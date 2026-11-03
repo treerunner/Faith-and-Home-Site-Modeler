@@ -1,0 +1,25 @@
+:root {
+  --color-existing: #9b9486;
+  --color-reuse: #5c7a4e;
+  --color-new: #c96e2f;
+  --color-removed: #aaaaaa;
+  --color-context: #f5f0e8;
+  --color-base: #f0ebe0;
+  --color-grid: #d4c5a9;
+  --color-selection: #2563eb;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: system-ui, sans-serif;
+  background: var(--color-base);
+}
