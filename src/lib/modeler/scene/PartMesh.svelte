@@ -3,7 +3,6 @@
 	import * as THREE from 'three';
 	import type { Part } from '../types';
 	import { COLORS } from '../colors';
-	import { store } from '../store.svelte';
 
 	interface Props {
 		part: Part;
@@ -34,32 +33,12 @@
 	const baseColor = COLORS.existing;
 	let color = $derived(selected ? COLORS.selection : baseColor);
 	let opacity = $derived(ghost ? 0.45 : 1);
-
-	// site y → three.js z; parts sit at y = SLAB_HEIGHT / 2 above grid
-	let posY = $derived(ghost ? SLAB_HEIGHT / 2 : SLAB_HEIGHT / 2);
-
-	function handleClick(e: { nativeEvent?: Event }) {
-		e.nativeEvent?.stopPropagation?.();
-		store.selectPart(part.id);
-	}
-
-	function handlePointerDown(e: { intersection?: { point: THREE.Vector3 }; nativeEvent?: Event }) {
-		e.nativeEvent?.stopPropagation?.();
-		if (store.mode.type === 'selected' && store.mode.partId === part.id) {
-			const pt = e.intersection?.point;
-			if (pt) {
-				store.startDragging(part.id, pt.x - part.x, pt.z - part.y);
-			}
-		}
-	}
 </script>
 
 <T.Mesh
 	geometry={geo}
-	position={[part.x, posY, part.y]}
+	position={[part.x, SLAB_HEIGHT / 2, part.y]}
 	rotation={[0, -(part.rotation * Math.PI) / 180, 0]}
-	onclick={handleClick}
-	onpointerdown={handlePointerDown}
 	userData={{ partId: part.id }}
 >
 	<T.MeshLambertMaterial

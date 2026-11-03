@@ -2,8 +2,11 @@
 	import Palette from './Palette.svelte';
 	import Scene from '../scene/Scene.svelte';
 	import { store } from '../store.svelte';
-	import { clientToSite } from '../scene/cameraRef';
+	import { clientToSite, hitTest, rendererEl } from '../scene/cameraRef';
 	import type { Part } from '../types';
+	import type { ResizeHandle } from '../interaction';
+
+	// ── Drag-and-drop from palette ──────────────────────────────────────────
 
 	function handleDragOver(e: DragEvent) {
 		e.preventDefault();
@@ -13,12 +16,10 @@
 		const shape = e.dataTransfer.types.includes('text/plain')
 			? (e.dataTransfer.getData?.('text/plain') as Part['shape'] | '')
 			: '';
-
-		// During dragover, getData may be empty in some browsers; infer shape from store mode
 		const activeShape =
 			shape || (store.mode.type === 'placing' ? store.mode.shape : null);
-
 		if (!activeShape) return;
+
 		const pos = clientToSite(e.clientX, e.clientY);
 		if (pos) store.updateGhostPos(activeShape as Part['shape'], pos.x, pos.y);
 	}
@@ -34,6 +35,32 @@
 
 	function handleDragLeave() {
 		store.cancelPlacing();
+	}
+
+	// ── Pointer events ──────────────────────────────────────────────────────
+
+	function handlePointerDown(e: PointerEvent) {
+		// Ignore DnD synthetic events
+		if (e.buttons === 0) return;
+
+		const result = hitTest(e.clientX, e.clientY);
+		if (!result) return;
+
+		if (result.kind === 'part' && result.partId !== '__ghost__') {
+			const part = store.allParts.find((p) => p.id === result.partId);
+			if (!part) return;
+			rendererEl?.setPointerCapture(e.pointerId);
+			store.startDragging(result.partId, result.x - part.x, result.y - part.y);
+		} else if (result.kind === 'resize') {
+			rendererEl?.setPointerCapture(e.pointerId);
+			store.startResizing(result.partId, result.handle as ResizeHandle);
+		} else if (result.kind === 'rotate') {
+			rendererEl?.setPointerCapture(e.pointerId);
+			store.startRotating(result.partId, result.x, result.y);
+		} else {
+			// Ground: deselect
+			store.selectPart(null);
+		}
 	}
 
 	function handlePointerMove(e: PointerEvent) {
@@ -65,6 +92,7 @@
 			ondragleave={handleDragLeave}
 			onpointermove={handlePointerMove}
 			onpointerup={handlePointerUp}
+			onpointerdown={handlePointerDown}
 		/>
 	</div>
 </div>

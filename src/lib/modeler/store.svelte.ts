@@ -40,6 +40,8 @@ class ModelerStore {
 
 	readonly #undoStack: Site[] = [];
 	readonly #redoStack: Site[] = [];
+	// Tracks whether a drag/resize/rotate actually changed something
+	#gestureDidMutate = false;
 
 	get selectedPartId(): string | null {
 		const m = this.mode;
@@ -104,6 +106,7 @@ class ModelerStore {
 
 	startDragging(id: string, offsetX: number, offsetY: number) {
 		this.#pushUndo();
+		this.#gestureDidMutate = false;
 		this.mode = { type: 'dragging', partId: id, offsetX, offsetY };
 	}
 
@@ -114,17 +117,23 @@ class ModelerStore {
 		const rawY = worldY - offsetY;
 		const part = this.#findPart(partId);
 		if (!part) return;
-		const tempPart = { ...part, x: rawX, y: rawY };
+		// Grid snap first, then edge snap can override (preserves exact edge alignment)
+		const gridX = snapToGrid(rawX);
+		const gridY = snapToGrid(rawY);
+		const tempPart = { ...part, x: gridX, y: gridY };
 		const others = this.allParts;
 		const snapped = snapEdge(tempPart, others);
 		this.#mutPart(partId, (p) => {
-			p.x = snapToGrid(snapped.x);
-			p.y = snapToGrid(snapped.y);
+			p.x = snapped.x;
+			p.y = snapped.y;
 		});
+		this.#gestureDidMutate = true;
 	}
 
 	endDrag() {
 		if (this.mode.type !== 'dragging') return;
+		// If pointer never moved, discard the no-op undo entry
+		if (!this.#gestureDidMutate) this.#undoStack.pop();
 		this.mode = { type: 'selected', partId: this.mode.partId };
 	}
 
@@ -132,6 +141,7 @@ class ModelerStore {
 		const part = this.#findPart(id);
 		if (!part) return;
 		this.#pushUndo();
+		this.#gestureDidMutate = false;
 		const hw = part.w / 2;
 		const hd = part.d / 2;
 		// anchor = corner opposite to the handle being dragged
@@ -153,10 +163,12 @@ class ModelerStore {
 			p.x = newX;
 			p.y = newY;
 		});
+		this.#gestureDidMutate = true;
 	}
 
 	endResize() {
 		if (this.mode.type !== 'resizing') return;
+		if (!this.#gestureDidMutate) this.#undoStack.pop();
 		this.mode = { type: 'selected', partId: this.mode.partId };
 	}
 
@@ -164,6 +176,7 @@ class ModelerStore {
 		const part = this.#findPart(id);
 		if (!part) return;
 		this.#pushUndo();
+		this.#gestureDidMutate = false;
 		const startAngle = Math.atan2(mouseY - part.y, mouseX - part.x) * (180 / Math.PI);
 		this.mode = {
 			type: 'rotating',
@@ -184,10 +197,12 @@ class ModelerStore {
 		this.#mutPart(partId, (p) => {
 			p.rotation = ((startRotation + delta) % 360 + 360) % 360;
 		});
+		this.#gestureDidMutate = true;
 	}
 
 	endRotation() {
 		if (this.mode.type !== 'rotating') return;
+		if (!this.#gestureDidMutate) this.#undoStack.pop();
 		this.mode = { type: 'selected', partId: this.mode.partId };
 	}
 

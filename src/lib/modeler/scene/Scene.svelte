@@ -1,12 +1,6 @@
 <script lang="ts">
-	import { Canvas, T } from '@threlte/core';
-	import PlanCamera from './PlanCamera.svelte';
-	import SceneSetup from './SceneSetup.svelte';
-	import PartMesh from './PartMesh.svelte';
-	import ResizeHandles from './ResizeHandles.svelte';
-	import GroundPlane from './GroundPlane.svelte';
-	import { store } from '../store.svelte';
-	import { COLORS } from '../colors';
+	import { Canvas } from '@threlte/core';
+	import SceneRoot from './SceneRoot.svelte';
 	import { setRendererEl } from './cameraRef';
 
 	interface Props {
@@ -15,9 +9,11 @@
 		ondragleave: (e: DragEvent) => void;
 		onpointermove: (e: PointerEvent) => void;
 		onpointerup: (e: PointerEvent) => void;
+		onpointerdown: (e: PointerEvent) => void;
 	}
 
-	let { ondragover, ondrop, ondragleave, onpointermove, onpointerup }: Props = $props();
+	let { ondragover, ondrop, ondragleave, onpointermove, onpointerup, onpointerdown }: Props =
+		$props();
 
 	let wrapperEl: HTMLDivElement | undefined = $state();
 
@@ -27,21 +23,6 @@
 			if (canvas) setRendererEl(canvas as HTMLCanvasElement);
 		}
 	});
-
-	let allParts = $derived(store.site.structures.flatMap((s) => s.parts));
-	let ghostPart = $derived(
-		store.mode.type === 'placing'
-			? ({
-					id: '__ghost__',
-					shape: store.mode.shape,
-					x: store.mode.ghostX,
-					y: store.mode.ghostY,
-					w: store.mode.shape === 'rect' ? 10 : 6,
-					d: 6,
-					rotation: 0,
-				} as const)
-			: null,
-	);
 </script>
 
 <div
@@ -54,37 +35,10 @@
 	{ondragleave}
 	{onpointermove}
 	{onpointerup}
+	{onpointerdown}
 >
 	<Canvas>
-		<SceneSetup />
-		<PlanCamera />
-
-		<!-- Warm key light -->
-		<T.DirectionalLight position={[10, 20, 10]} intensity={1.2} color="#fff8f0" />
-		<T.AmbientLight intensity={0.6} color="#f5f0e8" />
-
-		<!-- Meter grid -->
-		<T.GridHelper
-			args={[120, 120, COLORS.grid, COLORS.gridSub]}
-			position={[0, 0, 0]}
-		/>
-
-		<!-- Parts -->
-		{#each allParts as part (part.id)}
-			<PartMesh {part} selected={store.selectedPartId === part.id} />
-		{/each}
-
-		<!-- Ghost during palette drag -->
-		{#if ghostPart}
-			<PartMesh part={ghostPart} selected={false} ghost />
-		{/if}
-
-		<!-- Resize + rotate handles for selected part -->
-		{#if store.selectedPart}
-			<ResizeHandles part={store.selectedPart} />
-		{/if}
-
-		<GroundPlane />
+		<SceneRoot />
 	</Canvas>
 </div>
 
