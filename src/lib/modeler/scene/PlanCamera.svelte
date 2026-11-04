@@ -2,6 +2,7 @@
 	import { T, useThrelte } from '@threlte/core';
 	import * as THREE from 'three';
 	import { setPlanCamera } from './cameraRef';
+	import { store } from '../store.svelte';
 
 	// Meters visible top-to-bottom in the plan view
 	const WORLD_HEIGHT = 100;
@@ -30,4 +31,4 @@
 </script>
 
 <!-- manual prevents Threlte's auto-resize from overriding our frustum -->
-<T.OrthographicCamera makeDefault manual bind:ref={cam} near={0.1} far={1000} />
+<T.OrthographicCamera makeDefault={store.viewMode === 'plan'} manual bind:ref={cam} near={0.1} far={1000} />

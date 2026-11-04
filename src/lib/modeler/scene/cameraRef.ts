@@ -3,6 +3,8 @@ import * as THREE from 'three';
 export let planCamera: THREE.OrthographicCamera | null = null;
 export let rendererEl: HTMLCanvasElement | null = null;
 export let mainScene: THREE.Scene | null = null;
+let perspCamera: THREE.PerspectiveCamera | null = null;
+let mainRenderer: THREE.WebGLRenderer | null = null;
 
 export function setPlanCamera(cam: THREE.OrthographicCamera): void {
 	planCamera = cam;
@@ -13,11 +15,25 @@ export function setRendererEl(el: HTMLCanvasElement): void {
 export function setMainScene(s: THREE.Scene): void {
 	mainScene = s;
 }
+export function setPerspCamera(cam: THREE.PerspectiveCamera): void {
+	perspCamera = cam;
+}
+export function setRenderer(r: THREE.WebGLRenderer): void {
+	mainRenderer = r;
+}
+export function getRenderer(): THREE.WebGLRenderer | null {
+	return mainRenderer;
+}
+export function getPerspCamera(): THREE.PerspectiveCamera | null {
+	return perspCamera;
+}
 
 export type HitResult =
 	| { kind: 'part'; partId: string; x: number; y: number }
 	| { kind: 'resize'; partId: string; handle: string }
 	| { kind: 'rotate'; partId: string; x: number; y: number }
+	| { kind: 'openSpace'; openSpaceId: string; x: number; y: number }
+	| { kind: 'osVertex'; openSpaceId: string; vertexIndex: number }
 	| { kind: 'ground'; x: number; y: number };
 
 function makeRaycaster(clientX: number, clientY: number): THREE.Raycaster | null {
@@ -50,6 +66,12 @@ export function hitTest(clientX: number, clientY: number): HitResult | null {
 			if (typeof ud.partId === 'string') {
 				return { kind: 'part', partId: ud.partId, x: hit.point.x, y: hit.point.z };
 			}
+			if (typeof ud.openSpaceId === 'string' && typeof ud.osVertex === 'number') {
+				return { kind: 'osVertex', openSpaceId: ud.openSpaceId, vertexIndex: ud.osVertex };
+			}
+			if (typeof ud.openSpaceId === 'string') {
+				return { kind: 'openSpace', openSpaceId: ud.openSpaceId, x: hit.point.x, y: hit.point.z };
+			}
 		}
 	}
 
@@ -59,6 +81,17 @@ export function hitTest(clientX: number, clientY: number): HitResult | null {
 	const groundHit = rc.ray.intersectPlane(plane, target);
 	if (!groundHit) return null;
 	return { kind: 'ground', x: groundHit.x, y: groundHit.z };
+}
+
+// Project a world (site) point to screen (client) coordinates.
+export function worldToScreen(wx: number, wz: number): { x: number; y: number } | null {
+	if (!planCamera || !rendererEl) return null;
+	const v = new THREE.Vector3(wx, 0, wz).project(planCamera);
+	const rect = rendererEl.getBoundingClientRect();
+	return {
+		x: rect.left + ((v.x + 1) / 2) * rect.width,
+		y: rect.top + ((-v.y + 1) / 2) * rect.height,
+	};
 }
 
 // Convenience: just the site coordinates of the ground intersection.

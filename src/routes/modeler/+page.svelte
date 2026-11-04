@@ -2,6 +2,11 @@
 	import EditorLayout from '#lib/modeler/ui/EditorLayout.svelte';
 	import { store } from '#lib/modeler/store.svelte';
 
+	function isEditing(e: KeyboardEvent): boolean {
+		const tag = (e.target as HTMLElement)?.tagName;
+		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+	}
+
 	function handleKeyDown(e: KeyboardEvent) {
 		const meta = e.metaKey || e.ctrlKey;
 
@@ -16,6 +21,8 @@
 			store.redo();
 			return;
 		}
+
+		if (isEditing(e)) return;
 
 		const id = store.selectedPartId;
 		if (!id) return;

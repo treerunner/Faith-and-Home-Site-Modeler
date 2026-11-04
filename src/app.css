@@ -7,6 +7,12 @@
   --color-base: #f0ebe0;
   --color-grid: #d4c5a9;
   --color-selection: #2563eb;
+  --color-os-parking: #b5b0aa;
+  --color-os-lawn: #a8c090;
+  --color-os-courtyard: #d4c5a9;
+  --color-os-court: #9bb8cc;
+  --color-os-garden: #8faf7a;
+  --color-os-cemetery: #8a8a8a;
 }
 
 *,

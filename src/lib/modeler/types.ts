@@ -39,6 +39,7 @@ export interface OpenSpace {
 	id: string;
 	kind: 'parking' | 'lawn' | 'courtyard' | 'court' | 'garden' | 'cemetery';
 	polygon: [number, number][];
+	label?: string;
 }
 
 export interface Site {
