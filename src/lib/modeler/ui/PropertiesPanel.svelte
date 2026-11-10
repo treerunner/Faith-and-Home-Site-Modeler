@@ -3,7 +3,7 @@
 	import { statusColor, USE_COLORS } from '../colors';
 	import type { CongregationProfile, Roof, Status, Structure, Use } from '../types';
 
-	let sidebarTab = $state<'spatial' | 'social'>('spatial');
+	let sidebarTab = $derived(store.sidebarTab);
 
 	const STATUS_OPTIONS: { value: Status; label: string }[] = [
 		{ value: 'existing', label: 'Existing' },
@@ -36,7 +36,9 @@
 	// Track which structure is expanded — syncs when canvas selection changes
 	let expandedId = $state('');
 	$effect(() => {
-		if (store.activeStructureId) expandedId = store.activeStructureId;
+		if (store.activeStructureId) {
+			expandedId = store.activeStructureId;
+		}
 	});
 
 	function toggleStructure(id: string) {
@@ -86,14 +88,14 @@
 			class:tab-btn--active={sidebarTab === 'spatial'}
 			role="tab"
 			aria-selected={sidebarTab === 'spatial'}
-			onclick={() => { sidebarTab = 'spatial'; }}
+			onclick={() => { store.sidebarTab = 'spatial'; }}
 		>Spatial</button>
 		<button
 			class="tab-btn"
 			class:tab-btn--active={sidebarTab === 'social'}
 			role="tab"
 			aria-selected={sidebarTab === 'social'}
-			onclick={() => { sidebarTab = 'social'; }}
+			onclick={() => { store.sidebarTab = 'social'; }}
 		>Social</button>
 	</div>
 
@@ -256,6 +258,26 @@
 												<span class="alloc-pct">{Math.round(pct)}%</span>
 											</div>
 										{/each}
+									</div>
+								{/if}
+
+								{#if s.uses.includes('housing')}
+									<div class="field-group">
+										<label class="field-label" for="struct-dwellings-{s.id}">Housing units</label>
+										<input
+											id="struct-dwellings-{s.id}"
+											class="num-input"
+											type="number"
+											min="0"
+											max="999"
+											placeholder="0"
+											value={s.dwellings ?? ''}
+											oninput={(e) => {
+												const v = (e.target as HTMLInputElement).value;
+												store.updateStructure(s.id, { dwellings: v ? Number(v) : undefined });
+											}}
+										/>
+										<span class="field-hint">est. 2.5 persons / unit</span>
 									</div>
 								{/if}
 
@@ -579,6 +601,10 @@
 		user-select: none;
 	}
 
+	.use-label input[type='checkbox'] {
+		accent-color: var(--color-selection);
+	}
+
 	.row-fields {
 		display: flex;
 		gap: 0.4rem;
@@ -601,6 +627,14 @@
 	}
 
 	.num-input:focus { outline: 2px solid var(--color-selection); border-color: transparent; }
+
+	.field-hint {
+		font-size: 0.6rem;
+		color: var(--color-text);
+		opacity: 0.6;
+		margin-top: 0.1rem;
+		display: block;
+	}
 
 	.action-row {
 		display: flex;
@@ -682,8 +716,31 @@
 		flex: 1;
 		min-width: 0;
 		height: 3px;
-		accent-color: var(--color-text);
 		cursor: pointer;
+		-webkit-appearance: none;
+		appearance: none;
+		background: var(--color-border);
+		border-radius: 2px;
+		outline: none;
+	}
+
+	.alloc-slider::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: var(--color-text);
+		cursor: pointer;
+	}
+
+	.alloc-slider::-moz-range-thumb {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: var(--color-text);
+		cursor: pointer;
+		border: none;
 	}
 
 	.alloc-pct {

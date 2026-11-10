@@ -26,6 +26,7 @@ class ModelerStore {
 	site = $state<Site>(makeSite());
 	mode = $state<InteractionMode>({ type: 'idle' });
 	activeStructureId = $state<string>('');
+	sidebarTab = $state<'spatial' | 'social'>('spatial');
 	viewMode = $state<'plan' | '3d'>('plan');
 	showLabels = $state(true);
 	showAnalysis = $state(false);
@@ -186,10 +187,12 @@ class ModelerStore {
 
 	setActiveStructure(id: string) {
 		this.activeStructureId = id;
+		this.sidebarTab = 'spatial';
 	}
 
 	selectStructure(id: string) {
 		this.activeStructureId = id;
+		this.sidebarTab = 'spatial';
 		const s = this.site.structures.find((s) => s.id === id);
 		if (s && s.parts.length > 0) {
 			this.mode = { type: 'selected', partId: s.parts[0].id };
@@ -201,7 +204,7 @@ class ModelerStore {
 	updateStructure(
 		id: string,
 		patch: Partial<
-			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof' | 'useWeights'>
+			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof' | 'useWeights' | 'dwellings'>
 		>,
 	) {
 		this.#pushUndo();

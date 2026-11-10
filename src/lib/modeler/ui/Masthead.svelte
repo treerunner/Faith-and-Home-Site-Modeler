@@ -99,7 +99,7 @@
 
 	.masthead__title {
 		font-family: var(--font-display);
-		font-size: 2.6rem;
+		font-size: 3.4rem;
 		font-weight: normal;
 		line-height: 1;
 		color: var(--color-text);

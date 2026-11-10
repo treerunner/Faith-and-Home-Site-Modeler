@@ -36,6 +36,7 @@
 			s.closePath();
 			const geo = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false });
 			geo.rotateX(Math.PI / 2);
+			geo.translate(0, h / 2, 0); // center on Y=0 to match BoxGeometry (extrusion is in -Y after rotateX)
 			return geo;
 		}
 		return new THREE.BoxGeometry(w, h, d, 1, floors, 1);

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { store } from '../store.svelte';
 	import { USE_COLORS } from '../colors';
+	import { capturePlanImage } from '../sceneExport';
 	import {
 		siteFootprint,
 		grossFloorArea,
@@ -67,6 +68,9 @@
 
 	const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+	let planImageSrc = $state<string | null>(null);
+	$effect(() => { planImageSrc = capturePlanImage(); });
+
 	function fmt(n: number): string {
 		return Math.round(n).toLocaleString();
 	}
@@ -88,6 +92,7 @@
 			<!-- Site Overview -->
 			<section class="report-section">
 				<h2 class="section-heading">Site Overview</h2>
+				<div class="overview-with-plan">
 				<div class="overview-grid">
 					<div class="overview-row">
 						<span class="overview-label">Site</span>
@@ -128,6 +133,10 @@
 						</div>
 					{/if}
 				</div>
+				{#if planImageSrc}
+					<img class="overview-plan" src={planImageSrc} alt="Site plan" />
+				{/if}
+				</div>
 			</section>
 
 			<!-- Spatial Metrics -->
@@ -153,7 +162,15 @@
 							</td>
 						</tr>
 						<tr><td class="met-label">Stories range</td><td class="met-value">{storiesMin === storiesMax ? storiesMin : `${storiesMin}–${storiesMax}`}</td></tr>
-						<tr><td class="met-label">Dwellings estimate</td><td class="met-value">{dwellings > 0 ? dwellings : '—'}</td></tr>
+						<tr>
+								<td class="met-label">Housing units</td>
+								<td class="met-value">
+									{dwellings > 0 ? dwellings : '—'}
+									{#if dwellings > 0}
+										<span class="met-sub">est. {Math.round(dwellings * 2.5)} residents</span>
+									{/if}
+								</td>
+							</tr>
 						<tr><td class="met-label">Total open space</td><td class="met-value">{fmt(osArea)} m²</td></tr>
 						<tr><td class="met-label">Green space</td><td class="met-value">{fmt(green)} m² <span class="met-sub">{osArea > 0 ? pct(green, osArea) : ''}</span></td></tr>
 						<tr><td class="met-label">Parking</td><td class="met-value">{fmt(parking)} m²</td></tr>
@@ -347,10 +364,28 @@
 		border-bottom: 1px solid var(--color-border);
 	}
 
+	.overview-with-plan {
+		display: flex;
+		gap: 1.5rem;
+		align-items: flex-start;
+	}
+
 	.overview-grid {
 		display: flex;
 		flex-direction: column;
 		gap: 0.3rem;
+		flex: 1;
+	}
+
+	.overview-plan {
+		width: 180px;
+		height: 180px;
+		object-fit: contain;
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		background: var(--color-surface);
+		flex-shrink: 0;
+		image-rendering: pixelated;
 	}
 
 	.overview-row {

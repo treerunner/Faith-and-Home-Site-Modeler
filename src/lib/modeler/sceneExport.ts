@@ -1,4 +1,12 @@
-import { getRenderer, getPerspCamera, mainScene } from './scene/cameraRef';
+import { getRenderer, getPerspCamera, planCamera, mainScene } from './scene/cameraRef';
+
+export function capturePlanImage(): string | null {
+	const renderer = getRenderer();
+	const scene = mainScene;
+	if (!renderer || !planCamera || !scene) return null;
+	renderer.render(scene, planCamera);
+	return renderer.domElement.toDataURL('image/png');
+}
 
 export function exportPNG(filename = 'site-model.png') {
 	const renderer = getRenderer();
