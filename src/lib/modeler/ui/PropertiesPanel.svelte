@@ -109,7 +109,7 @@
 						<button
 							class="pill"
 							class:pill--active={profile.size === size}
-							style={profile.size === size ? 'background:#6b5f4e;border-color:#6b5f4e;color:#fff' : ''}
+							style={profile.size === size ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
 							onclick={() => store.updateCongregationProfile({ size: profile.size === size ? undefined : size })}
 						>{size.charAt(0).toUpperCase() + size.slice(1)}</button>
 					{/each}
@@ -133,7 +133,7 @@
 						<button
 							class="pill"
 							class:pill--active={profile.tenure === tenure}
-							style={profile.tenure === tenure ? 'background:#6b5f4e;border-color:#6b5f4e;color:#fff' : ''}
+							style={profile.tenure === tenure ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
 							onclick={() => store.updateCongregationProfile({ tenure: profile.tenure === tenure ? undefined : tenure })}
 						>{tenure.charAt(0).toUpperCase() + tenure.slice(1)}</button>
 					{/each}
@@ -147,7 +147,7 @@
 						<button
 							class="pill"
 							class:pill--active={profile.ownership === own}
-							style={profile.ownership === own ? 'background:#6b5f4e;border-color:#6b5f4e;color:#fff' : ''}
+							style={profile.ownership === own ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
 							onclick={() => store.updateCongregationProfile({ ownership: profile.ownership === own ? undefined : own })}
 						>{own.charAt(0).toUpperCase() + own.slice(1)}</button>
 					{/each}
@@ -347,8 +347,8 @@
 	.props-panel {
 		width: 220px;
 		flex-shrink: 0;
-		background: #f8f5ee;
-		border-left: 1px solid #d4c5a9;
+		background: var(--color-surface);
+		border-left: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
 		overflow-y: auto;
@@ -357,8 +357,8 @@
 
 	.site-name-row {
 		padding: 0.5rem 0.6rem 0.4rem;
-		border-bottom: 1px solid #e8deca;
-		background: #f0ece3;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
 	}
 
 	.site-name-input {
@@ -367,7 +367,7 @@
 		background: transparent;
 		font-size: 0.8rem;
 		font-weight: 600;
-		color: #2a1f10;
+		color: var(--color-text);
 		padding: 0;
 		outline: none;
 		caret-color: var(--color-selection);
@@ -379,8 +379,8 @@
 
 	.tab-strip {
 		display: flex;
-		border-bottom: 1px solid #d4c5a9;
-		background: #f0ece3;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
 		flex-shrink: 0;
 	}
 
@@ -391,19 +391,19 @@
 		background: none;
 		font-size: 0.7rem;
 		font-weight: 500;
-		color: #6b5f4e;
+		color: var(--color-text);
 		cursor: pointer;
 		border-bottom: 2px solid transparent;
 		transition: color 0.1s, border-color 0.1s;
 	}
 
-	.tab-btn:hover { color: #2a1f10; }
+	.tab-btn:hover { color: var(--color-text); }
 
 	.tab-btn--active {
-		color: #2a1f10;
+		color: var(--color-text);
 		font-weight: 700;
-		border-bottom-color: #6b5f4e;
-		background: #f8f5ee;
+		border-bottom-color: var(--color-text);
+		background: var(--color-surface);
 	}
 
 	.textarea-input {
@@ -415,7 +415,7 @@
 
 	.section {
 		padding: 0.75rem;
-		border-bottom: 1px solid #e8deca;
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.section--props {
@@ -429,13 +429,13 @@
 		font-weight: 600;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: #6b5f4e;
+		color: var(--color-text);
 		margin: 0 0 0.5rem;
 	}
 
 	.empty-hint {
 		font-size: 0.65rem;
-		color: #9a8a76;
+		color: var(--color-text);
 		line-height: 1.4;
 		margin: 0;
 	}
@@ -455,8 +455,8 @@
 	}
 
 	.struct-item--open {
-		border: 1px solid #c8b898;
-		background: #f0ece3;
+		border: 1px solid var(--color-border);
+		background: var(--color-surface);
 	}
 
 	.struct-row {
@@ -469,7 +469,7 @@
 		background: none;
 		cursor: pointer;
 		font-size: 0.75rem;
-		color: #4a3f30;
+		color: var(--color-text);
 		text-align: left;
 		border-radius: 3px;
 	}
@@ -479,7 +479,7 @@
 
 	.caret {
 		font-size: 0.5rem;
-		color: #9a8a76;
+		color: var(--color-text);
 		flex-shrink: 0;
 		transition: transform 0.15s ease;
 		display: inline-block;
@@ -500,7 +500,7 @@
 
 	.group-badge {
 		font-size: 0.65rem;
-		color: #7c6a52;
+		color: var(--color-text);
 		flex-shrink: 0;
 		line-height: 1;
 	}
@@ -510,7 +510,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.45rem;
-		border-top: 1px solid #d8ceba;
+		border-top: 1px solid var(--color-border);
 	}
 
 	.field-label {
@@ -518,7 +518,7 @@
 		font-weight: 600;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
-		color: #6b5f4e;
+		color: var(--color-text);
 		display: block;
 		margin-bottom: 0.15rem;
 	}
@@ -526,11 +526,11 @@
 	.text-input, .select-input {
 		width: 100%;
 		padding: 0.25rem 0.35rem;
-		border: 1px solid #d4c5a9;
+		border: 1px solid var(--color-border);
 		border-radius: 3px;
 		background: #fff;
 		font-size: 0.72rem;
-		color: #2a1f10;
+		color: var(--color-text);
 	}
 
 	.text-input:focus, .select-input:focus {
@@ -552,15 +552,15 @@
 
 	.pill {
 		padding: 0.15rem 0.35rem;
-		border: 1px solid #d4c5a9;
+		border: 1px solid var(--color-border);
 		border-radius: 10px;
 		background: #fff;
 		font-size: 0.62rem;
 		cursor: pointer;
-		color: #4a3f30;
+		color: var(--color-text);
 	}
 
-	.pill:hover { border-color: #9a8a76; }
+	.pill:hover { border-color: var(--color-text); }
 	.pill--active { font-weight: 600; }
 
 	.uses-grid {
@@ -571,7 +571,7 @@
 
 	.use-label {
 		font-size: 0.68rem;
-		color: #4a3f30;
+		color: var(--color-text);
 		display: flex;
 		align-items: center;
 		gap: 0.2rem;
@@ -593,11 +593,11 @@
 	.num-input {
 		width: 100%;
 		padding: 0.25rem 0.35rem;
-		border: 1px solid #d4c5a9;
+		border: 1px solid var(--color-border);
 		border-radius: 3px;
 		background: #fff;
 		font-size: 0.72rem;
-		color: #2a1f10;
+		color: var(--color-text);
 	}
 
 	.num-input:focus { outline: 2px solid var(--color-selection); border-color: transparent; }
@@ -624,10 +624,10 @@
 	.split-btn {
 		flex: 1;
 		padding: 0.25rem 0.4rem;
-		border: 1px solid #c8b898;
+		border: 1px solid var(--color-border);
 		border-radius: 3px;
 		background: none;
-		color: #6b5f4e;
+		color: var(--color-text);
 		font-size: 0.68rem;
 		cursor: pointer;
 	}
@@ -670,7 +670,7 @@
 
 	.alloc-name {
 		font-size: 0.6rem;
-		color: #6b5f4e;
+		color: var(--color-text);
 		width: 52px;
 		flex-shrink: 0;
 		overflow: hidden;
@@ -682,13 +682,13 @@
 		flex: 1;
 		min-width: 0;
 		height: 3px;
-		accent-color: #6b5f4e;
+		accent-color: var(--color-text);
 		cursor: pointer;
 	}
 
 	.alloc-pct {
 		font-size: 0.6rem;
-		color: #4a3f30;
+		color: var(--color-text);
 		width: 26px;
 		text-align: right;
 		flex-shrink: 0;

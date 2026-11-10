@@ -90,8 +90,8 @@
 	.palette {
 		width: 160px;
 		flex-shrink: 0;
-		background: #f8f5ee;
-		border-right: 1px solid #d4c5a9;
+		background: var(--color-surface);
+		border-right: 1px solid var(--color-border);
 		padding: 1rem 0.75rem;
 		display: flex;
 		flex-direction: column;
@@ -104,7 +104,7 @@
 		font-weight: 600;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: #6b5f4e;
+		color: var(--color-text);
 		margin: 0;
 	}
 
@@ -123,17 +123,17 @@
 		align-items: center;
 		gap: 0.25rem;
 		padding: 0.75rem 0.5rem;
-		border: 1.5px solid #d4c5a9;
+		border: 1.5px solid var(--color-border);
 		border-radius: 4px;
-		background: #fff;
+		background: var(--color-surface);
 		cursor: grab;
-		color: #4a3f30;
+		color: var(--color-text);
 		transition: border-color 0.1s, background 0.1s;
 	}
 
 	.shape-tile:hover {
 		border-color: var(--color-selection);
-		background: #f0f4ff;
+		background: var(--fh-dusk-tint);
 	}
 
 	.shape-tile:active {
@@ -147,7 +147,7 @@
 
 	.shape-desc {
 		font-size: 0.65rem;
-		color: #7a6a56;
+		color: var(--color-text);
 		text-align: center;
 	}
 
@@ -170,11 +170,11 @@
 		gap: 0.5rem;
 		width: 100%;
 		padding: 0.4rem 0.5rem;
-		border: 1.5px solid #d4c5a9;
+		border: 1.5px solid var(--color-border);
 		border-radius: 4px;
-		background: #fff;
+		background: var(--color-surface);
 		cursor: pointer;
-		color: #4a3f30;
+		color: var(--color-text);
 		font-size: 0.75rem;
 		font-weight: 600;
 		text-align: left;
@@ -183,12 +183,12 @@
 
 	.os-tile:hover {
 		border-color: var(--color-selection);
-		background: #f0f4ff;
+		background: var(--fh-dusk-tint);
 	}
 
 	.os-tile--active {
 		border-color: var(--color-selection);
-		background: #e8f0ff;
+		background: var(--fh-dusk-tint);
 	}
 
 	.os-swatch {
@@ -206,7 +206,7 @@
 
 	.palette-hint {
 		font-size: 0.65rem;
-		color: #9a8a76;
+		color: var(--color-text);
 		line-height: 1.4;
 		margin-top: auto;
 	}

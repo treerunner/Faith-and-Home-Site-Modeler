@@ -234,14 +234,14 @@
 	.scale-bar__line {
 		width: 10cqh;
 		height: 3px;
-		background: #4a3f30;
-		border-left: 2px solid #4a3f30;
-		border-right: 2px solid #4a3f30;
+		background: var(--color-text);
+		border-left: 2px solid var(--color-text);
+		border-right: 2px solid var(--color-text);
 	}
 
 	.scale-bar__label {
 		font-size: 0.65rem;
-		color: #4a3f30;
+		color: var(--color-text);
 		font-weight: 600;
 	}
 
@@ -268,15 +268,15 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.3rem 0.5rem;
-		background: rgba(248 245 238 / 0.9);
-		border-top: 1px solid #d4c5a9;
+		background: rgba(247 247 242 / 0.95);
+		border-top: 1px solid var(--color-border);
 		gap: 0.5rem;
 	}
 
 	.view-tabs {
 		display: flex;
 		gap: 2px;
-		background: #e8deca;
+		background: var(--color-border);
 		border-radius: 4px;
 		padding: 2px;
 	}
@@ -287,7 +287,7 @@
 		border-radius: 3px;
 		background: transparent;
 		font-size: 0.7rem;
-		color: #6b5f4e;
+		color: var(--color-text);
 		cursor: pointer;
 		font-weight: 500;
 	}
@@ -296,18 +296,18 @@
 
 	.view-tab--active {
 		background: #fff;
-		color: #2a1f10;
+		color: var(--color-text);
 		font-weight: 600;
 		box-shadow: 0 1px 2px rgba(0 0 0 / 0.1);
 	}
 
 	.export-btn {
 		padding: 0.2rem 0.6rem;
-		border: 1px solid #c8b898;
+		border: 1px solid var(--color-border);
 		border-radius: 3px;
 		background: none;
 		font-size: 0.7rem;
-		color: #4a3f30;
+		color: var(--color-text);
 		cursor: pointer;
 	}
 
@@ -316,11 +316,11 @@
 
 	.labels-btn {
 		padding: 0.2rem 0.6rem;
-		border: 1px solid #c8b898;
+		border: 1px solid var(--color-border);
 		border-radius: 3px;
 		background: none;
 		font-size: 0.7rem;
-		color: #4a3f30;
+		color: var(--color-text);
 		cursor: pointer;
 	}
 	.labels-btn:hover { background: #ece8e0; }
@@ -328,11 +328,11 @@
 
 	.analysis-btn {
 		padding: 0.2rem 0.6rem;
-		border: 1px solid #c8b898;
+		border: 1px solid var(--color-border);
 		border-radius: 3px;
 		background: none;
 		font-size: 0.7rem;
-		color: #4a3f30;
+		color: var(--color-text);
 		cursor: pointer;
 	}
 	.analysis-btn:hover { background: #ece8e0; }

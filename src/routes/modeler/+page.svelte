@@ -1,5 +1,6 @@
 <script lang="ts">
 	import EditorLayout from '#lib/modeler/ui/EditorLayout.svelte';
+	import Masthead from '#lib/modeler/ui/Masthead.svelte';
 	import { store } from '#lib/modeler/store.svelte';
 
 	function isEditing(e: KeyboardEvent): boolean {
@@ -54,7 +55,10 @@
 </svelte:head>
 
 <div class="modeler-page">
-	<EditorLayout />
+	<Masthead />
+	<div class="editor-wrap">
+		<EditorLayout />
+	</div>
 </div>
 
 <style>
@@ -66,5 +70,13 @@
 	.modeler-page {
 		width: 100%;
 		height: 100%;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.editor-wrap {
+		flex: 1;
+		min-height: 0;
+		overflow: hidden;
 	}
 </style>

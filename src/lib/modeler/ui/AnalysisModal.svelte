@@ -265,8 +265,8 @@
 	.analysis-modal {
 		width: 100%;
 		max-width: 760px;
-		background: #f8f5ee;
-		border: 1px solid #c8b898;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
 		border-radius: 6px;
 		display: flex;
 		flex-direction: column;
@@ -278,8 +278,8 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.75rem 1rem;
-		border-bottom: 1px solid #d4c5a9;
-		background: #f0ece3;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
 		border-radius: 6px 6px 0 0;
 	}
 
@@ -288,14 +288,14 @@
 		font-weight: 700;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
-		color: #4a3f30;
+		color: var(--color-text);
 	}
 
 	.modal-close {
 		background: none;
 		border: none;
 		font-size: 1rem;
-		color: #6b5f4e;
+		color: var(--color-text);
 		cursor: pointer;
 		padding: 0.1rem 0.3rem;
 		line-height: 1;
@@ -313,22 +313,22 @@
 
 	.analysis-modal__footer {
 		padding: 0.75rem 1.5rem;
-		border-top: 1px solid #d4c5a9;
+		border-top: 1px solid var(--color-border);
 		display: flex;
 		justify-content: flex-end;
 	}
 
 	.print-btn {
 		padding: 0.35rem 1rem;
-		border: 1px solid #c8b898;
+		border: 1px solid var(--color-border);
 		border-radius: 3px;
-		background: #4a3f30;
-		color: #f8f5ee;
+		background: var(--color-text);
+		color: var(--color-surface);
 		font-size: 0.75rem;
 		cursor: pointer;
 		font-weight: 600;
 	}
-	.print-btn:hover { background: #2a1f10; }
+	.print-btn:hover { background: #000; }
 
 	.report-section {
 		display: flex;
@@ -341,10 +341,10 @@
 		font-weight: 700;
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
-		color: #6b5f4e;
+		color: var(--color-text);
 		margin: 0;
 		padding-bottom: 0.35rem;
-		border-bottom: 1px solid #d4c5a9;
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.overview-grid {
@@ -364,14 +364,14 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		color: #9a8a76;
+		color: var(--color-text);
 		width: 90px;
 		flex-shrink: 0;
 	}
 
 	.overview-value {
 		font-size: 0.8rem;
-		color: #2a1f10;
+		color: var(--color-text);
 	}
 
 	.type-badge {
@@ -392,18 +392,18 @@
 		font-size: 0.78rem;
 	}
 
-	.metrics-table tr { border-bottom: 1px solid #e8deca; }
+	.metrics-table tr { border-bottom: 1px solid var(--color-border); }
 	.metrics-table tr:last-child { border-bottom: none; }
 
 	.met-label {
 		padding: 0.3rem 0;
-		color: #6b5f4e;
+		color: var(--color-text);
 		width: 60%;
 	}
 
 	.met-value {
 		padding: 0.3rem 0;
-		color: #2a1f10;
+		color: var(--color-text);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		text-align: right;
@@ -411,7 +411,7 @@
 
 	.met-sub {
 		font-weight: 400;
-		color: #9a8a76;
+		color: var(--color-text);
 		font-size: 0.7rem;
 		margin-left: 0.3rem;
 	}
@@ -452,18 +452,18 @@
 
 	.alloc-name {
 		flex: 1;
-		color: #4a3f30;
+		color: var(--color-text);
 	}
 
 	.alloc-area {
-		color: #6b5f4e;
+		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
 		width: 70px;
 		text-align: right;
 	}
 
 	.alloc-pct {
-		color: #2a1f10;
+		color: var(--color-text);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		width: 36px;
@@ -482,14 +482,14 @@
 		font-weight: 700;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
-		color: #9a8a76;
+		color: var(--color-text);
 		padding: 0.2rem 0.4rem 0.3rem;
-		border-bottom: 1px solid #d4c5a9;
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.inventory-table td {
 		padding: 0.25rem 0.4rem;
-		color: #2a1f10;
+		color: var(--color-text);
 		border-bottom: 1px solid #ece8e0;
 		vertical-align: top;
 	}
@@ -497,7 +497,7 @@
 	.inventory-table tr:last-child td { border-bottom: none; }
 
 	.uses-cell {
-		color: #6b5f4e;
+		color: var(--color-text);
 		font-size: 0.68rem;
 	}
 
@@ -518,7 +518,7 @@
 
 	.step--flag { background: #fdf0f0; border-left: 3px solid #c05870; }
 	.step--suggest { background: #fdf5e8; border-left: 3px solid #c08030; }
-	.step--info { background: #f4f2ee; border-left: 3px solid #9a8a76; }
+	.step--info { background: var(--color-surface); border-left: 3px solid #9a8a76; }
 
 	.step-chip {
 		font-size: 0.58rem;
@@ -533,7 +533,7 @@
 
 	.step-chip--flag { background: #c05870; color: #fff; }
 	.step-chip--suggest { background: #c08030; color: #fff; }
-	.step-chip--info { background: #9a8a76; color: #fff; }
+	.step-chip--info { background: var(--fh-stone); color: #fff; }
 
-	.step-msg { color: #2a1f10; line-height: 1.45; }
+	.step-msg { color: var(--color-text); line-height: 1.45; }
 </style>

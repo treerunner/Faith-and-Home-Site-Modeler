@@ -1,18 +1,44 @@
 :root {
-  --color-existing: #9b9486;
-  --color-reuse: #5c7a4e;
-  --color-new: #c96e2f;
-  --color-removed: #aaaaaa;
-  --color-context: #f5f0e8;
-  --color-base: #f0ebe0;
-  --color-grid: #d4c5a9;
-  --color-selection: #2563eb;
-  --color-os-parking: #b5b0aa;
-  --color-os-lawn: #a8c090;
-  --color-os-courtyard: #d4c5a9;
-  --color-os-garden: #8faf7a;
-  --color-os-cemetery: #8a8a8a;
-  --color-os-walkway: #c8b88a;
+  /* F&H brand palette */
+  --fh-dusk:       #6a81b9;
+  --fh-dusk-tint:  #d2d9ea;
+  --fh-lantern:    #f7941d;
+  --fh-lantern-tint: #fddfbb;
+  --fh-canopy:     #49b187;
+  --fh-canopy-tint: #c8e8db;
+  --fh-terracotta: #c55e61;
+  --fh-terracotta-tint: #eecfd0;
+  --fh-stone:      #959192;
+  --fh-stone-tint: #dfdede;
+  --fh-linen:      #f7f7f2;
+  --fh-black:      #181818;
+
+  --font-display: 'right-grotesk', system-ui, sans-serif;
+
+  /* Status colors */
+  --color-existing: var(--fh-stone);
+  --color-reuse:    var(--fh-canopy);
+  --color-new:      var(--fh-lantern);
+  --color-removed:  var(--fh-stone-tint);
+
+  /* App surface colors */
+  --color-context:   var(--fh-linen);
+  --color-base:      var(--fh-linen);
+  --color-grid:      #d9d8d7;
+  --color-selection: var(--fh-dusk);
+
+  /* UI surface tokens */
+  --color-surface: var(--fh-linen);   /* panels, sidebars */
+  --color-border:  #d4d3d2;           /* all borders/dividers */
+  --color-text:    var(--fh-black);   /* all body text */
+
+  /* Open space colors */
+  --color-os-parking:   var(--fh-stone);
+  --color-os-lawn:      var(--fh-canopy-tint);
+  --color-os-courtyard: var(--fh-linen);
+  --color-os-garden:    var(--fh-canopy);
+  --color-os-cemetery:  #6b6869;
+  --color-os-walkway:   #c8c6c7;
 }
 
 *,
@@ -37,6 +63,14 @@ body {
   .analysis-modal__toolbar,
   .analysis-modal__footer { display: none !important; }
   .analysis-modal__body { overflow: visible !important; max-height: none !important; }
+}
+
+@font-face {
+  font-family: 'right-grotesk';
+  src: url('/fonts/PPRightGrotesk-CompactDark.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
