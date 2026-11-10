@@ -108,6 +108,8 @@
 	geometry={roofGeo}
 	position={[part.x, totalHeight, part.y]}
 	rotation={[0, yaw, 0]}
+	castShadow
+	receiveShadow
 >
 	<T.MeshLambertMaterial {color} side={THREE.DoubleSide} />
 </T.Mesh>

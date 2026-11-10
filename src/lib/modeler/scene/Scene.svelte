@@ -37,7 +37,7 @@
 	{onpointerup}
 	{onpointerdown}
 >
-	<Canvas>
+	<Canvas shadows>
 		<SceneRoot />
 	</Canvas>
 </div>

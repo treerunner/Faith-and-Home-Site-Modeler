@@ -14,7 +14,7 @@ export type InteractionMode =
 			companions: { id: string; initialX: number; initialY: number }[];
 			cloning?: boolean;
 	  }
-	| { type: 'resizing'; partId: string; handle: ResizeHandle; anchorX: number; anchorY: number }
+	| { type: 'resizing'; partId: string; handle: ResizeHandle; anchorX: number; anchorY: number; initialW: number; initialD: number }
 	| {
 			type: 'rotating';
 			partId: string;

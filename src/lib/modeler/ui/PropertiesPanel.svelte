@@ -1,7 +1,19 @@
 <script lang="ts">
 	import { store } from '../store.svelte';
 	import { statusColor } from '../colors';
-	import type { Roof, Status, Use } from '../types';
+	import type { Roof, Status, Structure, Use } from '../types';
+
+	const USE_COLORS: Record<Use, string> = {
+		worship:        '#5b6cb8',
+		fellowship:     '#4fa86e',
+		education:      '#d4a040',
+		office:         '#7a8aaa',
+		housing:        '#e07040',
+		community:      '#e09828',
+		daycare:        '#a070c0',
+		social_services:'#c05870',
+		other:          '#c06060',
+	};
 
 	const STATUS_OPTIONS: { value: Status; label: string }[] = [
 		{ value: 'existing', label: 'Existing' },
@@ -50,7 +62,19 @@
 		const s = store.site.structures.find((s) => s.id === structureId);
 		if (!s) return;
 		const uses = checked ? [...s.uses, use] : s.uses.filter((u) => u !== use);
-		store.updateStructure(structureId, { uses });
+		const useWeights = { ...s.useWeights };
+		if (checked) { if (!useWeights[use]) useWeights[use] = 50; }
+		else delete useWeights[use];
+		store.updateStructure(structureId, { uses, useWeights });
+	}
+
+	function setWeight(s: Structure, use: Use, weight: number) {
+		store.updateStructure(s.id, { useWeights: { ...s.useWeights, [use]: Math.max(1, weight) } });
+	}
+
+	function allocPct(s: Structure, use: Use): number {
+		const total = s.uses.reduce((sum, u) => sum + (s.useWeights?.[u] ?? 50), 0);
+		return total > 0 ? ((s.useWeights?.[use] ?? 50) / total) * 100 : 0;
 	}
 </script>
 
@@ -74,8 +98,8 @@
 						>
 							<span class="caret" class:caret--open={isOpen} aria-hidden="true">▶</span>
 							<span class="struct-label">{s.label}</span>
-							{#if s.parts.length > 1}
-								<span class="part-count" title="{s.parts.length} parts">{s.parts.length}</span>
+							{#if s.groupId}
+								<span class="group-badge" title="Grouped — moves with linked structures">⚭</span>
 							{/if}
 							<span class="status-chip" style="background:{statusColor(s.status)}" aria-label={s.status}></span>
 						</button>
@@ -121,6 +145,33 @@
 									</div>
 								</fieldset>
 
+								{#if s.uses.length > 0}
+									<div class="alloc-section">
+										<div class="alloc-bar" aria-hidden="true">
+											{#each s.uses as use (use)}
+												<div class="alloc-seg" style="width:{allocPct(s, use)}%;background:{USE_COLORS[use]}"></div>
+											{/each}
+										</div>
+										{#each s.uses as use (use)}
+											{@const opt = USE_OPTIONS.find(o => o.value === use)}
+											{@const pct = allocPct(s, use)}
+											<div class="alloc-row">
+												<span class="alloc-dot" style="background:{USE_COLORS[use]}"></span>
+												<span class="alloc-name">{opt?.label ?? use}</span>
+												<input
+													class="alloc-slider"
+													type="range"
+													min="1"
+													max="100"
+													value={s.useWeights?.[use] ?? 50}
+													oninput={(e) => setWeight(s, use, Number((e.target as HTMLInputElement).value))}
+												/>
+												<span class="alloc-pct">{Math.round(pct)}%</span>
+											</div>
+										{/each}
+									</div>
+								{/if}
+
 								<div class="row-fields">
 									<div class="field-group">
 										<label class="field-label" for="struct-stories-{s.id}">Stories</label>
@@ -162,9 +213,9 @@
 								</select>
 
 								<div class="action-row">
-									{#if s.parts.length > 1}
-										<button class="split-btn" onclick={() => store.splitStructure(s.id)}>
-											Split ({s.parts.length})
+									{#if s.groupId}
+										<button class="split-btn" onclick={() => store.ungroupStructure(s.id)}>
+											Ungroup
 										</button>
 									{/if}
 									<button class="delete-btn" onclick={() => store.deleteStructure(s.id)}>Delete</button>
@@ -300,14 +351,11 @@
 		border: 1px solid rgba(0 0 0 / 0.15);
 	}
 
-	.part-count {
-		font-size: 0.6rem;
-		background: #c8b898;
-		color: #4a3f30;
-		border-radius: 8px;
-		padding: 0 4px;
-		line-height: 1.4;
+	.group-badge {
+		font-size: 0.65rem;
+		color: #7c6a52;
 		flex-shrink: 0;
+		line-height: 1;
 	}
 
 	.struct-props {
@@ -438,4 +486,65 @@
 	}
 
 	.split-btn:hover { background: #ece8e0; }
+
+	.alloc-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+
+	.alloc-bar {
+		display: flex;
+		height: 8px;
+		border-radius: 3px;
+		overflow: hidden;
+		gap: 1px;
+		background: #e0d8cc;
+	}
+
+	.alloc-seg {
+		height: 100%;
+		transition: width 0.1s;
+		min-width: 2px;
+	}
+
+	.alloc-row {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+
+	.alloc-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.alloc-name {
+		font-size: 0.6rem;
+		color: #6b5f4e;
+		width: 52px;
+		flex-shrink: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.alloc-slider {
+		flex: 1;
+		min-width: 0;
+		height: 3px;
+		accent-color: #6b5f4e;
+		cursor: pointer;
+	}
+
+	.alloc-pct {
+		font-size: 0.6rem;
+		color: #4a3f30;
+		width: 26px;
+		text-align: right;
+		flex-shrink: 0;
+		font-variant-numeric: tabular-nums;
+	}
 </style>

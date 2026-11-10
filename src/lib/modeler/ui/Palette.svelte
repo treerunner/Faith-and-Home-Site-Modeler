@@ -12,9 +12,9 @@
 		{ kind: 'parking', label: 'Parking', color: 'var(--color-os-parking)' },
 		{ kind: 'lawn', label: 'Lawn', color: 'var(--color-os-lawn)' },
 		{ kind: 'courtyard', label: 'Courtyard', color: 'var(--color-os-courtyard)' },
-		{ kind: 'court', label: 'Court', color: 'var(--color-os-court)' },
 		{ kind: 'garden', label: 'Garden', color: 'var(--color-os-garden)' },
 		{ kind: 'cemetery', label: 'Cemetery', color: 'var(--color-os-cemetery)' },
+		{ kind: 'walkway', label: 'Walkway', color: 'var(--color-os-walkway)' },
 	];
 
 	function handleDragStart(e: DragEvent, shape: Part['shape']) {

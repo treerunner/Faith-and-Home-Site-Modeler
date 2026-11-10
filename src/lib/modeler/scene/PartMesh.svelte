@@ -74,6 +74,8 @@
 	position={[part.x, posY, part.y]}
 	rotation={[0, -(part.rotation * Math.PI) / 180, 0]}
 	userData={{ partId: part.id }}
+	castShadow
+	receiveShadow
 >
 	<T.MeshLambertMaterial
 		color={faceColor}

@@ -19,15 +19,28 @@
 		y: number;
 	}
 
-	let handles = $derived<Handle[]>([
-		{ id: 'nw', x: part.x - part.w / 2, y: part.y + part.d / 2 },
-		{ id: 'ne', x: part.x + part.w / 2, y: part.y + part.d / 2 },
-		{ id: 'se', x: part.x + part.w / 2, y: part.y - part.d / 2 },
-		{ id: 'sw', x: part.x - part.w / 2, y: part.y - part.d / 2 },
-	]);
+	function rotatedCorners() {
+		const θ = (part.rotation * Math.PI) / 180;
+		const c = Math.cos(θ), s = Math.sin(θ);
+		function pt(dx: number, dy: number) {
+			return { x: part.x + dx * c - dy * s, y: part.y + dx * s + dy * c };
+		}
+		const hw = part.w / 2, hd = part.d / 2;
+		return {
+			handles: [
+				{ id: 'nw' as ResizeHandle, ...pt(-hw,  hd) },
+				{ id: 'ne' as ResizeHandle, ...pt( hw,  hd) },
+				{ id: 'se' as ResizeHandle, ...pt( hw, -hd) },
+				{ id: 'sw' as ResizeHandle, ...pt(-hw, -hd) },
+			],
+			rot: pt(0, hd + 1.5),
+		};
+	}
 
-	let rotHandleX = $derived(part.x);
-	let rotHandleY = $derived(part.y + part.d / 2 + 1.5);
+	let corners = $derived(rotatedCorners());
+	let handles = $derived(corners.handles);
+	let rotHandleX = $derived(corners.rot.x);
+	let rotHandleY = $derived(corners.rot.y);
 </script>
 
 {#each handles as h (h.id)}

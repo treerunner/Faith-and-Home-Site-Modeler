@@ -9,5 +9,6 @@ export function roofHeight(part: Part): number {
 }
 
 export function gableRidgeAxis(part: Part): 'x' | 'z' {
-	return part.w >= part.d ? 'x' : 'z';
+	const axis = part.ridgeAxis ?? (part.w >= part.d ? 'w' : 'd');
+	return axis === 'w' ? 'x' : 'z';
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { store } from '../store.svelte';
-	import { worldToScreen } from '../scene/cameraRef';
+	import { worldToScreen, getPerspCamera } from '../scene/cameraRef';
 	import { OPEN_SPACE_COLORS } from '../colors';
 	import type { OpenSpace } from '../types';
 
@@ -37,6 +37,15 @@
 		return () => window.removeEventListener('resize', onResize);
 	});
 
+	// In 3D mode, run a rAF loop so labels track the orbiting camera each frame.
+	$effect(() => {
+		if (store.viewMode !== '3d') return;
+		let raf: number;
+		const loop = () => { viewVersion++; raf = requestAnimationFrame(loop); };
+		raf = requestAnimationFrame(loop);
+		return () => cancelAnimationFrame(raf);
+	});
+
 	interface LabelEntry {
 		os: OpenSpace;
 		screen: { x: number; y: number } | null;
@@ -48,9 +57,10 @@
 
 	let entries = $derived<LabelEntry[]>(
 		store.site.openSpaces.map((os) => {
-			void viewVersion; // re-derive on resize
+			void viewVersion; // re-derive on resize / camera move
 			const c = centroid(os.polygon);
-			const screen = worldToScreen(c[0], c[1]);
+			const cam = store.viewMode === '3d' ? (getPerspCamera() ?? undefined) : undefined;
+			const screen = worldToScreen(c[0], c[1], cam);
 			const area = polygonArea(os.polygon);
 			return {
 				os,
@@ -71,6 +81,7 @@
 	}
 </script>
 
+{#if store.showLabels}
 {#each entries as entry (entry.os.id)}
 	{#if entry.screen}
 		{@const color = OPEN_SPACE_COLORS[entry.os.kind]}
@@ -91,6 +102,7 @@
 		</div>
 	{/if}
 {/each}
+{/if}
 
 <style>
 	.os-label {

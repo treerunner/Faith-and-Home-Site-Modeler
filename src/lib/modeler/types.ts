@@ -19,6 +19,7 @@ export interface Part {
 	w: number; // width (x-axis) meters
 	d: number; // depth (y-axis) meters
 	rotation: number; // degrees
+	ridgeAxis?: 'w' | 'd'; // pinned gable ridge direction; falls back to longer dimension if absent
 	storiesOverride?: number;
 }
 
@@ -31,13 +32,15 @@ export interface Structure {
 	floorHeight: number; // meters; default 3.5, nave default 9
 	roof: Roof;
 	parts: Part[];
+	useWeights?: Partial<Record<Use, number>>; // relative allocation weights per selected use
 	dwellings?: number;
 	provenance: 'user' | 'osm' | 'overture';
+	groupId?: string; // shared with other structures that move together
 }
 
 export interface OpenSpace {
 	id: string;
-	kind: 'parking' | 'lawn' | 'courtyard' | 'court' | 'garden' | 'cemetery';
+	kind: 'parking' | 'lawn' | 'courtyard' | 'garden' | 'cemetery' | 'walkway';
 	polygon: [number, number][];
 	label?: string;
 }

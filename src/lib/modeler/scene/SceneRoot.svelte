@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { T, useThrelte } from '@threlte/core';
+	import * as THREE from 'three';
 	import PlanCamera from './PlanCamera.svelte';
 	import PerspCamera from './PerspCamera.svelte';
 	import PartMesh from './PartMesh.svelte';
@@ -86,21 +87,66 @@
 	);
 
 	// Lighting varies between plan and 3D view
+	// 3D: NW sun position so shadows fall toward SE, giving clear depth from the default camera angle
 	let lightPos = $derived<[number, number, number]>(
-		store.viewMode === '3d' ? [40, 60, 30] : [10, 20, 10],
+		store.viewMode === '3d' ? [-40, 80, -40] : [10, 20, 10],
 	);
-	let lightIntensity = $derived(store.viewMode === '3d' ? 1.6 : 1.2);
-	let ambientIntensity = $derived(store.viewMode === '3d' ? 0.4 : 0.6);
+	let lightIntensity = $derived(store.viewMode === '3d' ? 1.8 : 1.2);
+	let ambientIntensity = $derived(store.viewMode === '3d' ? 0.47 : 0.6);
+
+	// Shadow camera config — covers any reasonably-sized site
+	let dirLight: THREE.DirectionalLight | undefined = $state();
+	$effect(() => {
+		if (!dirLight) return;
+		dirLight.shadow.mapSize.set(2048, 2048);
+		const cam = dirLight.shadow.camera as THREE.OrthographicCamera;
+		cam.left = -120; cam.right = 120;
+		cam.top = 120;   cam.bottom = -120;
+		cam.near = 1;    cam.far = 400;
+		cam.updateProjectionMatrix();
+		dirLight.shadow.bias = -0.0005;
+	});
+
+	// Pedestal: AABB of all parts + margin, 4 m deep
+	const PAD = 20, MIN_SIDE = 30, DEPTH = 4;
+	let pedestal = $derived.by(() => {
+		const parts = store.site.structures.flatMap((s) => s.parts);
+		if (parts.length === 0) return { cx: 0, cz: 0, w: MIN_SIDE, d: MIN_SIDE };
+		const xs = parts.flatMap((p) => [p.x - p.w / 2, p.x + p.w / 2]);
+		const zs = parts.flatMap((p) => [p.y - p.d / 2, p.y + p.d / 2]);
+		const minX = Math.min(...xs) - PAD, maxX = Math.max(...xs) + PAD;
+		const minZ = Math.min(...zs) - PAD, maxZ = Math.max(...zs) + PAD;
+		return {
+			cx: (minX + maxX) / 2,
+			cz: (minZ + maxZ) / 2,
+			w: Math.max(MIN_SIDE, maxX - minX),
+			d: Math.max(MIN_SIDE, maxZ - minZ),
+		};
+	});
 </script>
 
 <PlanCamera />
 <PerspCamera />
 
-<T.DirectionalLight position={lightPos} intensity={lightIntensity} color="#fff8f0" />
+<T.DirectionalLight
+	bind:ref={dirLight}
+	position={lightPos}
+	intensity={lightIntensity}
+	color="#fff8f0"
+	castShadow
+/>
 <T.AmbientLight intensity={ambientIntensity} color="#f5f0e8" />
 
 {#if store.viewMode === 'plan'}
 	<T.GridHelper args={[120, 120, COLORS.grid, COLORS.gridSub]} position={[0, 0, 0]} />
+{/if}
+
+{#if store.viewMode === '3d'}
+	<!-- Pedestal base -->
+	<T.Mesh position={[pedestal.cx, -DEPTH / 2, pedestal.cz]} receiveShadow>
+		<T.BoxGeometry args={[pedestal.w, DEPTH, pedestal.d]} />
+		<T.MeshLambertMaterial color="#c8b898" />
+	</T.Mesh>
 {/if}
 
 {#each store.site.openSpaces as os (os.id)}

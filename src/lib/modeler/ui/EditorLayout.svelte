@@ -99,7 +99,7 @@
 		if (store.mode.type === 'dragging') {
 			store.updateDrag(pos.x, pos.y);
 		} else if (store.mode.type === 'resizing') {
-			store.updateResize(pos.x, pos.y);
+			store.updateResize(pos.x, pos.y, e.shiftKey);
 		} else if (store.mode.type === 'rotating') {
 			store.updateRotation(pos.x, pos.y, e.shiftKey);
 		} else if (store.mode.type === 'drawingOpenSpace') {
@@ -178,6 +178,12 @@
 					onclick={() => { store.viewMode = '3d'; }}
 				>3D</button>
 			</div>
+			<button
+				class="labels-btn"
+				class:labels-btn--off={!store.showLabels}
+				onclick={() => { store.showLabels = !store.showLabels; }}
+				title="Toggle open space labels"
+			>Labels</button>
 			<button
 				class="export-btn"
 				disabled={store.viewMode !== '3d'}
@@ -297,4 +303,16 @@
 
 	.export-btn:hover:not(:disabled) { background: #ece8e0; }
 	.export-btn:disabled { opacity: 0.4; cursor: default; }
+
+	.labels-btn {
+		padding: 0.2rem 0.6rem;
+		border: 1px solid #c8b898;
+		border-radius: 3px;
+		background: none;
+		font-size: 0.7rem;
+		color: #4a3f30;
+		cursor: pointer;
+	}
+	.labels-btn:hover { background: #ece8e0; }
+	.labels-btn--off { opacity: 0.45; }
 </style>

@@ -28,7 +28,7 @@ export const OPEN_SPACE_COLORS: Record<OpenSpace['kind'], string> = {
 	parking: '#b5b0aa',
 	lawn: '#a8c090',
 	courtyard: '#d4c5a9',
-	court: '#9bb8cc',
 	garden: '#8faf7a',
 	cemetery: '#8a8a8a',
+	walkway: '#c8b88a',
 };

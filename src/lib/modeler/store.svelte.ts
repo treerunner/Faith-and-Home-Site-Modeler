@@ -27,6 +27,7 @@ class ModelerStore {
 	mode = $state<InteractionMode>({ type: 'idle' });
 	activeStructureId = $state<string>('');
 	viewMode = $state<'plan' | '3d'>('plan');
+	showLabels = $state(true);
 
 	readonly #undoStack: Site[] = [];
 	readonly #redoStack: Site[] = [];
@@ -117,6 +118,7 @@ class ModelerStore {
 		const newStructure: Structure = {
 			...snapshot,
 			id: crypto.randomUUID(),
+			groupId: undefined, // copies don't inherit group membership
 			parts: newParts,
 		};
 		this.site.structures.push(newStructure);
@@ -137,13 +139,15 @@ class ModelerStore {
 
 	placePart(shape: Part['shape'], x: number, y: number) {
 		this.#pushUndo();
+		const defaults = PART_DEFAULTS[shape];
 		const part: Part = {
 			id: crypto.randomUUID(),
 			shape,
 			x: snapToGrid(x),
 			y: snapToGrid(y),
-			...PART_DEFAULTS[shape],
+			...defaults,
 			rotation: 0,
+			ridgeAxis: defaults.w >= defaults.d ? 'w' : 'd',
 		};
 		// Each placed shape gets its own structure entry
 		const s: Structure = {
@@ -196,7 +200,7 @@ class ModelerStore {
 	updateStructure(
 		id: string,
 		patch: Partial<
-			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof'>
+			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof' | 'useWeights'>
 		>,
 	) {
 		this.#pushUndo();
@@ -209,7 +213,13 @@ class ModelerStore {
 		this.#pushUndo();
 		const idx = this.site.structures.findIndex((s) => s.id === id);
 		if (idx === -1) return;
-		this.site.structures.splice(idx, 1); // parts are deleted with the structure
+		const groupId = this.site.structures[idx].groupId;
+		this.site.structures.splice(idx, 1);
+		// If only one structure remains in the group, remove its orphaned groupId
+		if (groupId) {
+			const remaining = this.site.structures.filter((s) => s.groupId === groupId);
+			if (remaining.length === 1) remaining[0].groupId = undefined;
+		}
 		if (this.activeStructureId === id) {
 			this.activeStructureId = this.site.structures[0]?.id ?? '';
 		}
@@ -337,9 +347,16 @@ class ModelerStore {
 		this.#pushUndo();
 		this.#gestureDidMutate = false;
 		const structure = this.site.structures.find((s) => s.parts.some((p) => p.id === id));
-		const companions = structure
-			? structure.parts.map((p) => ({ id: p.id, initialX: p.x, initialY: p.y }))
-			: [{ id, initialX: this.#findPart(id)?.x ?? 0, initialY: this.#findPart(id)?.y ?? 0 }];
+		// Include all parts from every structure in the same group so they move as a unit
+		const groupMembers =
+			structure?.groupId
+				? this.site.structures.filter((s) => s.groupId === structure.groupId)
+				: structure
+					? [structure]
+					: [];
+		const companions = groupMembers.flatMap((s) =>
+			s.parts.map((p) => ({ id: p.id, initialX: p.x, initialY: p.y })),
+		);
 		this.mode = { type: 'dragging', partId: id, offsetX, offsetY, companions, cloning };
 	}
 
@@ -380,14 +397,14 @@ class ModelerStore {
 		if (this.mode.type !== 'dragging') return;
 		if (!this.#gestureDidMutate) this.#undoStack.pop();
 		const { partId, cloning } = this.mode;
-		// Auto-merge when dropped touching another structure (not while cloning)
+		// Auto-group when dropped touching another structure (not while cloning)
 		if (!cloning) {
 			const draggedStructure = this.site.structures.find((s) =>
 				s.parts.some((p) => p.id === partId),
 			);
 			if (draggedStructure) {
 				const target = this.#findTouchingStructure(draggedStructure);
-				if (target) this.#mergeStructures(draggedStructure.id, target.id);
+				if (target) this.#groupStructures(draggedStructure.id, target.id);
 			}
 		}
 		this.mode = { type: 'selected', partId };
@@ -417,13 +434,25 @@ class ModelerStore {
 		return undefined;
 	}
 
-	#mergeStructures(draggedId: string, targetId: string) {
-		const dragged = this.site.structures.find((s) => s.id === draggedId);
-		const target = this.site.structures.find((s) => s.id === targetId);
-		if (!dragged || !target) return;
-		target.parts.push(...dragged.parts);
-		this.site.structures.splice(this.site.structures.indexOf(dragged), 1);
-		if (this.activeStructureId === draggedId) this.activeStructureId = targetId;
+	#groupStructures(id1: string, id2: string) {
+		const s1 = this.site.structures.find((s) => s.id === id1);
+		const s2 = this.site.structures.find((s) => s.id === id2);
+		if (!s1 || !s2) return;
+		if (s1.groupId !== undefined && s1.groupId === s2.groupId) return;
+		const groupId = s1.groupId ?? s2.groupId ?? crypto.randomUUID();
+		s1.groupId = groupId;
+		s2.groupId = groupId;
+	}
+
+	ungroupStructure(id: string) {
+		this.#pushUndo();
+		const structure = this.site.structures.find((s) => s.id === id);
+		if (!structure?.groupId) return;
+		const groupId = structure.groupId;
+		structure.groupId = undefined;
+		// If only one member remains in the group, remove its groupId too
+		const remaining = this.site.structures.filter((s) => s.groupId === groupId);
+		if (remaining.length === 1) remaining[0].groupId = undefined;
 	}
 
 	startResizing(id: string, handle: ResizeHandle) {
@@ -431,21 +460,46 @@ class ModelerStore {
 		if (!part) return;
 		this.#pushUndo();
 		this.#gestureDidMutate = false;
-		const hw = part.w / 2;
-		const hd = part.d / 2;
-		// anchor = corner opposite to the handle being dragged
-		const anchorX = part.x + (handle.includes('e') ? -hw : hw);
-		const anchorY = part.y + (handle.includes('n') ? -hd : hd);
-		this.mode = { type: 'resizing', partId: id, handle, anchorX, anchorY };
+		// anchor = corner opposite the dragged handle, rotated to world space
+		const adx = handle.includes('e') ? -part.w / 2 : part.w / 2;
+		const ady = handle.includes('n') ? -part.d / 2 : part.d / 2;
+		const θ = (part.rotation * Math.PI) / 180;
+		const c = Math.cos(θ), s = Math.sin(θ);
+		const anchorX = part.x + adx * c - ady * s;
+		const anchorY = part.y + adx * s + ady * c;
+		this.mode = { type: 'resizing', partId: id, handle, anchorX, anchorY, initialW: part.w, initialD: part.d };
 	}
 
-	updateResize(worldX: number, worldY: number) {
+	updateResize(worldX: number, worldY: number, proportional = false) {
 		if (this.mode.type !== 'resizing') return;
-		const { partId, anchorX, anchorY } = this.mode;
-		const newW = Math.max(1, snapToGrid(Math.abs(worldX - anchorX), 0.5));
-		const newD = Math.max(1, snapToGrid(Math.abs(worldY - anchorY), 0.5));
-		const newX = (worldX + anchorX) / 2;
-		const newY = (worldY + anchorY) / 2;
+		const { partId, anchorX, anchorY, initialW, initialD } = this.mode;
+		const part = this.#findPart(partId);
+		if (!part) return;
+		const θ = (part.rotation * Math.PI) / 180;
+		const c = Math.cos(θ), s = Math.sin(θ);
+		// Project cursor-to-anchor vector onto part's local axes
+		const vecX = worldX - anchorX;
+		const vecY = worldY - anchorY;
+		const localX = vecX * c + vecY * s;   // component along local X (width axis)
+		const localY = -vecX * s + vecY * c;  // component along local Y (depth axis)
+		const rawW = Math.abs(localX);
+		const rawD = Math.abs(localY);
+		let newW: number, newD: number;
+		if (proportional && (rawW > 0 || rawD > 0)) {
+			const scale = Math.max(rawW / initialW, rawD / initialD);
+			newW = Math.max(1, snapToGrid(initialW * scale, 0.5));
+			newD = Math.max(1, snapToGrid(initialD * scale, 0.5));
+		} else {
+			newW = Math.max(1, snapToGrid(rawW, 0.5));
+			newD = Math.max(1, snapToGrid(rawD, 0.5));
+		}
+		// Reconstruct dragged corner in world space, then center is the midpoint
+		const signLX = localX >= 0 ? 1 : -1;
+		const signLY = localY >= 0 ? 1 : -1;
+		const dragRelX = signLX * newW * c - signLY * newD * s;
+		const dragRelY = signLX * newW * s + signLY * newD * c;
+		const newX = anchorX + dragRelX / 2;
+		const newY = anchorY + dragRelY / 2;
 		this.#mutPart(partId, (p) => {
 			p.w = newW;
 			p.d = newD;
