@@ -1,4 +1,4 @@
-import type { OpenSpace, Part, Site, Structure } from './types';
+import type { CongregationProfile, OpenSpace, Part, Site, Structure } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 
@@ -13,7 +13,7 @@ const MAX_UNDO = 50;
 function makeSite(): Site {
 	return {
 		id: crypto.randomUUID(),
-		name: 'Untitled Site',
+		name: '',
 		mode: 'grid',
 		structures: [],
 		openSpaces: [],
@@ -28,6 +28,7 @@ class ModelerStore {
 	activeStructureId = $state<string>('');
 	viewMode = $state<'plan' | '3d'>('plan');
 	showLabels = $state(true);
+	showAnalysis = $state(false);
 
 	readonly #undoStack: Site[] = [];
 	readonly #redoStack: Site[] = [];
@@ -578,6 +579,16 @@ class ModelerStore {
 
 	toggleViewMode() {
 		this.viewMode = this.viewMode === 'plan' ? '3d' : 'plan';
+	}
+
+	updateSiteName(name: string) {
+		this.#pushUndo();
+		this.site.name = name;
+	}
+
+	updateCongregationProfile(patch: Partial<CongregationProfile>) {
+		this.#pushUndo();
+		this.site.congregationProfile = { ...this.site.congregationProfile, ...patch };
 	}
 
 	undo() {

@@ -2,6 +2,7 @@
 	import Palette from './Palette.svelte';
 	import PropertiesPanel from './PropertiesPanel.svelte';
 	import OpenSpaceLabels from './OpenSpaceLabels.svelte';
+	import AnalysisModal from './AnalysisModal.svelte';
 	import Scene from '../scene/Scene.svelte';
 	import { store } from '../store.svelte';
 	import { clientToSite, hitTest, rendererEl } from '../scene/cameraRef';
@@ -121,6 +122,7 @@
 
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
+			if (store.showAnalysis) { store.showAnalysis = false; return; }
 			if (store.mode.type === 'drawingOpenSpace') store.cancelPlacing();
 			else if (store.selectedOpenSpaceId) store.selectOpenSpace(null);
 		}
@@ -190,9 +192,17 @@
 				onclick={() => exportPNG()}
 				title="Export PNG"
 			>↓ PNG</button>
+			<button
+				class="analysis-btn"
+				onclick={() => { store.showAnalysis = true; }}
+				title="Open analysis report"
+			>Analysis</button>
 		</div>
 	</div>
 	<PropertiesPanel />
+	{#if store.showAnalysis}
+		<AnalysisModal />
+	{/if}
 </div>
 
 <style>
@@ -211,7 +221,7 @@
 
 	.scale-bar {
 		position: absolute;
-		bottom: 0.75rem;
+		bottom: 3rem;
 		right: 0.75rem;
 		display: flex;
 		flex-direction: column;
@@ -315,4 +325,15 @@
 	}
 	.labels-btn:hover { background: #ece8e0; }
 	.labels-btn--off { opacity: 0.45; }
+
+	.analysis-btn {
+		padding: 0.2rem 0.6rem;
+		border: 1px solid #c8b898;
+		border-radius: 3px;
+		background: none;
+		font-size: 0.7rem;
+		color: #4a3f30;
+		cursor: pointer;
+	}
+	.analysis-btn:hover { background: #ece8e0; }
 </style>

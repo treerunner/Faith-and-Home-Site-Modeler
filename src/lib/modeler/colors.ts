@@ -12,7 +12,19 @@ export const COLORS = {
 	selection: '#2563eb',
 } as const;
 
-import type { OpenSpace, Status } from './types';
+import type { OpenSpace, Status, Use } from './types';
+
+export const USE_COLORS: Record<Use, string> = {
+	worship:        '#5b6cb8',
+	fellowship:     '#4fa86e',
+	education:      '#d4a040',
+	office:         '#7a8aaa',
+	housing:        '#e07040',
+	community:      '#e09828',
+	daycare:        '#a070c0',
+	social_services:'#c05870',
+	other:          '#c06060',
+};
 
 export function statusColor(status: Status): string {
 	const map: Record<Status, string> = {

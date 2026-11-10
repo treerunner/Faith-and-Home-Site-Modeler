@@ -45,6 +45,14 @@ export interface OpenSpace {
 	label?: string;
 }
 
+export interface CongregationProfile {
+	size?: 'small' | 'medium' | 'large';
+	tradition?: string;
+	tenure?: 'new' | 'recent' | 'established' | 'historic';
+	ownership?: 'owned' | 'leased';
+	notes?: string;
+}
+
 export interface Site {
 	id: string;
 	name: string;
@@ -56,4 +64,5 @@ export interface Site {
 	openSpaces: OpenSpace[];
 	context: { footprints: [number, number][][]; roads: [number, number][][] };
 	annotations: { n: number; x: number; y: number; text: string }[];
+	congregationProfile?: CongregationProfile;
 }

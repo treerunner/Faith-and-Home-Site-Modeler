@@ -1,19 +1,9 @@
 <script lang="ts">
 	import { store } from '../store.svelte';
-	import { statusColor } from '../colors';
-	import type { Roof, Status, Structure, Use } from '../types';
+	import { statusColor, USE_COLORS } from '../colors';
+	import type { CongregationProfile, Roof, Status, Structure, Use } from '../types';
 
-	const USE_COLORS: Record<Use, string> = {
-		worship:        '#5b6cb8',
-		fellowship:     '#4fa86e',
-		education:      '#d4a040',
-		office:         '#7a8aaa',
-		housing:        '#e07040',
-		community:      '#e09828',
-		daycare:        '#a070c0',
-		social_services:'#c05870',
-		other:          '#c06060',
-	};
+	let sidebarTab = $state<'spatial' | 'social'>('spatial');
 
 	const STATUS_OPTIONS: { value: Status; label: string }[] = [
 		{ value: 'existing', label: 'Existing' },
@@ -79,6 +69,103 @@
 </script>
 
 <aside class="props-panel" aria-label="Properties panel">
+	<div class="site-name-row">
+		<input
+			class="site-name-input"
+			type="text"
+			aria-label="Site name"
+			placeholder="Untitled Site"
+			value={store.site.name}
+			oninput={(e) => store.updateSiteName((e.target as HTMLInputElement).value)}
+		/>
+	</div>
+
+	<div class="tab-strip" role="tablist">
+		<button
+			class="tab-btn"
+			class:tab-btn--active={sidebarTab === 'spatial'}
+			role="tab"
+			aria-selected={sidebarTab === 'spatial'}
+			onclick={() => { sidebarTab = 'spatial'; }}
+		>Spatial</button>
+		<button
+			class="tab-btn"
+			class:tab-btn--active={sidebarTab === 'social'}
+			role="tab"
+			aria-selected={sidebarTab === 'social'}
+			onclick={() => { sidebarTab = 'social'; }}
+		>Social</button>
+	</div>
+
+	{#if sidebarTab === 'social'}
+		{@const profile = store.site.congregationProfile ?? {}}
+		<div class="section section--props">
+			<h2 class="panel-heading">Congregation</h2>
+
+			<fieldset class="fieldset">
+				<legend class="field-label">Size</legend>
+				<div class="pill-group">
+					{#each (['small', 'medium', 'large'] as const) as size}
+						<button
+							class="pill"
+							class:pill--active={profile.size === size}
+							style={profile.size === size ? 'background:#6b5f4e;border-color:#6b5f4e;color:#fff' : ''}
+							onclick={() => store.updateCongregationProfile({ size: profile.size === size ? undefined : size })}
+						>{size.charAt(0).toUpperCase() + size.slice(1)}</button>
+					{/each}
+				</div>
+			</fieldset>
+
+			<label class="field-label" for="profile-tradition">Denomination / tradition</label>
+			<input
+				id="profile-tradition"
+				class="text-input"
+				type="text"
+				placeholder="e.g. Roman Catholic, AME"
+				value={profile.tradition ?? ''}
+				oninput={(e) => store.updateCongregationProfile({ tradition: (e.target as HTMLInputElement).value || undefined })}
+			/>
+
+			<fieldset class="fieldset">
+				<legend class="field-label">Tenure in building</legend>
+				<div class="pill-group">
+					{#each (['new', 'recent', 'established', 'historic'] as const) as tenure}
+						<button
+							class="pill"
+							class:pill--active={profile.tenure === tenure}
+							style={profile.tenure === tenure ? 'background:#6b5f4e;border-color:#6b5f4e;color:#fff' : ''}
+							onclick={() => store.updateCongregationProfile({ tenure: profile.tenure === tenure ? undefined : tenure })}
+						>{tenure.charAt(0).toUpperCase() + tenure.slice(1)}</button>
+					{/each}
+				</div>
+			</fieldset>
+
+			<fieldset class="fieldset">
+				<legend class="field-label">Ownership</legend>
+				<div class="pill-group">
+					{#each (['owned', 'leased'] as const) as own}
+						<button
+							class="pill"
+							class:pill--active={profile.ownership === own}
+							style={profile.ownership === own ? 'background:#6b5f4e;border-color:#6b5f4e;color:#fff' : ''}
+							onclick={() => store.updateCongregationProfile({ ownership: profile.ownership === own ? undefined : own })}
+						>{own.charAt(0).toUpperCase() + own.slice(1)}</button>
+					{/each}
+				</div>
+			</fieldset>
+
+			<label class="field-label" for="profile-notes">Notes</label>
+			<textarea
+				id="profile-notes"
+				class="text-input textarea-input"
+				placeholder="Any additional context..."
+				value={profile.notes ?? ''}
+				oninput={(e) => store.updateCongregationProfile({ notes: (e.target as HTMLTextAreaElement).value || undefined })}
+			></textarea>
+		</div>
+	{/if}
+
+	{#if sidebarTab === 'spatial'}
 	<div class="section">
 		<h2 class="panel-heading">Structures</h2>
 
@@ -228,8 +315,10 @@
 		{/if}
 	</div>
 
+	{/if}
+
 	<!-- Open space properties when one is selected -->
-	{#if selectedOS}
+	{#if selectedOS && sidebarTab === 'spatial'}
 		{@const os = selectedOS}
 		<div class="section section--props">
 			<h2 class="panel-heading">Open Space</h2>
@@ -264,6 +353,64 @@
 		flex-direction: column;
 		overflow-y: auto;
 		user-select: none;
+	}
+
+	.site-name-row {
+		padding: 0.5rem 0.6rem 0.4rem;
+		border-bottom: 1px solid #e8deca;
+		background: #f0ece3;
+	}
+
+	.site-name-input {
+		width: 100%;
+		border: none;
+		background: transparent;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: #2a1f10;
+		padding: 0;
+		outline: none;
+		caret-color: var(--color-selection);
+	}
+
+	.site-name-input:focus {
+		border-bottom: 1px solid var(--color-selection);
+	}
+
+	.tab-strip {
+		display: flex;
+		border-bottom: 1px solid #d4c5a9;
+		background: #f0ece3;
+		flex-shrink: 0;
+	}
+
+	.tab-btn {
+		flex: 1;
+		padding: 0.4rem 0;
+		border: none;
+		background: none;
+		font-size: 0.7rem;
+		font-weight: 500;
+		color: #6b5f4e;
+		cursor: pointer;
+		border-bottom: 2px solid transparent;
+		transition: color 0.1s, border-color 0.1s;
+	}
+
+	.tab-btn:hover { color: #2a1f10; }
+
+	.tab-btn--active {
+		color: #2a1f10;
+		font-weight: 700;
+		border-bottom-color: #6b5f4e;
+		background: #f8f5ee;
+	}
+
+	.textarea-input {
+		resize: vertical;
+		min-height: 60px;
+		font-family: inherit;
+		line-height: 1.4;
 	}
 
 	.section {
