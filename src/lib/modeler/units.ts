@@ -1,5 +1,8 @@
 // Internal geometry is always in meters. Convert to feet only at display time.
 
+/** Default average unit size used for housing area estimates. */
+export const AVG_UNIT_SQFT = 900;
+
 export const M_TO_FT   = 3.28084;
 export const SQM_TO_SQFT = 10.7639;
 

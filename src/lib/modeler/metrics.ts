@@ -68,6 +68,17 @@ export function dwellingsEstimate(site: Site): number {
 	return site.structures.reduce((sum, s) => sum + (s.dwellings ?? 0), 0);
 }
 
+export function dwellingsByStatus(site: Site): { adaptive_reuse: number; new: number; existing: number } {
+	const result = { adaptive_reuse: 0, new: 0, existing: 0 };
+	for (const s of site.structures) {
+		if (!s.uses.includes('housing') || !s.dwellings) continue;
+		if (s.status === 'adaptive_reuse') result.adaptive_reuse += s.dwellings;
+		else if (s.status === 'new') result.new += s.dwellings;
+		else if (s.status === 'existing') result.existing += s.dwellings;
+	}
+	return result;
+}
+
 // GFA × normalized use weight, summed across all structures
 export function useFloorAreaByUse(site: Site): Partial<Record<Use, number>> {
 	const result: Partial<Record<Use, number>> = {};

@@ -2,7 +2,7 @@
 	import { store } from '../store.svelte';
 	import { USE_COLORS } from '../colors';
 	import { capturePlanImage } from '../sceneExport';
-	import { fmtSqft } from '../units';
+	import { fmtSqft, AVG_UNIT_SQFT } from '../units';
 	import {
 		siteFootprint,
 		grossFloorArea,
@@ -11,6 +11,7 @@
 		greenSpaceArea,
 		parkingArea,
 		dwellingsEstimate,
+		dwellingsByStatus,
 		useFloorAreaByUse,
 		structureFootprint,
 		generateActionSteps,
@@ -41,6 +42,7 @@
 	let green = $derived(greenSpaceArea(site));
 	let parking = $derived(parkingArea(site));
 	let dwellings = $derived(dwellingsEstimate(site));
+	let dwellingStatus = $derived(dwellingsByStatus(site));
 	let useAreas = $derived(useFloorAreaByUse(site));
 	let steps = $derived(generateActionSteps(site));
 
@@ -170,7 +172,17 @@
 								<td class="met-value">
 									{dwellings > 0 ? dwellings : '—'}
 									{#if dwellings > 0}
-										<span class="met-sub">est. {Math.round(dwellings * 2.5)} residents</span>
+										{#if dwellingStatus.adaptive_reuse > 0}
+											<span class="met-sub met-sub--block">{dwellingStatus.adaptive_reuse} adaptive reuse</span>
+										{/if}
+										{#if dwellingStatus.new > 0}
+											<span class="met-sub met-sub--block">{dwellingStatus.new} new construction</span>
+										{/if}
+										{#if dwellingStatus.existing > 0}
+											<span class="met-sub met-sub--block">{dwellingStatus.existing} existing</span>
+										{/if}
+										<span class="met-sub met-sub--block">est. {Math.round(dwellings * 2.5)} residents</span>
+										<span class="met-sub met-sub--block">est. {(dwellings * AVG_UNIT_SQFT).toLocaleString()} sq ft <span class="met-hint">avg {AVG_UNIT_SQFT} sq ft/unit</span></span>
 									{/if}
 								</td>
 							</tr>
@@ -462,6 +474,17 @@
 		color: var(--color-text);
 		font-size: 0.7rem;
 		margin-left: 0.3rem;
+	}
+
+	.met-sub--block {
+		display: block;
+		margin-left: 0;
+		margin-top: 2px;
+	}
+
+	.met-hint {
+		opacity: 0.55;
+		font-size: 0.65rem;
 	}
 
 	.alloc-bar {
