@@ -165,9 +165,9 @@
 		<OpenSpaceLabels />
 
 		{#if store.viewMode === 'plan'}
-			<div class="scale-bar" aria-label="Scale: 10 meters">
+			<div class="scale-bar" aria-label="Scale: 33 feet">
 				<div class="scale-bar__line"></div>
-				<span class="scale-bar__label">10 m</span>
+				<span class="scale-bar__label">33 ft</span>
 			</div>
 		{/if}
 

@@ -2,6 +2,7 @@
 	import { store } from '../store.svelte';
 	import { USE_COLORS } from '../colors';
 	import { capturePlanImage } from '../sceneExport';
+	import { fmtSqft } from '../units';
 	import {
 		siteFootprint,
 		grossFloorArea,
@@ -70,10 +71,6 @@
 
 	let planImageSrc = $state<string | null>(null);
 	$effect(() => { planImageSrc = capturePlanImage(site); });
-
-	function fmt(n: number): string {
-		return Math.round(n).toLocaleString();
-	}
 
 	function pct(n: number, total: number): string {
 		return total > 0 ? Math.round((n / total) * 100) + '%' : '—';
@@ -150,8 +147,8 @@
 				<h2 class="section-heading">Spatial Metrics</h2>
 				<table class="metrics-table">
 					<tbody>
-						<tr><td class="met-label">Structure footprint</td><td class="met-value">{fmt(footprint)} m²</td></tr>
-						<tr><td class="met-label">Gross floor area</td><td class="met-value">{fmt(gfa)} m²</td></tr>
+						<tr><td class="met-label">Structure footprint</td><td class="met-value">{fmtSqft(footprint)}</td></tr>
+						<tr><td class="met-label">Gross floor area</td><td class="met-value">{fmtSqft(gfa)}</td></tr>
 						<tr><td class="met-label">Lot coverage</td><td class="met-value">{coverage !== null ? Math.round(coverage) + '%' : '—'}</td></tr>
 						<tr><td class="met-label">Structures</td>
 							<td class="met-value">
@@ -177,9 +174,9 @@
 									{/if}
 								</td>
 							</tr>
-						<tr><td class="met-label">Total open space</td><td class="met-value">{fmt(osArea)} m²</td></tr>
-						<tr><td class="met-label">Green space</td><td class="met-value">{fmt(green)} m² <span class="met-sub">{osArea > 0 ? pct(green, osArea) : ''}</span></td></tr>
-						<tr><td class="met-label">Parking</td><td class="met-value">{fmt(parking)} m²</td></tr>
+						<tr><td class="met-label">Total open space</td><td class="met-value">{fmtSqft(osArea)}</td></tr>
+						<tr><td class="met-label">Green space</td><td class="met-value">{fmtSqft(green)} <span class="met-sub">{osArea > 0 ? pct(green, osArea) : ''}</span></td></tr>
+						<tr><td class="met-label">Parking</td><td class="met-value">{fmtSqft(parking)}</td></tr>
 					</tbody>
 				</table>
 			</section>
@@ -198,7 +195,7 @@
 							<div class="alloc-row">
 								<span class="alloc-dot" style="background:{USE_COLORS[use]}"></span>
 								<span class="alloc-name">{USE_LABELS[use]}</span>
-								<span class="alloc-area">{fmt(area)} m²</span>
+								<span class="alloc-area">{fmtSqft(area)}</span>
 								<span class="alloc-pct">{pct(area, useAreaTotal)}</span>
 							</div>
 						{/each}
@@ -229,7 +226,7 @@
 									<td>{s.roof.charAt(0).toUpperCase() + s.roof.slice(1)}</td>
 									<td>{s.stories}</td>
 									<td class="uses-cell">{s.uses.map((u) => USE_LABELS[u]).join(', ') || '—'}</td>
-									<td>{fmt(structureFootprint(s))} m²</td>
+									<td>{fmtSqft(structureFootprint(s))}</td>
 								</tr>
 							{/each}
 						</tbody>
@@ -509,7 +506,7 @@
 	.alloc-area {
 		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
-		width: 70px;
+		width: 90px;
 		text-align: right;
 	}
 

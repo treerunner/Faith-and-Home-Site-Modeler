@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { store } from '../store.svelte';
 	import { statusColor, USE_COLORS } from '../colors';
+	import { M_TO_FT, ftToM } from '../units';
 	import type { CongregationProfile, Roof, Status, Structure, Use } from '../types';
 
 	let sidebarTab = $derived(store.sidebarTab);
@@ -295,16 +296,16 @@
 										/>
 									</div>
 									<div class="field-group">
-										<label class="field-label" for="struct-floor-{s.id}">Floor ht (m)</label>
+										<label class="field-label" for="struct-floor-{s.id}">Floor ht (ft)</label>
 										<input
 											id="struct-floor-{s.id}"
 											class="num-input"
 											type="number"
-											min="2"
-											max="20"
+											min="5"
+											max="66"
 											step="0.5"
-											value={s.floorHeight}
-											oninput={(e) => store.updateStructure(s.id, { floorHeight: Number((e.target as HTMLInputElement).value) })}
+											value={+(s.floorHeight * M_TO_FT).toFixed(1)}
+											oninput={(e) => store.updateStructure(s.id, { floorHeight: ftToM(Number((e.target as HTMLInputElement).value)) })}
 										/>
 									</div>
 								</div>
@@ -350,34 +351,34 @@
 				<h2 class="panel-heading">Tree</h2>
 				<div class="row-fields">
 					<div class="field-group">
-						<label class="field-label" for="tree-radius">Canopy (m)</label>
+						<label class="field-label" for="tree-radius">Canopy (ft)</label>
 						<input
 							id="tree-radius"
 							class="num-input"
 							type="number"
-							min="0.5"
-							max="20"
+							min="1.5"
+							max="66"
 							step="0.5"
-							value={tree.radius}
+							value={+(tree.radius * M_TO_FT).toFixed(1)}
 							oninput={(e) => {
 								const v = Number((e.target as HTMLInputElement).value);
-								if (v > 0) store.updateTree(tree.id, { radius: v });
+								if (v > 0) store.updateTree(tree.id, { radius: ftToM(v) });
 							}}
 						/>
 					</div>
 					<div class="field-group">
-						<label class="field-label" for="tree-height">Height (m)</label>
+						<label class="field-label" for="tree-height">Height (ft)</label>
 						<input
 							id="tree-height"
 							class="num-input"
 							type="number"
-							min="1"
-							max="40"
-							step="0.5"
-							value={tree.height}
+							min="3"
+							max="130"
+							step="1"
+							value={+(tree.height * M_TO_FT).toFixed(1)}
 							oninput={(e) => {
 								const v = Number((e.target as HTMLInputElement).value);
-								if (v > 0) store.updateTree(tree.id, { height: v });
+								if (v > 0) store.updateTree(tree.id, { height: ftToM(v) });
 							}}
 						/>
 					</div>
