@@ -36,9 +36,10 @@
 </script>
 
 {#if geo}
-	<!-- Visible fill -->
+	<!-- Visible fill — polygonOffset pulls depth toward camera to beat the pedestal -->
 	<T.Mesh position={[0, Y_FILL, 0]} geometry={geo}>
-		<T.MeshLambertMaterial {color} {opacity} transparent side={THREE.DoubleSide} />
+		<T.MeshLambertMaterial {color} {opacity} transparent side={THREE.DoubleSide}
+			polygonOffset={true} polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
 	</T.Mesh>
 	<!-- Hit-test mesh (transparent but physically present) -->
 	{#if !draft}
