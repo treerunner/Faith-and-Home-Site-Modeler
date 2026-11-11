@@ -11,6 +11,13 @@
 	import type { ResizeHandle } from '../interaction';
 
 	let canvasAreaEl: HTMLDivElement | undefined = $state();
+	let viewModeBeforeAnalysis = $state<'plan' | '3d'>('plan');
+
+	function openAnalysis() {
+		viewModeBeforeAnalysis = store.viewMode;
+		store.viewMode = 'plan'; // ensure plan-view scene before modal mounts
+		store.showAnalysis = true;
+	}
 
 	// ── Drag-and-drop from palette ──────────────────────────────────────────
 
@@ -136,7 +143,7 @@
 
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
-			if (store.showAnalysis) { store.showAnalysis = false; return; }
+			if (store.showAnalysis) { store.showAnalysis = false; store.viewMode = viewModeBeforeAnalysis; return; }
 			if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree') store.cancelPlacing();
 			else if (store.selectedOpenSpaceId) store.selectOpenSpace(null);
 			else if (store.selectedTreeId) store.selectTree(null);
@@ -210,14 +217,14 @@
 			>↓ PNG</button>
 			<button
 				class="analysis-btn"
-				onclick={() => { store.showAnalysis = true; }}
+				onclick={openAnalysis}
 				title="Open analysis report"
 			>Analysis</button>
 		</div>
 	</div>
 	<PropertiesPanel />
 	{#if store.showAnalysis}
-		<AnalysisModal />
+		<AnalysisModal previousViewMode={viewModeBeforeAnalysis} />
 	{/if}
 </div>
 

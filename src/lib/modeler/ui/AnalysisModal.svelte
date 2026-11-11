@@ -1,5 +1,16 @@
 <script lang="ts">
 	import { store } from '../store.svelte';
+
+	interface Props { previousViewMode?: 'plan' | '3d' }
+	let { previousViewMode = 'plan' }: Props = $props();
+
+	function close() {
+		store.showAnalysis = false;
+		store.viewMode = previousViewMode;
+	}
+
+	// Restore view mode if the component is destroyed via any path.
+	$effect(() => () => { store.viewMode = previousViewMode; });
 	import { USE_COLORS } from '../colors';
 	import { capturePlanImage } from '../sceneExport';
 	import { fmtSqft, AVG_UNIT_SQFT } from '../units';
@@ -79,11 +90,11 @@
 	}
 </script>
 
-<div class="analysis-overlay" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) store.showAnalysis = false; }}>
+<div class="analysis-overlay" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) close(); }}>
 	<div class="analysis-modal" role="dialog" aria-modal="true" aria-label="Site analysis">
 		<div class="analysis-modal__toolbar">
 			<span class="modal-title">Site Analysis</span>
-			<button class="modal-close" onclick={() => { store.showAnalysis = false; }} aria-label="Close">✕</button>
+			<button class="modal-close" onclick={close} aria-label="Close">✕</button>
 		</div>
 
 		<div class="analysis-modal__body">
