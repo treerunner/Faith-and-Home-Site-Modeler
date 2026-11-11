@@ -16,6 +16,9 @@
 	function openAnalysis() {
 		viewModeBeforeAnalysis = store.viewMode;
 		store.viewMode = 'plan'; // ensure plan-view scene before modal mounts
+		store.selectPart(null);  // clear selection so handles don't appear in thumbnail
+		store.selectOpenSpace(null);
+		store.selectTree(null);
 		store.showAnalysis = true;
 	}
 
