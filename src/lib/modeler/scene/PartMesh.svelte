@@ -28,11 +28,14 @@
 	const EDGE_COLOR = '#4a3f30';
 
 	function makeGeo(shape: Part['shape'], w: number, d: number, h: number, floors: number) {
+		if (shape === 'circle') {
+			return new THREE.CylinderGeometry(w / 2, w / 2, h, 32, floors);
+		}
 		if (shape === 'tri') {
 			const s = new THREE.Shape();
-			s.moveTo(-w / 2, -d / 2);
-			s.lineTo(w / 2, -d / 2);
-			s.lineTo(0, d / 2);
+			s.moveTo(-w / 2, d / 2);
+			s.lineTo(w / 2, d / 2);
+			s.lineTo(0, -d / 2);
 			s.closePath();
 			const geo = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false });
 			geo.rotateX(Math.PI / 2);

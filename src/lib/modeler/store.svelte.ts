@@ -1,9 +1,10 @@
-import type { CongregationProfile, OpenSpace, Part, Site, Structure } from './types';
+import type { CongregationProfile, OpenSpace, Part, Site, Structure, Tree } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 
 const PART_DEFAULTS: Record<Part['shape'], { w: number; d: number }> = {
 	rect: { w: 10, d: 6 },
+	circle: { w: 6, d: 6 },
 	square: { w: 6, d: 6 },
 	tri: { w: 6, d: 6 },
 };
@@ -17,6 +18,7 @@ function makeSite(): Site {
 		mode: 'grid',
 		structures: [],
 		openSpaces: [],
+		trees: [],
 		context: { footprints: [], roads: [] },
 		annotations: [],
 	};
@@ -86,6 +88,12 @@ class ModelerStore {
 	get selectedOpenSpace(): OpenSpace | undefined {
 		const id = this.selectedOpenSpaceId;
 		return id ? this.site.openSpaces.find((o) => o.id === id) : undefined;
+	}
+
+	get selectedTreeId(): string | null {
+		const m = this.mode;
+		if (m.type === 'selectedTree' || m.type === 'draggingTree') return m.treeId;
+		return null;
 	}
 
 	#pushUndo() {
@@ -505,6 +513,7 @@ class ModelerStore {
 		const newX = anchorX + dragRelX / 2;
 		const newY = anchorY + dragRelY / 2;
 		this.#mutPart(partId, (p) => {
+			if (p.shape === 'circle') { newW = newD = Math.max(newW, newD); }
 			p.w = newW;
 			p.d = newD;
 			p.x = newX;
@@ -587,6 +596,54 @@ class ModelerStore {
 	updateSiteName(name: string) {
 		this.#pushUndo();
 		this.site.name = name;
+	}
+
+	startPlacingTree() {
+		this.mode = { type: 'placingTree' };
+	}
+
+	placeTree(x: number, y: number) {
+		this.#pushUndo();
+		const tree: Tree = { id: crypto.randomUUID(), x, y, radius: 2.5, height: 8 };
+		this.site.trees.push(tree);
+		this.mode = { type: 'selectedTree', treeId: tree.id };
+	}
+
+	selectTree(id: string | null) {
+		this.mode = id ? { type: 'selectedTree', treeId: id } : { type: 'idle' };
+	}
+
+	deleteTree(id: string) {
+		this.#pushUndo();
+		const idx = this.site.trees.findIndex((t) => t.id === id);
+		if (idx !== -1) this.site.trees.splice(idx, 1);
+		this.mode = { type: 'idle' };
+	}
+
+	startDraggingTree(id: string, offsetX: number, offsetY: number) {
+		this.#gestureDidMutate = false;
+		this.mode = { type: 'draggingTree', treeId: id, offsetX, offsetY };
+	}
+
+	updateDragTree(x: number, y: number) {
+		if (this.mode.type !== 'draggingTree') return;
+		if (!this.#gestureDidMutate) { this.#pushUndo(); this.#gestureDidMutate = true; }
+		const tree = this.site.trees.find((t) => t.id === (this.mode as { treeId: string }).treeId);
+		if (!tree) return;
+		tree.x = x - this.mode.offsetX;
+		tree.y = y - this.mode.offsetY;
+	}
+
+	endDragTree() {
+		if (this.mode.type !== 'draggingTree') return;
+		this.mode = { type: 'selectedTree', treeId: this.mode.treeId };
+		this.#gestureDidMutate = false;
+	}
+
+	updateTree(id: string, patch: Partial<Pick<Tree, 'radius' | 'height'>>) {
+		this.#pushUndo();
+		const tree = this.site.trees.find((t) => t.id === id);
+		if (tree) Object.assign(tree, patch);
 	}
 
 	updateCongregationProfile(patch: Partial<CongregationProfile>) {

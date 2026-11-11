@@ -317,7 +317,10 @@
 									onchange={(e) => store.updateStructure(s.id, { roof: (e.target as HTMLSelectElement).value as Roof })}
 								>
 									{#each ROOF_OPTIONS as opt (opt.value)}
-										<option value={opt.value}>{opt.label}</option>
+										{@const noGable = s.parts.some(p => p.shape === 'tri' || p.shape === 'circle')}
+										{#if !(opt.value === 'gable' && noGable)}
+											<option value={opt.value}>{opt.label}</option>
+										{/if}
 									{/each}
 								</select>
 
@@ -337,6 +340,51 @@
 		{/if}
 	</div>
 
+	{/if}
+
+	<!-- Tree properties when one is selected -->
+	{#if store.selectedTreeId && sidebarTab === 'spatial'}
+		{@const tree = store.site.trees.find(t => t.id === store.selectedTreeId)}
+		{#if tree}
+			<div class="section section--props">
+				<h2 class="panel-heading">Tree</h2>
+				<div class="row-fields">
+					<div class="field-group">
+						<label class="field-label" for="tree-radius">Canopy (m)</label>
+						<input
+							id="tree-radius"
+							class="num-input"
+							type="number"
+							min="0.5"
+							max="20"
+							step="0.5"
+							value={tree.radius}
+							oninput={(e) => {
+								const v = Number((e.target as HTMLInputElement).value);
+								if (v > 0) store.updateTree(tree.id, { radius: v });
+							}}
+						/>
+					</div>
+					<div class="field-group">
+						<label class="field-label" for="tree-height">Height (m)</label>
+						<input
+							id="tree-height"
+							class="num-input"
+							type="number"
+							min="1"
+							max="40"
+							step="0.5"
+							value={tree.height}
+							oninput={(e) => {
+								const v = Number((e.target as HTMLInputElement).value);
+								if (v > 0) store.updateTree(tree.id, { height: v });
+							}}
+						/>
+					</div>
+				</div>
+				<button class="delete-btn" onclick={() => store.deleteTree(tree.id)}>Delete</button>
+			</div>
+		{/if}
 	{/if}
 
 	<!-- Open space properties when one is selected -->

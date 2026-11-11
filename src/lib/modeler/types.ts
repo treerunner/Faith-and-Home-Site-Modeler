@@ -11,9 +11,10 @@ export type Use =
 	| 'other';
 export type Roof = 'flat' | 'gable' | 'object';
 
+
 export interface Part {
 	id: string;
-	shape: 'rect' | 'square' | 'tri';
+	shape: 'rect' | 'square' | 'tri' | 'circle';
 	x: number; // meters, local site coords (east-west)
 	y: number; // meters, local site coords (north-south)
 	w: number; // width (x-axis) meters
@@ -53,6 +54,14 @@ export interface CongregationProfile {
 	notes?: string;
 }
 
+export interface Tree {
+	id: string;
+	x: number;
+	y: number;
+	radius: number; // canopy radius in meters
+	height: number; // total height in meters
+}
+
 export interface Site {
 	id: string;
 	name: string;
@@ -62,6 +71,7 @@ export interface Site {
 	siteType?: 'urban' | 'suburban' | 'rural';
 	structures: Structure[];
 	openSpaces: OpenSpace[];
+	trees: Tree[];
 	context: { footprints: [number, number][][]; roads: [number, number][][] };
 	annotations: { n: number; x: number; y: number; text: string }[];
 	congregationProfile?: CongregationProfile;

@@ -6,10 +6,10 @@ import type { Status } from './types';
 
 describe('statusColor', () => {
 	const cases: [Status, string][] = [
-		['existing', '#9b9486'],
-		['adaptive_reuse', '#5c7a4e'],
-		['new', '#c96e2f'],
-		['removed', '#aaaaaa'],
+		['existing', '#959192'],
+		['adaptive_reuse', '#49b187'],
+		['new', '#f7941d'],
+		['removed', '#dfdede'],
 	];
 
 	for (const [status, expected] of cases) {

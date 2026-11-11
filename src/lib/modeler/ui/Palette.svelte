@@ -2,10 +2,10 @@
 	import type { OpenSpace, Part } from '../types';
 	import { store } from '../store.svelte';
 
-	const SHAPES: { shape: Part['shape']; label: string; desc: string }[] = [
-		{ shape: 'rect', label: 'Rectangle', desc: 'Bar or wing' },
-		{ shape: 'square', label: 'Square', desc: 'Compact volume' },
-		{ shape: 'tri', label: 'Triangle', desc: 'Object in space' },
+	const SHAPES: { shape: Part['shape']; label: string }[] = [
+		{ shape: 'square', label: 'Square' },
+		{ shape: 'circle', label: 'Circle' },
+		{ shape: 'tri', label: 'Triangle' },
 	];
 
 	const OPEN_SPACES: { kind: OpenSpace['kind']; label: string; color: string }[] = [
@@ -37,33 +37,32 @@
 		{#each SHAPES as s (s.shape)}
 			<li>
 				<div
-					class="shape-tile shape-tile--{s.shape}"
+					class="shape-tile"
 					draggable="true"
 					role="listitem"
+					title={s.label}
 					aria-label="Drag to place {s.label}"
 					ondragstart={(e) => handleDragStart(e, s.shape)}
 				>
-					<div class="shape-icon" aria-hidden="true">
-						{#if s.shape === 'rect'}
-							<svg viewBox="0 0 40 24" width="40" height="24">
-								<rect x="1" y="1" width="38" height="22" fill="none" stroke="currentColor" stroke-width="2" />
-							</svg>
-						{:else if s.shape === 'square'}
-							<svg viewBox="0 0 28 28" width="28" height="28">
-								<rect x="1" y="1" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" />
-							</svg>
-						{:else}
-							<svg viewBox="0 0 32 28" width="32" height="28">
-								<polygon points="16,1 31,27 1,27" fill="none" stroke="currentColor" stroke-width="2" />
-							</svg>
-						{/if}
-					</div>
-					<span class="shape-label">{s.label}</span>
-					<span class="shape-desc">{s.desc}</span>
+					{#if s.shape === 'square'}
+						<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true">
+							<rect x="1" y="1" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" />
+						</svg>
+					{:else if s.shape === 'circle'}
+						<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true">
+							<circle cx="14" cy="14" r="12" fill="none" stroke="currentColor" stroke-width="2" />
+						</svg>
+					{:else}
+						<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true">
+							<polygon points="14,2 27,26 1,26" fill="none" stroke="currentColor" stroke-width="2" />
+						</svg>
+					{/if}
 				</div>
 			</li>
 		{/each}
 	</ul>
+
+	<div class="palette-hint">Drag a shape onto the canvas to place it</div>
 
 	<h2 class="palette-heading palette-heading--section">Open Spaces</h2>
 	<ul class="os-list" role="list">
@@ -83,7 +82,17 @@
 		{/each}
 	</ul>
 
-	<div class="palette-hint">Drag a shape onto the canvas to place it</div>
+	<h2 class="palette-heading palette-heading--section">Trees</h2>
+	<button
+		class="tree-btn"
+		class:tree-btn--active={store.mode.type === 'placingTree'}
+		onclick={() => store.mode.type === 'placingTree' ? store.cancelPlacing() : store.startPlacingTree()}
+		aria-pressed={store.mode.type === 'placingTree'}
+	>
+		<span class="tree-icon" aria-hidden="true">▲</span>
+		<span>Place tree</span>
+	</button>
+
 </aside>
 
 <style>
@@ -113,22 +122,22 @@
 		padding: 0;
 		margin: 0;
 		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+		flex-direction: row;
+		gap: 0.35rem;
 	}
 
 	.shape-tile {
 		display: flex;
-		flex-direction: column;
 		align-items: center;
-		gap: 0.25rem;
-		padding: 0.75rem 0.5rem;
+		justify-content: center;
+		padding: 0.4rem;
 		border: 1.5px solid var(--color-border);
 		border-radius: 4px;
 		background: var(--color-surface);
 		cursor: grab;
 		color: var(--color-text);
 		transition: border-color 0.1s, background 0.1s;
+		flex: 1;
 	}
 
 	.shape-tile:hover {
@@ -136,20 +145,7 @@
 		background: var(--fh-dusk-tint);
 	}
 
-	.shape-tile:active {
-		cursor: grabbing;
-	}
-
-	.shape-label {
-		font-size: 0.75rem;
-		font-weight: 600;
-	}
-
-	.shape-desc {
-		font-size: 0.65rem;
-		color: var(--color-text);
-		text-align: center;
-	}
+	.shape-tile:active { cursor: grabbing; }
 
 	.palette-heading--section {
 		margin-top: 0.5rem;
@@ -204,10 +200,40 @@
 		flex: 1;
 	}
 
+	.tree-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		width: 100%;
+		padding: 0.4rem 0.5rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: 4px;
+		background: var(--color-surface);
+		cursor: pointer;
+		color: var(--color-text);
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-align: left;
+		transition: border-color 0.1s, background 0.1s;
+	}
+
+	.tree-btn:hover { border-color: var(--color-selection); background: var(--fh-dusk-tint); }
+
+	.tree-btn--active {
+		border-color: var(--color-selection);
+		background: var(--fh-dusk-tint);
+	}
+
+	.tree-icon {
+		color: #8fa88f;
+		font-size: 0.85rem;
+		line-height: 1;
+	}
+
 	.palette-hint {
 		font-size: 0.65rem;
 		color: var(--color-text);
 		line-height: 1.4;
-		margin-top: auto;
+		opacity: 0.6;
 	}
 </style>

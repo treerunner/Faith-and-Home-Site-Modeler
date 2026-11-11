@@ -33,7 +33,7 @@
 	function handleDrop(e: DragEvent) {
 		e.preventDefault();
 		const shape = e.dataTransfer?.getData('text/plain') as Part['shape'] | undefined;
-		if (!shape || !['rect', 'square', 'tri'].includes(shape)) return;
+		if (!shape || !['rect', 'square', 'tri', 'circle'].includes(shape)) return;
 		const pos = clientToSite(e.clientX, e.clientY);
 		if (!pos) return;
 		store.placePart(shape, pos.x, pos.y);
@@ -48,6 +48,13 @@
 	function handlePointerDown(e: PointerEvent) {
 		if (e.buttons === 0) return;
 		if (store.viewMode === '3d') return;
+
+		if (store.mode.type === 'placingTree') {
+			const pos = clientToSite(e.clientX, e.clientY);
+			if (!pos) return;
+			store.placeTree(pos.x, pos.y);
+			return;
+		}
 
 		if (store.mode.type === 'drawingOpenSpace') {
 			const pos = clientToSite(e.clientX, e.clientY);
@@ -86,10 +93,14 @@
 		} else if (result.kind === 'openSpace') {
 			rendererEl?.setPointerCapture(e.pointerId);
 			store.startDraggingOpenSpace(result.openSpaceId, result.x, result.y);
+		} else if (result.kind === 'tree') {
+			rendererEl?.setPointerCapture(e.pointerId);
+			store.startDraggingTree(result.treeId, result.x - (store.site.trees.find(t => t.id === result.treeId)?.x ?? 0), result.y - (store.site.trees.find(t => t.id === result.treeId)?.y ?? 0));
 		} else {
 			// Ground: deselect everything
 			store.selectPart(null);
 			store.selectOpenSpace(null);
+			store.selectTree(null);
 		}
 	}
 
@@ -97,7 +108,9 @@
 		const pos = clientToSite(e.clientX, e.clientY);
 		if (!pos) return;
 
-		if (store.mode.type === 'dragging') {
+		if (store.mode.type === 'draggingTree') {
+			store.updateDragTree(pos.x, pos.y);
+		} else if (store.mode.type === 'dragging') {
 			store.updateDrag(pos.x, pos.y);
 		} else if (store.mode.type === 'resizing') {
 			store.updateResize(pos.x, pos.y, e.shiftKey);
@@ -118,17 +131,20 @@
 		else if (store.mode.type === 'rotating') store.endRotation();
 		else if (store.mode.type === 'draggingOpenSpace') store.endDragOpenSpace();
 		else if (store.mode.type === 'draggingOsVertex') store.endDragOsVertex();
+		else if (store.mode.type === 'draggingTree') store.endDragTree();
 	}
 
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
 			if (store.showAnalysis) { store.showAnalysis = false; return; }
-			if (store.mode.type === 'drawingOpenSpace') store.cancelPlacing();
+			if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree') store.cancelPlacing();
 			else if (store.selectedOpenSpaceId) store.selectOpenSpace(null);
+			else if (store.selectedTreeId) store.selectTree(null);
 		}
 		if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === document.body) {
 			if (store.selectedPartId) store.deletePart(store.selectedPartId);
 			else if (store.selectedOpenSpaceId) store.deleteOpenSpace(store.selectedOpenSpaceId);
+			else if (store.selectedTreeId) store.deleteTree(store.selectedTreeId);
 		}
 	}
 </script>

@@ -37,6 +37,7 @@ function makeSite(overrides: Partial<Site> = {}): Site {
 		mode: 'grid',
 		structures: [makeStructure()],
 		openSpaces: [],
+		trees: [],
 		context: { footprints: [], roads: [] },
 		annotations: [],
 		...overrides,

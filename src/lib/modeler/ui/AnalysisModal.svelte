@@ -69,7 +69,7 @@
 	const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
 	let planImageSrc = $state<string | null>(null);
-	$effect(() => { planImageSrc = capturePlanImage(); });
+	$effect(() => { planImageSrc = capturePlanImage(site); });
 
 	function fmt(n: number): string {
 		return Math.round(n).toLocaleString();
@@ -130,6 +130,12 @@
 						<div class="overview-row">
 							<span class="overview-label">Ownership</span>
 							<span class="overview-value">{profile.ownership.charAt(0).toUpperCase() + profile.ownership.slice(1)}</span>
+						</div>
+					{/if}
+					{#if profile.notes}
+						<div class="overview-row overview-row--notes">
+							<span class="overview-label">Notes</span>
+							<span class="overview-value">{profile.notes}</span>
 						</div>
 					{/if}
 				</div>
@@ -392,6 +398,16 @@
 		display: flex;
 		align-items: baseline;
 		gap: 0.75rem;
+	}
+
+	.overview-row--notes {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.overview-row--notes .overview-value {
+		white-space: pre-wrap;
+		line-height: 1.4;
 	}
 
 	.overview-label {

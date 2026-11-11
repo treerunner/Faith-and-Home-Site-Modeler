@@ -79,9 +79,9 @@
 		const rH = roofHeight(p);
 		const geo = new THREE.BufferGeometry();
 		const vertices = new Float32Array([
-			-hw, 0, -hd, // 0 left base (flat side, matches body)
-			hw, 0, -hd,  // 1 right base (flat side, matches body)
-			0, 0, hd,    // 2 apex base (matches body triangle apex at +Z)
+			-hw, 0, hd,  // 0 left base (flat side at +Z, matches body)
+			hw, 0, hd,   // 1 right base
+			0, 0, -hd,   // 2 apex base (apex now at -Z = top of screen)
 			0, rH, 0,    // 3 roof peak
 		]);
 		const indices = new Uint16Array([0, 1, 3, 1, 2, 3, 2, 0, 3]);

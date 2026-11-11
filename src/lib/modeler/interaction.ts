@@ -42,4 +42,7 @@ export type InteractionMode =
 			openSpaceId: string;
 			vertexIndex: number;
 			origPolygon: [number, number][];
-	  };
+	  }
+	| { type: 'placingTree' }
+	| { type: 'selectedTree'; treeId: string }
+	| { type: 'draggingTree'; treeId: string; offsetX: number; offsetY: number };

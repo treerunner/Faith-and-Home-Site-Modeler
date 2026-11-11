@@ -7,6 +7,7 @@
 	import RoofMesh from './RoofMesh.svelte';
 	import ResizeHandles from './ResizeHandles.svelte';
 	import OpenSpacePolygon from './OpenSpacePolygon.svelte';
+	import TreeMesh from './TreeMesh.svelte';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
 	import { setMainScene } from './cameraRef';
@@ -48,7 +49,7 @@
 					shape: store.mode.shape,
 					x: store.mode.ghostX,
 					y: store.mode.ghostY,
-					w: store.mode.shape === 'rect' ? 10 : 6,
+					w: 6,
 					d: 6,
 					rotation: 0,
 				} as const)
@@ -196,3 +197,7 @@
 {#if store.selectedPart && store.viewMode === 'plan'}
 	<ResizeHandles part={store.selectedPart} />
 {/if}
+
+{#each store.site.trees as tree (tree.id)}
+	<TreeMesh {tree} selected={store.selectedTreeId === tree.id} is3D={store.viewMode === '3d'} />
+{/each}

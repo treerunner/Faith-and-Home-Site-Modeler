@@ -25,7 +25,7 @@ function makeStructure(overrides: Partial<Structure> = {}): Structure {
 function makeSite(overrides: Partial<Site> = {}): Site {
 	return {
 		id: 'site1', name: 'Test Site', mode: 'grid',
-		structures: [], openSpaces: [], context: { footprints: [], roads: [] }, annotations: [],
+		structures: [], openSpaces: [], trees: [], context: { footprints: [], roads: [] }, annotations: [],
 		...overrides,
 	};
 }

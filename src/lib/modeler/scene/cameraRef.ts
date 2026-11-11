@@ -34,6 +34,7 @@ export type HitResult =
 	| { kind: 'rotate'; partId: string; x: number; y: number }
 	| { kind: 'openSpace'; openSpaceId: string; x: number; y: number }
 	| { kind: 'osVertex'; openSpaceId: string; vertexIndex: number }
+	| { kind: 'tree'; treeId: string; x: number; y: number }
 	| { kind: 'ground'; x: number; y: number };
 
 function makeRaycaster(clientX: number, clientY: number): THREE.Raycaster | null {
@@ -71,6 +72,9 @@ export function hitTest(clientX: number, clientY: number): HitResult | null {
 			}
 			if (typeof ud.openSpaceId === 'string') {
 				return { kind: 'openSpace', openSpaceId: ud.openSpaceId, x: hit.point.x, y: hit.point.z };
+			}
+			if (typeof ud.treeId === 'string') {
+				return { kind: 'tree', treeId: ud.treeId, x: hit.point.x, y: hit.point.z };
 			}
 		}
 	}
