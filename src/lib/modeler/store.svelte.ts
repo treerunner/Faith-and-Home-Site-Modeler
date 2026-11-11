@@ -212,7 +212,7 @@ class ModelerStore {
 	updateStructure(
 		id: string,
 		patch: Partial<
-			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof' | 'useWeights' | 'dwellings'>
+			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof' | 'useWeights' | 'dwellings' | 'basement'>
 		>,
 	) {
 		this.#pushUndo();

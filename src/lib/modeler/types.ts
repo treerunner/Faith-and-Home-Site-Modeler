@@ -8,6 +8,7 @@ export type Use =
 	| 'community'
 	| 'daycare'
 	| 'social_services'
+	| 'kitchen'
 	| 'other';
 export type Roof = 'flat' | 'gable' | 'object';
 
@@ -35,6 +36,7 @@ export interface Structure {
 	parts: Part[];
 	useWeights?: Partial<Record<Use, number>>; // relative allocation weights per selected use
 	dwellings?: number;
+	basement?: boolean;
 	provenance: 'user' | 'osm' | 'overture';
 	groupId?: string; // shared with other structures that move together
 }

@@ -39,6 +39,7 @@ export const USE_COLORS: Record<Use, string> = {
 	housing:         FH.terracotta,
 	community:       '#8fa3cc',  // Dusk mid
 	daycare:         '#74c4a0',  // Canopy mid
+	kitchen:         '#e8a84a',  // Lantern warm
 	social_services: '#d4858a',  // Terracotta mid
 	other:           '#b5b2b3',  // Stone mid
 };

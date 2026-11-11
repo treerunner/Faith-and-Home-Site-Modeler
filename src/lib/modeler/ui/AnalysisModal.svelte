@@ -32,7 +32,7 @@
 	const USE_LABELS: Record<Use, string> = {
 		worship: 'Worship', fellowship: 'Fellowship', education: 'Education',
 		office: 'Office', housing: 'Housing', community: 'Community',
-		daycare: 'Daycare', social_services: 'Social services', other: 'Other',
+		daycare: 'Daycare', kitchen: 'Kitchen', social_services: 'Social services', other: 'Other',
 	};
 
 	const STATUS_LABELS = {
@@ -247,7 +247,7 @@
 									<td>{s.label}</td>
 									<td>{STATUS_LABELS[s.status]}</td>
 									<td>{s.roof.charAt(0).toUpperCase() + s.roof.slice(1)}</td>
-									<td>{s.stories}</td>
+									<td>{s.stories}{s.basement ? ' +B' : ''}</td>
 									<td class="uses-cell">{s.uses.map((u) => USE_LABELS[u]).join(', ') || '—'}</td>
 									<td>{fmtSqft(structureFootprint(s))}</td>
 								</tr>

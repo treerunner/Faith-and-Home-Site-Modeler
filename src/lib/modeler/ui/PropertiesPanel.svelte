@@ -21,6 +21,7 @@
 		{ value: 'housing', label: 'Housing' },
 		{ value: 'community', label: 'Community' },
 		{ value: 'daycare', label: 'Daycare' },
+		{ value: 'kitchen', label: 'Kitchen' },
 		{ value: 'social_services', label: 'Social services' },
 		{ value: 'other', label: 'Other' },
 	];
@@ -309,6 +310,16 @@
 										/>
 									</div>
 								</div>
+
+								<label class="use-label basement-label">
+									<input
+										type="checkbox"
+										checked={s.basement ?? false}
+										onchange={(e) => store.updateStructure(s.id, { basement: (e.target as HTMLInputElement).checked || undefined })}
+									/>
+									Basement
+									<span class="field-hint basement-hint">+1 below-grade floor to GFA</span>
+								</label>
 
 								<label class="field-label" for="struct-roof-{s.id}">Roof</label>
 								<select
@@ -683,6 +694,17 @@
 		opacity: 0.6;
 		margin-top: 0.1rem;
 		display: block;
+	}
+
+	.basement-label {
+		align-items: baseline;
+		gap: 0.3rem;
+	}
+
+	.basement-hint {
+		display: inline;
+		margin-top: 0;
+		margin-left: 0.1rem;
 	}
 
 	.action-row {

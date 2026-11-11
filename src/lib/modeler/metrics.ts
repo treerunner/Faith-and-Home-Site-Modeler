@@ -14,7 +14,10 @@ export function siteFootprint(site: Site): number {
 }
 
 export function grossFloorArea(site: Site): number {
-	return site.structures.reduce((sum, s) => sum + structureFootprint(s) * s.stories, 0);
+	return site.structures.reduce(
+		(sum, s) => sum + structureFootprint(s) * (s.stories + (s.basement ? 1 : 0)),
+		0,
+	);
 }
 
 // Polygon area via shoelace formula (meters²)
