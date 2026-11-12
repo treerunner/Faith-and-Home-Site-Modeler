@@ -26,8 +26,9 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 - One `sites` table (`src/lib/server/db/schema.ts`): the full `Site` as JSON in `data`, plus `name` for listing. Server helpers in `src/lib/server/sites.ts`.
 - Every read and write passes through `normalizeSite` (`src/lib/modeler/serialize.ts`). When adding a field to `Site`, update it there with a default so older saves still load.
 - Schema changes: edit `schema.ts`, then `npm run db:generate` and `npm run db:migrate` (reads `DATABASE_URL` from `.env`).
-- No auth yet: anyone with `/modeler/[id]` can edit; `/modeler/[id]/view` is the read-only share link. `store.readOnly` gates editing.
-- Playwright tests write to the `.env` database and delete the rows they create.
+- Site URLs are `/modeler/<title>-<shortId>` (`src/lib/modeler/slug.ts`). Only the short id is looked up; the title part redirects to the current name, so renames never break links. Bare uuid URLs from before slugs also redirect. The API (`/api/sites/[id]`) still uses the uuid.
+- No auth yet: anyone with the editor URL can edit; `.../view` is the read-only share link. `store.readOnly` gates editing.
+- Playwright tests write to the `.env` database and delete the rows they create. Mutating API calls from Playwright's `request` need an `origin` header or SvelteKit returns 403.
 
 ## Colors
 Pull from the pattern book: green (adaptive reuse), orange (new construction), blue, red, off-white base. Define as CSS tokens and share with three.js materials.
