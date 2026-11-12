@@ -6,6 +6,7 @@ import { normalizeSite, SiteFormatError } from '../modeler/serialize';
 import { findPlanBySlug, pickSlug, RESERVED_SITE_SLUGS, slugify } from '../modeler/slug';
 import { planUrl, type SiteRef } from '../modeler/api';
 import type { Site } from '../modeler/types';
+import { siteGeography } from './geography';
 
 export interface SiteSummary {
 	id: string;
@@ -101,14 +102,15 @@ export async function saveSite(id: string, body: unknown): Promise<SiteRef> {
 	if (site.id !== id) error(400, 'Site id does not match URL');
 	return db.transaction(async (tx) => {
 		const [existing] = await tx.select({ slug: sites.slug }).from(sites).where(eq(sites.id, id));
+		const geo = siteGeography(site);
 		if (existing) {
 			await tx
 				.update(sites)
-				.set({ name: site.name, data: site, updatedAt: sql`now()` })
+				.set({ name: site.name, data: site, ...geo, updatedAt: sql`now()` })
 				.where(eq(sites.id, id));
 		} else {
 			// Placeholder until claimSlug sets the real one: the column is unique and not null
-			await tx.insert(sites).values({ id, slug: id, name: site.name, data: site });
+			await tx.insert(sites).values({ id, slug: id, name: site.name, data: site, ...geo });
 		}
 		const slug = await claimSlug(tx, id, site.name, existing?.slug);
 		return { id, slug, name: site.name };
@@ -124,7 +126,7 @@ export async function duplicateSite(id: string): Promise<SiteRef> {
 	const source = await getSite(id);
 	const copy: Site = { ...source, id: crypto.randomUUID(), name: `${source.name || 'Untitled'} copy` };
 	return db.transaction(async (tx) => {
-		await tx.insert(sites).values({ id: copy.id, slug: copy.id, name: copy.name, data: copy, duplicatedFrom: id });
+		await tx.insert(sites).values({ id: copy.id, slug: copy.id, name: copy.name, data: copy, duplicatedFrom: id, ...siteGeography(copy) });
 		const slug = await claimSlug(tx, copy.id, copy.name);
 		return { id: copy.id, slug, name: copy.name };
 	});

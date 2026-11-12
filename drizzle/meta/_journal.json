@@ -29,6 +29,13 @@
       "when": 1794522260766,
       "tag": "0003_drop_short_id",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794525619756,
+      "tag": "0004_site_geography",
+      "breakpoints": true
     }
   ]
 }
