@@ -76,7 +76,7 @@ interface Site {
 }
 ```
 
-Store sites as JSON in Railway Postgres (via Drizzle ORM), with the parcel and origin also in PostGIS columns for spatial queries later. The modeler schema is managed by Drizzle migrations alongside Directus content tables in the same database. As of M5 there is one `sites` table holding the Site JSON; PostGIS columns for origin and parcel arrive with address mode in M6.
+Store sites as JSON in Railway Postgres (via Drizzle ORM), with the parcel and origin also in PostGIS columns for spatial queries later. The modeler schema is managed by Drizzle migrations alongside Directus content tables in the same database. There is one `sites` table holding the Site JSON, plus `site_slugs` for URL history. Since M6 it also has PostGIS `origin` and `parcel` columns (lng/lat), written on save.
 
 ### Sites and plans (M5.5)
 
@@ -151,18 +151,24 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 
 **M5.5. Sites and plans.** (Done) Split the Site into site and plans as described above: schema and migration, nested URLs, plan switcher, duplicate plan, plans on the sites list. Do before M6 so parcel and context land at the site level.
 
-**M6. Address mode.** Add PostGIS columns for origin and parcel. Geocode, choose parcel, prefill existing buildings and context. Heights come from data where available, otherwise a default, always marked with provenance and editable. See data notes.
+**M6. Address mode.** (Done) Address search with suggestions, neighbors as foam and roads printed on the board, choose or draw the parcel, prefill its buildings into the current plan with marked heights, site type suggested from the neighborhood, PostGIS origin and parcel. See data notes.
+
+**M6.5. Terrain.** Elevation from USGS 3DEP (`getSamples`, 1 m lidar, public domain, JSON). Store an elevation grid on the site (about 5 m spacing), trace contours with a pure marching-squares function, render stacked chipboard layers in 3D, and set structures and foam on the terrain at render time (derived, not stored). Plan view prints contours; editing stays flat. Verified near Lehigh: about 90 m of relief across 400 m.
 
 **M7. Workshop features.** Side-by-side plans of one site (existing vs. proposal), numbered annotations in the pattern-book style, presenter mode for large screens.
 
 **M8. Experimental.** Stylized AI sketch renders from depth/edge passes; a splat capture of a real church placed beside chipboard massing. Separate module, off by default.
 
-## Data notes for address mode (verify before M6)
+## Data notes for address mode (verified Nov 2026)
 
-- **Footprints:** Overture Maps buildings and OpenStreetMap. Coverage in Lehigh County is generally good for footprints.
-- **Heights:** Sparse in open data. Use `height` or `building:levels` where tagged; otherwise estimate from USGS 3DEP lidar (heavier, server-side job) or ask the user to confirm stories. Recommended: default plus user confirmation, which is also a good participatory moment.
-- **Parcels:** Lehigh and Northampton County GIS parcel layers.
-- **Geocoding:** a provider whose terms allow storing results (not Google). Low volume makes this inexpensive.
+The tool should eventually work beyond the Lehigh Valley, so sources are global where possible and nothing needs a per-region import.
+
+- **Buildings and roads:** Overture Maps PMTiles (`overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/<release>/{buildings,transportation}.pmtiles`), read with HTTP range requests, about 2 s per z14 tile and global. Buildings carry `height`, `num_floors`, `class` and names; roads carry `class`. Tiles cut buildings at their edges; pieces are merged by Overture id. Update `OVERTURE_RELEASE` in `src/lib/server/overture.ts` every few months (old releases are removed). Attribution: OpenStreetMap contributors, Overture Maps Foundation.
+- **Not Overpass:** the public OSM Overpass servers failed repeatedly in testing (at capacity, timeouts), which is too unreliable for live setup in a workshop.
+- **Heights:** in an Allentown test tile, about 68% of buildings had a floor count and 10% a measured height. Others get a default, marked "Confirm the stories" until edited, which is also a participatory moment.
+- **Parcels:** no free national source. A per-county registry in `src/lib/server/parcels.ts`: Lehigh County via PASDA (2021-08 snapshot; the county's own server blocks bots). No working Northampton source was found. Everywhere else the parcel is drawn.
+- **Geocoding:** Photon (photon.komoot.io, OSM, global, built for typeahead, fair use) for suggestions; the US Census geocoder (public domain) for free text. Nominatim's public instance forbids autocomplete.
+- **Terrain (M6.5):** USGS 3DEP ImageServer, US only; another source would be needed abroad.
 - **Avoid:** Google Photorealistic 3D Tiles for anything other than live display.
 
 ## Working with Claude Code

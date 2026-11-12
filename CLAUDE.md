@@ -33,6 +33,14 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 - No auth yet, and slugs are guessable: anyone with the editor URL can edit; `.../view` is the read-only share link. `store.readOnly` gates editing.
 - Playwright tests write to the `.env` database and delete the rows they create. Mutating API calls from Playwright's `request` need an `origin` header or SvelteKit returns 403.
 
+## Address mode
+- Address data is fetched once at setup (`/api/context`) and saved into the Site: `context` (foam buildings, roads, sources), `origin`, `parcel`. Nothing re-fetches on load.
+- Sources and why are in docs/PLAN.md data notes. Prefer global sources; parcels are a per-county registry with drawing as the fallback.
+- Pure geometry is in `src/lib/modeler/geo.ts` (projection, footprint fitting, heights from tags, site type). Site coordinates: x east, y south (north is up in plan view).
+- Real footprints become `rect` parts when nearly rectangular, otherwise `poly` parts with points normalized to w×d.
+- Show data attribution wherever context appears (`Attribution.svelte`, from `context.sources`).
+- e2e mocks our own `/api/geocode*` and `/api/context`; parsers are tested against fixtures in `src/lib/server/fixtures/` captured live.
+
 ## Colors
 Pull from the pattern book: green (adaptive reuse), orange (new construction), blue, red, off-white base. Define as CSS tokens and share with three.js materials.
 
