@@ -1,19 +1,10 @@
-import { CONTEXT_HALF_SIZE, suggestSiteType, toLatLng, type LatLng } from '../modeler/geo';
-import type { ContextSource, Site } from '../modeler/types';
-import { fetchOvertureFeatures, parseBuildings, parseRoads, type ContextBuildingData } from './overture';
-import { fetchParcels, type ParcelData } from './parcels';
+import { CONTEXT_HALF_SIZE, toLatLng, type LatLng } from '../modeler/geo';
+import type { ContextResponse } from '../modeler/address';
+import { fetchOvertureFeatures, parseBuildings, parseRoads } from './overture';
+import { fetchParcels } from './parcels';
 
 // Everything address mode needs around an origin, in local meters. Fetched once at setup;
 // the client saves what it keeps into the Site. (M6.5 terrain slots in here as one more source.)
-
-export interface ContextResponse {
-	buildings: ContextBuildingData[];
-	roads: { line: [number, number][]; kind: string }[];
-	parcels: ParcelData[];
-	sources: ContextSource[];
-	siteType: NonNullable<Site['siteType']>;
-	parcelsFailed: boolean; // the parcel service was down; drawing still works
-}
 
 const PARCEL_HALF = 100; // parcels you can pick from: around the address, not the whole board
 const FETCH_MARGIN = 20; // buildings straddling the board edge still have their centroid fetched
@@ -29,13 +20,11 @@ export async function loadContext(origin: LatLng): Promise<ContextResponse> {
 			return null;
 		}),
 	]);
-	const buildings = parseBuildings(overture.buildings, origin, CONTEXT_HALF_SIZE);
 	return {
-		buildings,
+		buildings: parseBuildings(overture.buildings, origin, CONTEXT_HALF_SIZE),
 		roads: parseRoads(overture.roads, origin, CONTEXT_HALF_SIZE),
 		parcels: parcelResult?.parcels ?? [],
 		sources: ['overture', ...(parcelResult?.source ? [parcelResult.source] : [])],
-		siteType: suggestSiteType(buildings, CONTEXT_HALF_SIZE),
 		parcelsFailed: parcelResult === null,
 	};
 }

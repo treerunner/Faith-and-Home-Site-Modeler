@@ -2,6 +2,9 @@ import type { CongregationProfile, OpenSpace, PaletteShape, Part, Plan, Site, St
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
+import type { ContextBuildingData, ContextResponse, Suggestion } from './address';
+import { buildingsInParcel, fitFootprint, pointInPolygon, storiesFromTags, suggestSiteType } from './geo';
+import { polygonArea } from './metrics';
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
 
@@ -54,6 +57,9 @@ class ModelerStore {
 	showLabels = $state(true);
 	showAnalysis = $state(false);
 	readOnly = $state(false);
+	planViewHeight = $state(100); // meters visible top to bottom in plan view; the wheel zooms
+	// Address setup, between picking an address and finishing the parcel. Not saved.
+	setup = $state<{ context: ContextResponse; prefill: ContextBuildingData[] | null } | null>(null);
 	isPersisted = $state(false); // a database row exists for site.id
 	siteSlug = $state(''); // URL key, assigned by the server on save
 	activePlanId = $state('');
@@ -85,6 +91,7 @@ class ModelerStore {
 
 	#reset(site: Site, siteSlug: string, planId: string, readOnly: boolean) {
 		this.site = site;
+		this.setup = null;
 		this.#savedJson = JSON.stringify(site);
 		this.siteSlug = siteSlug;
 		this.isPersisted = siteSlug !== '';
@@ -355,6 +362,8 @@ class ModelerStore {
 		const s = this.plan.structures.find((s) => s.id === id);
 		if (!s) return;
 		Object.assign(s, patch);
+		// Prefilled heights are marked until someone confirms them by editing
+		if (patch.stories !== undefined || patch.floorHeight !== undefined) s.heightSource = undefined;
 	}
 
 	deleteStructure(id: string) {
@@ -727,6 +736,130 @@ class ModelerStore {
 
 	toggleViewMode() {
 		this.viewMode = this.viewMode === 'plan' ? '3d' : 'plan';
+	}
+
+	// ── Address mode ─────────────────────────────────────────────────────────
+
+	// Suggested from how built-up the neighborhood is; derived, never stored
+	get suggestedSiteType(): Site['siteType'] {
+		return this.site.mode === 'address' ? suggestSiteType(this.site.context.buildings) : undefined;
+	}
+
+	setSiteType(siteType: Site['siteType']) {
+		this.#pushUndo();
+		this.site.siteType = siteType;
+	}
+
+	// Puts the site at a real address. Its geometry stays where it is relative to the new origin.
+	startAddress(place: Suggestion, context: ContextResponse) {
+		this.#pushUndo();
+		this.site.mode = 'address';
+		this.site.address = place.label;
+		this.site.origin = { lat: place.lat, lng: place.lng };
+		this.site.parcel = undefined;
+		this.site.context = {
+			buildings: context.buildings.map((b) => ({ polygon: b.polygon, height: b.height })),
+			roads: context.roads,
+			sources: context.sources,
+		};
+		this.site.siteType ??= this.suggestedSiteType;
+		this.setup = { context, prefill: null };
+		this.planViewHeight = 220; // parcels around the address need room
+		this.mode = context.parcels.length ? { type: 'choosingParcel' } : { type: 'drawingParcel', points: [] };
+	}
+
+	// The smallest parcel under a point (parcels can nest, like condo lots inside a block)
+	parcelAt(x: number, y: number): string | undefined {
+		const hits = (this.setup?.context.parcels ?? []).filter((p) => pointInPolygon([x, y], p.polygon));
+		hits.sort((a, b) => polygonArea(a.polygon) - polygonArea(b.polygon));
+		return hits[0]?.id;
+	}
+
+	hoverParcel(id: string | undefined) {
+		if (this.mode.type === 'choosingParcel' && this.mode.hoverId !== id) this.mode = { type: 'choosingParcel', hoverId: id };
+	}
+
+	chooseParcel(id: string) {
+		const parcel = this.setup?.context.parcels.find((p) => p.id === id);
+		if (parcel) this.#setParcel(parcel.polygon);
+	}
+
+	startDrawingParcel() {
+		this.mode = { type: 'drawingParcel', points: [] };
+	}
+
+	addParcelVertex(x: number, y: number) {
+		if (this.mode.type !== 'drawingParcel') return;
+		const { points } = this.mode;
+		if (points.length >= 3 && Math.hypot(x - points[0][0], y - points[0][1]) < 2) {
+			this.#setParcel(points);
+			return;
+		}
+		this.mode = { type: 'drawingParcel', points: [...points, [x, y]], cursorPoint: [x, y] };
+	}
+
+	updateParcelCursor(x: number, y: number) {
+		if (this.mode.type === 'drawingParcel') this.mode = { ...this.mode, cursorPoint: [x, y] };
+	}
+
+	#setParcel(polygon: [number, number][]) {
+		this.#pushUndo();
+		this.site.parcel = polygon;
+		this.mode = { type: 'idle' };
+		this.planViewHeight = 100;
+		if (!this.setup) return;
+		const onParcel = buildingsInParcel(this.setup.context.buildings, polygon);
+		if (onParcel.length) this.setup = { ...this.setup, prefill: onParcel };
+		else this.setup = null;
+	}
+
+	// Leaves setup without a parcel (it can be drawn later from the address panel)
+	finishSetup() {
+		this.setup = null;
+		this.mode = { type: 'idle' };
+		this.planViewHeight = 100;
+	}
+
+	// Adds the parcel's buildings to the current plan as existing structures. They leave the
+	// foam context, since the model now has them as chipboard.
+	prefillBuildings() {
+		const prefill = this.setup?.prefill;
+		if (!prefill) return;
+		this.#pushUndo();
+		const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
+		for (const b of prefill) {
+			const { stories, floorHeight, source } = storiesFromTags(b.tags);
+			const kind = b.tags.building;
+			this.plan.structures.push({
+				id: crypto.randomUUID(),
+				label: b.name ?? (kind && kind !== 'yes' ? titleCase(kind) : 'Structure'),
+				status: 'existing',
+				uses: [],
+				stories,
+				floorHeight,
+				roof: 'flat',
+				parts: [{ id: crypto.randomUUID(), ...fitFootprint(b.polygon) }],
+				provenance: 'overture',
+				heightSource: source,
+			});
+		}
+		const added = new Set(prefill.map((b) => JSON.stringify(b.polygon)));
+		this.site.context.buildings = this.site.context.buildings.filter((b) => !added.has(JSON.stringify(b.polygon)));
+		this.setup = null;
+	}
+
+	clearAddress() {
+		this.#pushUndo();
+		this.site.mode = 'grid';
+		this.site.address = undefined;
+		this.site.origin = undefined;
+		this.site.parcel = undefined;
+		this.site.context = { buildings: [], roads: [] };
+		this.finishSetup();
+	}
+
+	zoomPlan(factor: number) {
+		this.planViewHeight = Math.min(320, Math.max(40, this.planViewHeight * factor));
 	}
 
 	updateSiteName(name: string) {

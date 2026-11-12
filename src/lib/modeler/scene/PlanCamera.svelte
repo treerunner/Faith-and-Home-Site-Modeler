@@ -4,9 +4,6 @@
 	import { setPlanCamera } from './cameraRef';
 	import { store } from '../store.svelte';
 
-	// Meters visible top-to-bottom in the plan view
-	const WORLD_HEIGHT = 100;
-
 	// useThrelte().size is a CurrentReadable backed by a $state.raw; reading
 	// .current inside $effect registers it as a reactive dependency.
 	const { size: sizeStore } = useThrelte();
@@ -16,7 +13,7 @@
 	$effect(() => {
 		if (!cam) return;
 		const { width, height } = sizeStore.current;
-		const halfH = WORLD_HEIGHT / 2;
+		const halfH = store.planViewHeight / 2; // meters visible top to bottom
 		const halfW = height > 0 ? halfH * (width / height) : halfH;
 		cam.left = -halfW;
 		cam.right = halfW;

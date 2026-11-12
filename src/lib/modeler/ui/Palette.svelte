@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { OpenSpace, Part } from '../types';
 	import { store } from '../store.svelte';
+	import AddressPanel from './AddressPanel.svelte';
 
 	const SHAPES: { shape: Part['shape']; label: string }[] = [
 		{ shape: 'square', label: 'Square' },
@@ -32,6 +33,7 @@
 </script>
 
 <aside class="palette" aria-label="Shape palette">
+	<AddressPanel />
 	<h2 class="palette-heading">Palette</h2>
 	<ul class="shape-list" role="list">
 		{#each SHAPES as s (s.shape)}

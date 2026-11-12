@@ -43,6 +43,8 @@ export type InteractionMode =
 			vertexIndex: number;
 			origPolygon: [number, number][];
 	  }
+	| { type: 'choosingParcel'; hoverId?: string }
+	| { type: 'drawingParcel'; points: [number, number][]; cursorPoint?: [number, number] }
 	| { type: 'placingTree' }
 	| { type: 'selectedTree'; treeId: string }
 	| { type: 'draggingTree'; treeId: string; offsetX: number; offsetY: number };

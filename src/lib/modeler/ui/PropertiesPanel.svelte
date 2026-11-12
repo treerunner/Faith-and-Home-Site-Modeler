@@ -3,7 +3,7 @@
 	import PlanSwitcher from './PlanSwitcher.svelte';
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM } from '../units';
-	import type { CongregationProfile, Roof, Status, Structure, Use } from '../types';
+	import type { CongregationProfile, Roof, Site, Status, Structure, Use } from '../types';
 
 	let sidebarTab = $derived(store.sidebarTab);
 
@@ -25,6 +25,12 @@
 		{ value: 'kitchen', label: 'Kitchen' },
 		{ value: 'social_services', label: 'Social services' },
 		{ value: 'other', label: 'Other' },
+	];
+
+	const SITE_TYPES: { value: NonNullable<Site['siteType']>; label: string }[] = [
+		{ value: 'urban', label: 'Urban' },
+		{ value: 'suburban', label: 'Suburban' },
+		{ value: 'rural', label: 'Rural' },
 	];
 
 	const ROOF_OPTIONS: { value: Roof; label: string }[] = [
@@ -175,6 +181,27 @@
 	{/if}
 
 	{#if sidebarTab === 'spatial'}
+	<div class="section section--site-type">
+		<h2 class="panel-heading">Site type</h2>
+		<fieldset class="ro-wrap" disabled={store.readOnly}>
+			<div class="pill-group" role="group" aria-label="Site type">
+				{#each SITE_TYPES as t (t.value)}
+					{@const on = store.site.siteType === t.value}
+					<button
+						class="pill"
+						class:pill--active={on}
+						aria-pressed={on}
+						style={on ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
+						onclick={() => store.setSiteType(on ? undefined : t.value)}
+					>{t.label}</button>
+				{/each}
+			</div>
+			{#if store.suggestedSiteType}
+				<p class="field-hint site-type-hint">Suggested from the neighborhood: {store.suggestedSiteType}</p>
+			{/if}
+		</fieldset>
+	</div>
+
 	<div class="section">
 		<h2 class="panel-heading">Structures</h2>
 
@@ -317,6 +344,12 @@
 									</div>
 								</div>
 
+								{#if s.heightSource === 'default'}
+									<p class="field-hint height-hint height-hint--confirm">Default height. Confirm the stories.</p>
+								{:else if s.heightSource === 'data'}
+									<p class="field-hint height-hint">Height from map data</p>
+								{/if}
+
 								<label class="use-label basement-label">
 									<input
 										type="checkbox"
@@ -437,6 +470,11 @@
 </aside>
 
 <style>
+	.section--site-type { padding-bottom: 0.6rem; }
+	.site-type-hint { display: block; margin-top: 0.35rem; }
+	.height-hint { display: block; margin: 0.15rem 0 0.35rem; }
+	.height-hint--confirm { color: #9a5a10; }
+
 	/* Disabled in view-only mode; otherwise invisible */
 	.ro-wrap {
 		border: 0;

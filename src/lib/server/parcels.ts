@@ -4,6 +4,7 @@ import { polygonArea } from '../modeler/metrics';
 import type { ContextSource } from '../modeler/types';
 import type { Bounds } from './overture';
 import { fetchJson } from './http';
+import type { ParcelData } from '../modeler/address';
 
 // Parcels have no free national source, so this is a registry of county services, grown as
 // the tool reaches new places. Where nothing covers a site, the user draws the parcel.
@@ -28,12 +29,6 @@ const SOURCES: ParcelSource[] = [
 		addressFields: ['SITUS_ADDR', 'SITUS_FDPR', 'SITUS_FNAM', 'SITUS_FTYP', 'SITUS_FDSU'],
 	},
 ];
-
-export interface ParcelData {
-	id: string;
-	address: string;
-	polygon: Pt[]; // local meters
-}
 
 function largestRing(g: Geometry): Pt[] | null {
 	const rings = g.type === 'Polygon' ? [g.coordinates[0]] : g.type === 'MultiPolygon' ? g.coordinates.map((p) => p[0]) : [];

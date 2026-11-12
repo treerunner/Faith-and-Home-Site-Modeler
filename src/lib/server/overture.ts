@@ -14,6 +14,7 @@ import {
 } from '../modeler/geo';
 import { polygonArea } from '../modeler/metrics';
 import { USER_AGENT } from './http';
+import type { ContextBuildingData } from '../modeler/address';
 
 // Buildings and roads from Overture Maps, read straight from its global PMTiles archives
 // with HTTP range requests (a few per tile; no import, works anywhere Overture covers).
@@ -74,14 +75,6 @@ export async function fetchOvertureFeatures(bounds: Bounds): Promise<{ buildings
 }
 
 // ── Parsing (pure; tested against fixtures) ──────────────────────────────────
-
-export interface ContextBuildingData {
-	id: string;
-	polygon: Pt[]; // local meters
-	height: number; // for foam
-	tags: Tags; // OSM-style tags for storiesFromTags when prefilling structures
-	name?: string;
-}
 
 // Overture properties in the OSM tag names geo.ts already understands
 export function overtureTags(p: Record<string, unknown>): Tags {

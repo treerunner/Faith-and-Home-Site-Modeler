@@ -1,14 +1,8 @@
 import { fetchJson } from './http';
+import type { Suggestion } from '../modeler/address';
 
 // Address search. Photon (OpenStreetMap, global, built for typeahead) suggests as you type;
 // the US Census geocoder (public domain) resolves free text that Photon can't place exactly.
-
-export interface Suggestion {
-	label: string;
-	lat: number;
-	lng: number;
-	precise: boolean; // a building, a place, or a house-number point; street-level results are not
-}
 
 // Biases suggestions toward the Lehigh Valley without excluding anywhere else
 const BIAS = { lat: 40.62, lng: -75.42 };

@@ -15,6 +15,8 @@
 
 	let { context, is3D }: Props = $props();
 
+	// Foam, road print and board skip tone mapping: the renderer's filmic curve greys off-white
+	// down, and these must read as white foam and light print against the chipboard.
 	const PLAN_SLAB = 0.05;
 	const ROAD_Y = 0.004; // just above the board, below open spaces (0.01)
 	const FOAM_EDGE = '#cfcac0';
@@ -80,13 +82,18 @@
 
 {#if roadGeo}
 	<T.Mesh geometry={roadGeo} receiveShadow>
-		<T.MeshLambertMaterial color={COLORS.road} side={THREE.DoubleSide} />
+		<T.MeshBasicMaterial color={COLORS.road} toneMapped={false} side={THREE.DoubleSide} />
 	</T.Mesh>
 {/if}
 
 {#if buildingGeo}
 	<T.Mesh geometry={buildingGeo} castShadow={is3D} receiveShadow>
-		<T.MeshLambertMaterial color={COLORS.context} transparent opacity={is3D ? 0.88 : 1} side={THREE.DoubleSide} />
+		{#if is3D}
+			<!-- Emissive lift keeps foam white on top while walls still shade -->
+			<T.MeshLambertMaterial color={COLORS.context} emissive={COLORS.context} emissiveIntensity={0.45} toneMapped={false} transparent opacity={0.92} side={THREE.DoubleSide} />
+		{:else}
+			<T.MeshBasicMaterial color={COLORS.context} toneMapped={false} side={THREE.DoubleSide} />
+		{/if}
 	</T.Mesh>
 	{#if buildingEdges}
 		<T.LineSegments geometry={buildingEdges}>

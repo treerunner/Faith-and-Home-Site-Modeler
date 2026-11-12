@@ -10,10 +10,19 @@
 		onpointermove: (e: PointerEvent) => void;
 		onpointerup: (e: PointerEvent) => void;
 		onpointerdown: (e: PointerEvent) => void;
+		onwheel: (e: WheelEvent) => void;
 	}
 
-	let { ondragover, ondrop, ondragleave, onpointermove, onpointerup, onpointerdown }: Props =
+	let { ondragover, ondrop, ondragleave, onpointermove, onpointerup, onpointerdown, onwheel }: Props =
 		$props();
+
+	// Attached by hand: Svelte makes wheel listeners passive, and zooming must preventDefault
+	$effect(() => {
+		if (!wrapperEl) return;
+		const el = wrapperEl;
+		el.addEventListener('wheel', onwheel, { passive: false });
+		return () => el.removeEventListener('wheel', onwheel);
+	});
 
 	let wrapperEl: HTMLDivElement | undefined = $state();
 

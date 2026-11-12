@@ -61,10 +61,21 @@
 
 	const CLOSE_DIST = 4;
 
-	let drawingMode = $derived(store.mode.type === 'drawingOpenSpace' ? store.mode : null);
+	// Open spaces and parcels are both traced point by point and share the vertex markers
+	let drawingMode = $derived(
+		store.mode.type === 'drawingOpenSpace' || store.mode.type === 'drawingParcel' ? store.mode : null,
+	);
+
+	let parcelDraft = $derived(
+		store.mode.type === 'drawingParcel'
+			? store.mode.cursorPoint
+				? [...store.mode.points, store.mode.cursorPoint]
+				: store.mode.points
+			: null,
+	);
 
 	let draftOpenSpace = $derived(
-		drawingMode && drawingMode.points.length > 0
+		drawingMode && drawingMode.type === 'drawingOpenSpace' && drawingMode.points.length > 0
 			? {
 					id: '__draft__',
 					kind: drawingMode.kind,
@@ -146,7 +157,8 @@
 <T.AmbientLight intensity={ambientIntensity} color="#f5f0e8" />
 
 {#if store.viewMode === 'plan'}
-	<T.GridHelper args={[120, 120, COLORS.grid, COLORS.gridSub]} position={[0, 0, 0]} />
+	{@const gridSize = isAddress ? CONTEXT_HALF_SIZE * 2 : 120}
+	<T.GridHelper args={[gridSize, gridSize, COLORS.grid, COLORS.gridSub]} position={[0, 0, 0]} />
 {/if}
 
 {#if store.viewMode === '3d'}
@@ -154,7 +166,11 @@
 	<T.Mesh position={[pedestal.cx, -DEPTH / 2, pedestal.cz]} receiveShadow>
 		<T.BoxGeometry args={[pedestal.w, DEPTH, pedestal.d]} />
 		<!-- Address mode: an off-white printed board; grid mode keeps the kraft base -->
-		<T.MeshLambertMaterial color={isAddress ? COLORS.base : '#c8b898'} />
+		{#if isAddress}
+			<T.MeshLambertMaterial color={COLORS.base} emissive={COLORS.base} emissiveIntensity={0.4} toneMapped={false} />
+		{:else}
+			<T.MeshLambertMaterial color="#c8b898" />
+		{/if}
 	</T.Mesh>
 {/if}
 
@@ -162,6 +178,19 @@
 
 {#if store.site.parcel && store.site.parcel.length >= 3}
 	<ParcelLine polygon={store.site.parcel} />
+{/if}
+
+<!-- Choosing a parcel: every candidate dashed, the one under the cursor highlighted -->
+{#if store.mode.type === 'choosingParcel' && store.setup}
+	{@const hoverId = store.mode.hoverId}
+	{#each store.setup.context.parcels as parcel (parcel.id)}
+		<ParcelLine polygon={parcel.polygon} dashed={parcel.id !== hoverId} highlight={parcel.id === hoverId} />
+	{/each}
+{/if}
+
+<!-- Drawing a parcel: the outline so far, closing to the cursor -->
+{#if parcelDraft && parcelDraft.length >= 2}
+	<ParcelLine polygon={parcelDraft} highlight />
 {/if}
 
 {#each store.plan.openSpaces as os (os.id)}

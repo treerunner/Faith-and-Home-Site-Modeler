@@ -5,6 +5,7 @@
 	import AnalysisModal from './AnalysisModal.svelte';
 	import SiteBar from './SiteBar.svelte';
 	import Attribution from './Attribution.svelte';
+	import SetupBanner from './SetupBanner.svelte';
 	import Scene from '../scene/Scene.svelte';
 	import { store } from '../store.svelte';
 	import { clientToSite, hitTest, rendererEl } from '../scene/cameraRef';
@@ -59,6 +60,13 @@
 
 	// ── Pointer events ──────────────────────────────────────────────────────
 
+	// Plan view zooms around the site origin; 3D has its own orbit controls
+	function handleWheel(e: WheelEvent) {
+		if (store.viewMode !== 'plan') return;
+		e.preventDefault();
+		store.zoomPlan(e.deltaY > 0 ? 1.1 : 1 / 1.1);
+	}
+
 	function handlePointerDown(e: PointerEvent) {
 		if (e.buttons === 0) return;
 		if (store.viewMode === '3d') return;
@@ -74,6 +82,19 @@
 			const pos = clientToSite(e.clientX, e.clientY);
 			if (!pos) return;
 			store.addOpenSpaceVertex(pos.x, pos.y);
+			return;
+		}
+
+		if (store.mode.type === 'choosingParcel') {
+			const pos = clientToSite(e.clientX, e.clientY);
+			const id = pos && store.parcelAt(pos.x, pos.y);
+			if (id) store.chooseParcel(id);
+			return;
+		}
+
+		if (store.mode.type === 'drawingParcel') {
+			const pos = clientToSite(e.clientX, e.clientY);
+			if (pos) store.addParcelVertex(pos.x, pos.y);
 			return;
 		}
 
@@ -142,6 +163,10 @@
 			store.updateRotation(pos.x, pos.y, e.shiftKey);
 		} else if (store.mode.type === 'drawingOpenSpace') {
 			store.updateOpenSpaceCursor(pos.x, pos.y);
+		} else if (store.mode.type === 'choosingParcel') {
+			store.hoverParcel(store.parcelAt(pos.x, pos.y));
+		} else if (store.mode.type === 'drawingParcel') {
+			store.updateParcelCursor(pos.x, pos.y);
 		} else if (store.mode.type === 'draggingOpenSpace') {
 			store.updateDragOpenSpace(pos.x, pos.y);
 		} else if (store.mode.type === 'draggingOsVertex') {
@@ -161,7 +186,9 @@
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
 			if (store.showAnalysis) { store.showAnalysis = false; store.viewMode = viewModeBeforeAnalysis; return; }
-			if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree') store.cancelPlacing();
+			if (store.mode.type === 'drawingParcel' && store.setup?.context.parcels.length) store.mode = { type: 'choosingParcel' };
+			else if (store.mode.type === 'drawingParcel' || store.mode.type === 'choosingParcel') store.finishSetup();
+			else if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree') store.cancelPlacing();
 			else if (store.selectedOpenSpaceId) store.selectOpenSpace(null);
 			else if (store.selectedTreeId) store.selectTree(null);
 		}
@@ -181,6 +208,7 @@
 	{/if}
 	<div class="canvas-area" bind:this={canvasAreaEl}>
 		<Scene
+			onwheel={handleWheel}
 			ondragover={handleDragOver}
 			ondrop={handleDrop}
 			ondragleave={handleDragLeave}
@@ -190,6 +218,7 @@
 		/>
 		<OpenSpaceLabels />
 		<Attribution />
+		<SetupBanner />
 
 		{#if store.viewMode === 'plan'}
 			<div class="scale-bar" aria-label="Scale: 33 feet">
