@@ -12,7 +12,9 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 
 ## Rules
 - Site geometry is in meters in local coordinates; convert to lat/lng only at the edges (geocoding, saving origin).
-- The `Site` object in `src/lib/modeler/types.ts` is the single source of truth. Rendering and metrics are derived from it; never store derived values.
+- The `Site` object in `src/lib/modeler/types.ts` is the single source of truth. A site is the property (name, parcel, context, congregation profile) and holds its `plans`; each `Plan` holds structures, open spaces, trees and annotations. Rendering and metrics are derived from them; never store derived values.
+- The store edits one plan at a time: use `store.plan`, not `store.site`, for plan-level fields. Plan-only metrics take a `Plan`; metrics that need the parcel or site type take `(plan, site)`.
+- Copy reactive state with the store's `copy()`, not `$state.snapshot(this.x)` alone: server builds (Vitest) compile that to the live value.
 - Metrics and building-type inference are pure functions in `src/lib/modeler/metrics.ts` with tests.
 - One three.js scene with two cameras (orthographic plan, perspective orbit). Do not build a separate 2D editor.
 - No Google Maps or Google 3D Tiles. No raster map tiles inside the 3D model.
@@ -26,8 +28,9 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 - One `sites` table (`src/lib/server/db/schema.ts`): the full `Site` as JSON in `data`, plus `name` for listing. Server helpers in `src/lib/server/sites.ts`.
 - Every read and write passes through `normalizeSite` (`src/lib/modeler/serialize.ts`). When adding a field to `Site`, update it there with a default so older saves still load.
 - Schema changes: edit `schema.ts`, then `npm run db:generate` and `npm run db:migrate` (reads `DATABASE_URL` from `.env`).
-- Site URLs are `/modeler/<title>-<shortId>` (`src/lib/modeler/slug.ts`). Only the short id is looked up; the title part redirects to the current name, so renames never break links. Bare uuid URLs from before slugs also redirect. The API (`/api/sites/[id]`) still uses the uuid.
-- No auth yet: anyone with the editor URL can edit; `.../view` is the read-only share link. `store.readOnly` gates editing.
+- URLs are `/modeler/<site>/<plan>[/view]` (`src/lib/modeler/slug.ts`); `/modeler/<site>` opens the first plan. Site slugs are unique across sites (`site_slugs` table, assigned by the server); plan slugs are unique within a site (stored in the plan, assigned by `assignPlanSlugs` on save). Collisions get `-2`, `-3`. Old slugs are kept, so renames redirect. Reserved: site `sites`, `new`, `view`; plan `view`. The API (`/api/sites/[id]`) uses the uuid.
+- Plan switches and renames update the URL with a shallow `goto` (`syncUrl` in `SiteBar.svelte`), so unsaved edits survive.
+- No auth yet, and slugs are guessable: anyone with the editor URL can edit; `.../view` is the read-only share link. `store.readOnly` gates editing.
 - Playwright tests write to the `.env` database and delete the rows they create. Mutating API calls from Playwright's `request` need an `origin` header or SvelteKit returns 403.
 
 ## Colors

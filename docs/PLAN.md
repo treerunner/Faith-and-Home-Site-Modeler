@@ -93,11 +93,11 @@ One property can have several plans. The site holds what belongs to the place; e
 - A new site starts with one plan, "Existing conditions". Proposals usually start by duplicating it.
 - Plans are parallel alternatives. Versions (deliberate snapshots of one plan, such as before a workshop) are an open question; build plans first.
 
-URLs nest instead of using literal `site/plan` segments. The site short id does the lookup; plan slugs are unique within their site and redirect on rename like site slugs.
+URLs are clean slugs that nest instead of using literal `site/plan` segments. Site slugs are unique across sites and plan slugs within their site; collisions get `-2`. Old slugs are kept so renames redirect. Slugs are guessable, which is acceptable until auth exists.
 
-- `/modeler/grace-church-7f3k9q` opens the site's default plan
-- `/modeler/grace-church-7f3k9q/housing-on-lot` opens a plan
-- `/modeler/grace-church-7f3k9q/housing-on-lot/v3` opens a saved version, if versions are added
+- `/modeler/grace-church` opens the site's first plan
+- `/modeler/grace-church/housing-on-lot` opens a plan
+- `/modeler/grace-church/housing-on-lot/v3` would open a saved version, if versions are added
 - `.../view` is the read-only form at any level
 
 UI: under the site name, a plan switcher shows the current plan's editable name, with New plan and Duplicate. The toolbar Duplicate copies the current plan within the site; duplicating a whole site moves to the sites list, which shows each site's plans.
@@ -149,7 +149,7 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 
 **M5. Save and share.** (Done) Persist to Railway Postgres via Drizzle ORM, shareable read-only links, duplicate a site to make scenarios. No auth yet; edit and ownership rules come with the platform work.
 
-**M5.5. Sites and plans.** Split the Site into site and plans as described above: schema and migration, nested URLs, plan switcher, duplicate plan, plans on the sites list. Do before M6 so parcel and context land at the site level.
+**M5.5. Sites and plans.** (Done) Split the Site into site and plans as described above: schema and migration, nested URLs, plan switcher, duplicate plan, plans on the sites list. Do before M6 so parcel and context land at the site level.
 
 **M6. Address mode.** Add PostGIS columns for origin and parcel. Geocode, choose parcel, prefill existing buildings and context. Heights come from data where available, otherwise a default, always marked with provenance and editable. See data notes.
 
