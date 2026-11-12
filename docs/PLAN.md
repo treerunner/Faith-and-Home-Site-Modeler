@@ -78,6 +78,32 @@ interface Site {
 
 Store sites as JSON in Railway Postgres (via Drizzle ORM), with the parcel and origin also in PostGIS columns for spatial queries later. The modeler schema is managed by Drizzle migrations alongside Directus content tables in the same database. As of M5 there is one `sites` table holding the Site JSON; PostGIS columns for origin and parcel arrive with address mode in M6.
 
+### Sites and plans (M5.5)
+
+One property can have several plans. The site holds what belongs to the place; each plan holds one proposal for it.
+
+| Site (the property) | Plan (one proposal) |
+|---|---|
+| name, mode, origin, parcel, siteType | name |
+| context (footprints, roads) | structures, openSpaces, trees |
+| congregationProfile | annotations |
+
+- Parcel and context come from geocoding once (M6) and are shared by every plan, never copied.
+- Existing buildings are copied into each plan, since each plan gives them its own status (keep, adaptive reuse, removed). Metrics are computed per plan.
+- A new site starts with one plan, "Existing conditions". Proposals usually start by duplicating it.
+- Plans are parallel alternatives. Versions (deliberate snapshots of one plan, such as before a workshop) are an open question; build plans first.
+
+URLs nest instead of using literal `site/plan` segments. The site short id does the lookup; plan slugs are unique within their site and redirect on rename like site slugs.
+
+- `/modeler/grace-church-7f3k9q` opens the site's default plan
+- `/modeler/grace-church-7f3k9q/housing-on-lot` opens a plan
+- `/modeler/grace-church-7f3k9q/housing-on-lot/v3` opens a saved version, if versions are added
+- `.../view` is the read-only form at any level
+
+UI: under the site name, a plan switcher shows the current plan's editable name, with New plan and Duplicate. The toolbar Duplicate copies the current plan within the site; duplicating a whole site moves to the sites list, which shows each site's plans.
+
+Migration: each existing site becomes a site with one plan.
+
 ## Platform context
 
 This modeler will be merged into a broader Faith & Home storytelling platform. The full platform stack:
@@ -123,9 +149,11 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 
 **M5. Save and share.** (Done) Persist to Railway Postgres via Drizzle ORM, shareable read-only links, duplicate a site to make scenarios. No auth yet; edit and ownership rules come with the platform work.
 
+**M5.5. Sites and plans.** Split the Site into site and plans as described above: schema and migration, nested URLs, plan switcher, duplicate plan, plans on the sites list. Do before M6 so parcel and context land at the site level.
+
 **M6. Address mode.** Add PostGIS columns for origin and parcel. Geocode, choose parcel, prefill existing buildings and context. Heights come from data where available, otherwise a default, always marked with provenance and editable. See data notes.
 
-**M7. Workshop features.** Side-by-side scenarios (existing vs. proposal), numbered annotations in the pattern-book style, presenter mode for large screens.
+**M7. Workshop features.** Side-by-side plans of one site (existing vs. proposal), numbered annotations in the pattern-book style, presenter mode for large screens.
 
 **M8. Experimental.** Stylized AI sketch renders from depth/edge passes; a splat capture of a real church placed beside chipboard massing. Separate module, off by default.
 
