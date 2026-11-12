@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { getRenderer, getPerspCamera, planCamera, mainScene } from './scene/cameraRef';
-import type { Site } from './types';
+import type { Plan } from './types';
 
 const PAD = 8;
 
-export function capturePlanImage(site: Site): string | null {
+export function capturePlanImage(plan: Plan): string | null {
 	const renderer = getRenderer();
 	const scene = mainScene;
 	if (!renderer || !planCamera || !scene) return null;
@@ -13,16 +13,16 @@ export function capturePlanImage(site: Site): string | null {
 	const xs: number[] = [];
 	const zs: number[] = [];
 
-	for (const s of site.structures) {
+	for (const s of plan.structures) {
 		for (const p of s.parts) {
 			xs.push(p.x - p.w / 2, p.x + p.w / 2);
 			zs.push(p.y - p.d / 2, p.y + p.d / 2);
 		}
 	}
-	for (const os of site.openSpaces) {
+	for (const os of plan.openSpaces) {
 		for (const [ox, oz] of os.polygon) { xs.push(ox); zs.push(oz); }
 	}
-	for (const t of site.trees) {
+	for (const t of plan.trees) {
 		xs.push(t.x - t.radius, t.x + t.radius);
 		zs.push(t.y - t.radius, t.y + t.radius);
 	}

@@ -56,7 +56,7 @@
 	}
 
 	let entries = $derived<LabelEntry[]>(
-		store.site.openSpaces.map((os) => {
+		store.plan.openSpaces.map((os) => {
 			void viewVersion; // re-derive on resize / camera move
 			const c = centroid(os.polygon);
 			const cam = store.viewMode === '3d' ? (getPerspCamera() ?? undefined) : undefined;

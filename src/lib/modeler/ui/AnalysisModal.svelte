@@ -44,29 +44,30 @@
 	};
 
 	let site = $derived(store.site);
+	let plan = $derived(store.plan);
 	let profile = $derived(site.congregationProfile ?? {});
 
-	let footprint = $derived(siteFootprint(site));
-	let gfa = $derived(grossFloorArea(site));
-	let coverage = $derived(lotCoverage(site));
-	let osArea = $derived(openSpaceArea(site));
-	let green = $derived(greenSpaceArea(site));
-	let parking = $derived(parkingArea(site));
-	let dwellings = $derived(dwellingsEstimate(site));
-	let dwellingStatus = $derived(dwellingsByStatus(site));
-	let useAreas = $derived(useFloorAreaByUse(site));
-	let steps = $derived(generateActionSteps(site));
+	let footprint = $derived(siteFootprint(plan));
+	let gfa = $derived(grossFloorArea(plan));
+	let coverage = $derived(lotCoverage(plan, site));
+	let osArea = $derived(openSpaceArea(plan));
+	let green = $derived(greenSpaceArea(plan));
+	let parking = $derived(parkingArea(plan));
+	let dwellings = $derived(dwellingsEstimate(plan));
+	let dwellingStatus = $derived(dwellingsByStatus(plan));
+	let useAreas = $derived(useFloorAreaByUse(plan));
+	let steps = $derived(generateActionSteps(plan, site));
 
 	let storiesMin = $derived(
-		site.structures.length ? Math.min(...site.structures.map((s) => s.stories)) : 0
+		plan.structures.length ? Math.min(...plan.structures.map((s) => s.stories)) : 0
 	);
 	let storiesMax = $derived(
-		site.structures.length ? Math.max(...site.structures.map((s) => s.stories)) : 0
+		plan.structures.length ? Math.max(...plan.structures.map((s) => s.stories)) : 0
 	);
 
 	let statusCounts = $derived.by(() => {
 		const counts = { existing: 0, adaptive_reuse: 0, new: 0, removed: 0 };
-		for (const s of site.structures) counts[s.status]++;
+		for (const s of plan.structures) counts[s.status]++;
 		return counts;
 	});
 
@@ -83,7 +84,7 @@
 	const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
 	let planImageSrc = $state<string | null>(null);
-	$effect(() => { planImageSrc = capturePlanImage(site); });
+	$effect(() => { planImageSrc = capturePlanImage(plan); });
 
 	function pct(n: number, total: number): string {
 		return total > 0 ? Math.round((n / total) * 100) + '%' : '—';
@@ -165,8 +166,8 @@
 						<tr><td class="met-label">Lot coverage</td><td class="met-value">{coverage !== null ? Math.round(coverage) + '%' : '—'}</td></tr>
 						<tr><td class="met-label">Structures</td>
 							<td class="met-value">
-								{site.structures.length}
-								{#if site.structures.length > 0}
+								{plan.structures.length}
+								{#if plan.structures.length > 0}
 									<span class="met-sub">
 										{[
 											statusCounts.existing && `${statusCounts.existing} existing`,
@@ -227,7 +228,7 @@
 			{/if}
 
 			<!-- Structure Inventory -->
-			{#if site.structures.length > 0}
+			{#if plan.structures.length > 0}
 				<section class="report-section">
 					<h2 class="section-heading">Structure Inventory</h2>
 					<table class="inventory-table">
@@ -242,7 +243,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each site.structures as s (s.id)}
+							{#each plan.structures as s (s.id)}
 								<tr>
 									<td>{s.label}</td>
 									<td>{STATUS_LABELS[s.status]}</td>

@@ -1,7 +1,9 @@
-import type { CongregationProfile, OpenSpace, Part, Site, Structure, Tree } from './types';
+import type { CongregationProfile, OpenSpace, Part, Plan, Site, Structure, Tree } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
+import { DEFAULT_PLAN_NAME } from './serialize';
+import { assignPlanSlugs } from './slug';
 
 const PART_DEFAULTS: Record<Part['shape'], { w: number; d: number }> = {
 	rect: { w: 10, d: 6 },
@@ -12,17 +14,35 @@ const PART_DEFAULTS: Record<Part['shape'], { w: number; d: number }> = {
 
 const MAX_UNDO = 50;
 
-function makeSite(): Site {
+// Deep copy of reactive state. Not $state.snapshot(this.x) alone: server builds (which
+// Vitest uses) compile that to the plain value, so "copies" would share arrays.
+function copy<T>(value: T): T {
+	return structuredClone($state.snapshot(value)) as T;
+}
+
+function makePlan(name: string, content: Partial<Plan> = {}): Plan {
 	return {
 		id: crypto.randomUUID(),
-		name: '',
-		mode: 'grid',
+		name,
+		slug: '',
 		structures: [],
 		openSpaces: [],
 		trees: [],
-		context: { footprints: [], roads: [] },
 		annotations: [],
+		...content,
 	};
+}
+
+function makeSite(): Site {
+	const site: Site = {
+		id: crypto.randomUUID(),
+		name: '',
+		mode: 'grid',
+		context: { footprints: [], roads: [] },
+		plans: [makePlan(DEFAULT_PLAN_NAME)],
+	};
+	assignPlanSlugs(site);
+	return site;
 }
 
 class ModelerStore {
@@ -35,7 +55,8 @@ class ModelerStore {
 	showAnalysis = $state(false);
 	readOnly = $state(false);
 	isPersisted = $state(false); // a database row exists for site.id
-	shortId = $state(''); // URL key, assigned by the server on first save
+	siteSlug = $state(''); // URL key, assigned by the server on save
+	activePlanId = $state('');
 	saveState = $state<'idle' | 'saving' | 'error'>('idle');
 
 	readonly #undoStack: Site[] = [];
@@ -54,25 +75,79 @@ class ModelerStore {
 
 	// Start a blank, unsaved site (the /modeler route).
 	newSite() {
-		this.#reset(makeSite(), '', false);
+		const site = makeSite();
+		this.#reset(site, '', site.plans[0].id, false);
 	}
 
-	loadSite(site: Site, shortId: string, readOnly: boolean) {
-		this.#reset(site, shortId, readOnly);
+	loadSite(site: Site, siteSlug: string, planId: string, readOnly: boolean) {
+		this.#reset(site, siteSlug, planId, readOnly);
 	}
 
-	#reset(site: Site, shortId: string, readOnly: boolean) {
+	#reset(site: Site, siteSlug: string, planId: string, readOnly: boolean) {
 		this.site = site;
 		this.#savedJson = JSON.stringify(site);
-		this.shortId = shortId;
-		this.isPersisted = shortId !== '';
+		this.siteSlug = siteSlug;
+		this.isPersisted = siteSlug !== '';
 		this.readOnly = readOnly;
 		this.saveState = 'idle';
+		this.showAnalysis = false;
+		this.#selectPlan(planId);
+	}
+
+	// ── Plans ────────────────────────────────────────────────────────────────
+
+	// The plan being viewed and edited. Falls back to the first plan if the id is stale.
+	get plan(): Plan {
+		return this.site.plans.find((p) => p.id === this.activePlanId) ?? this.site.plans[0];
+	}
+
+	// Plan switches, adds and deletes clear history, so undo never restores a plan that's gone
+	#selectPlan(id: string) {
+		this.activePlanId = id;
 		this.mode = { type: 'idle' };
 		this.activeStructureId = '';
-		this.showAnalysis = false;
 		this.#undoStack.splice(0);
 		this.#redoStack.splice(0);
+	}
+
+	switchPlan(id: string) {
+		if (id !== this.plan.id && this.site.plans.some((p) => p.id === id)) this.#selectPlan(id);
+	}
+
+	renamePlan(name: string) {
+		this.#pushUndo();
+		this.plan.name = name;
+	}
+
+	#addPlan(plan: Plan) {
+		this.site.plans.push(plan);
+		assignPlanSlugs(this.site);
+		this.#selectPlan(plan.id);
+	}
+
+	// A fresh proposal: the buildings as they stand today, without proposed ones.
+	newPlan() {
+		const current = copy(this.plan);
+		const structures = current.structures
+			.filter((s) => s.status !== 'new')
+			.map((s) => ({ ...s, status: 'existing' as const }));
+		this.#addPlan(
+			makePlan('New plan', { structures, openSpaces: current.openSpaces, trees: current.trees }),
+		);
+	}
+
+	duplicatePlan() {
+		const current = copy(this.plan);
+		this.#addPlan({ ...current, id: crypto.randomUUID(), name: `${current.name} copy`, slug: '', oldSlugs: undefined });
+	}
+
+	deletePlan(id: string) {
+		if (this.site.plans.length <= 1) return;
+		const idx = this.site.plans.findIndex((p) => p.id === id);
+		if (idx === -1) return;
+		const stayOn = this.plan.id === id ? this.site.plans[idx === 0 ? 1 : idx - 1].id : this.plan.id;
+		this.site.plans.splice(idx, 1);
+		this.#selectPlan(stayOn);
 	}
 
 	// Upserts the site. Edits made while a save is in flight stay dirty.
@@ -85,11 +160,12 @@ class ModelerStore {
 	}
 
 	async #doSave(): Promise<boolean> {
+		assignPlanSlugs(this.site); // renamed plans get new slugs; old ones are kept for redirects
 		const json = JSON.stringify($state.snapshot(this.site));
 		this.saveState = 'saving';
 		try {
 			const ref = await putSite(json, this.site.id);
-			this.shortId = ref.shortId;
+			this.siteSlug = ref.slug;
 			this.#savedJson = json;
 			this.isPersisted = true;
 			this.saveState = 'idle';
@@ -115,7 +191,7 @@ class ModelerStore {
 	}
 
 	get allParts(): Part[] {
-		return this.site.structures.flatMap((s) => s.parts);
+		return this.plan.structures.flatMap((s) => s.parts);
 	}
 
 	get selectedPart(): Part | undefined {
@@ -126,11 +202,11 @@ class ModelerStore {
 	get selectedStructure(): Structure | undefined {
 		const id = this.selectedPartId;
 		if (!id) return undefined;
-		return this.site.structures.find((s) => s.parts.some((p) => p.id === id));
+		return this.plan.structures.find((s) => s.parts.some((p) => p.id === id));
 	}
 
 	get activeStructure(): Structure | undefined {
-		return this.site.structures.find((s) => s.id === this.activeStructureId);
+		return this.plan.structures.find((s) => s.id === this.activeStructureId);
 	}
 
 	get selectedOpenSpaceId(): string | null {
@@ -147,7 +223,7 @@ class ModelerStore {
 
 	get selectedOpenSpace(): OpenSpace | undefined {
 		const id = this.selectedOpenSpaceId;
-		return id ? this.site.openSpaces.find((o) => o.id === id) : undefined;
+		return id ? this.plan.openSpaces.find((o) => o.id === id) : undefined;
 	}
 
 	get selectedTreeId(): string | null {
@@ -157,14 +233,14 @@ class ModelerStore {
 	}
 
 	#pushUndo() {
-		const snapshot = $state.snapshot(this.site) as Site;
+		const snapshot = copy(this.site);
 		if (this.#undoStack.length >= MAX_UNDO) this.#undoStack.shift();
 		this.#undoStack.push(snapshot);
 		this.#redoStack.splice(0);
 	}
 
 	#mutPart(id: string, fn: (p: Part) => void) {
-		for (const s of this.site.structures) {
+		for (const s of this.plan.structures) {
 			const p = s.parts.find((p) => p.id === id);
 			if (p) {
 				fn(p);
@@ -180,9 +256,9 @@ class ModelerStore {
 	// Clone the structure that owns partId, return the corresponding new part's id.
 	// No #pushUndo() here — startDragging captures the state including the clone.
 	duplicateStructure(partId: string): string | null {
-		const srcStructure = this.site.structures.find((s) => s.parts.some((p) => p.id === partId));
+		const srcStructure = this.plan.structures.find((s) => s.parts.some((p) => p.id === partId));
 		if (!srcStructure) return null;
-		const snapshot = $state.snapshot(srcStructure) as Structure;
+		const snapshot = copy(srcStructure);
 		const partIndex = snapshot.parts.findIndex((p) => p.id === partId);
 		const newParts = snapshot.parts.map((p) => ({ ...p, id: crypto.randomUUID() }));
 		const newStructure: Structure = {
@@ -191,19 +267,19 @@ class ModelerStore {
 			groupId: undefined, // copies don't inherit group membership
 			parts: newParts,
 		};
-		this.site.structures.push(newStructure);
+		this.plan.structures.push(newStructure);
 		this.activeStructureId = newStructure.id;
 		return newParts[partIndex >= 0 ? partIndex : 0].id;
 	}
 
 	splitStructure(id: string) {
 		this.#pushUndo();
-		const structure = this.site.structures.find((s) => s.id === id);
+		const structure = this.plan.structures.find((s) => s.id === id);
 		if (!structure || structure.parts.length <= 1) return;
-		const snap = $state.snapshot(structure) as Structure;
+		const snap = copy(structure);
 		structure.parts = [snap.parts[0]];
 		for (const part of snap.parts.slice(1)) {
-			this.site.structures.push({ ...snap, id: crypto.randomUUID(), parts: [part] });
+			this.plan.structures.push({ ...snap, id: crypto.randomUUID(), parts: [part] });
 		}
 	}
 
@@ -231,7 +307,7 @@ class ModelerStore {
 			parts: [part],
 			provenance: 'user',
 		};
-		this.site.structures.push(s);
+		this.plan.structures.push(s);
 		this.activeStructureId = s.id;
 		this.mode = { type: 'selected', partId: part.id };
 	}
@@ -249,7 +325,7 @@ class ModelerStore {
 			parts: [],
 			provenance: 'user',
 		};
-		this.site.structures.push(s);
+		this.plan.structures.push(s);
 		this.activeStructureId = s.id;
 	}
 
@@ -261,7 +337,7 @@ class ModelerStore {
 	selectStructure(id: string) {
 		this.activeStructureId = id;
 		this.sidebarTab = 'spatial';
-		const s = this.site.structures.find((s) => s.id === id);
+		const s = this.plan.structures.find((s) => s.id === id);
 		if (s && s.parts.length > 0) {
 			this.mode = { type: 'selected', partId: s.parts[0].id };
 		} else {
@@ -276,24 +352,24 @@ class ModelerStore {
 		>,
 	) {
 		this.#pushUndo();
-		const s = this.site.structures.find((s) => s.id === id);
+		const s = this.plan.structures.find((s) => s.id === id);
 		if (!s) return;
 		Object.assign(s, patch);
 	}
 
 	deleteStructure(id: string) {
 		this.#pushUndo();
-		const idx = this.site.structures.findIndex((s) => s.id === id);
+		const idx = this.plan.structures.findIndex((s) => s.id === id);
 		if (idx === -1) return;
-		const groupId = this.site.structures[idx].groupId;
-		this.site.structures.splice(idx, 1);
+		const groupId = this.plan.structures[idx].groupId;
+		this.plan.structures.splice(idx, 1);
 		// If only one structure remains in the group, remove its orphaned groupId
 		if (groupId) {
-			const remaining = this.site.structures.filter((s) => s.groupId === groupId);
+			const remaining = this.plan.structures.filter((s) => s.groupId === groupId);
 			if (remaining.length === 1) remaining[0].groupId = undefined;
 		}
 		if (this.activeStructureId === id) {
-			this.activeStructureId = this.site.structures[0]?.id ?? '';
+			this.activeStructureId = this.plan.structures[0]?.id ?? '';
 		}
 		this.mode = { type: 'idle' };
 	}
@@ -304,13 +380,13 @@ class ModelerStore {
 
 	updateOpenSpace(id: string, patch: Partial<Pick<OpenSpace, 'label' | 'kind'>>) {
 		this.#pushUndo();
-		const os = this.site.openSpaces.find((o) => o.id === id);
+		const os = this.plan.openSpaces.find((o) => o.id === id);
 		if (!os) return;
 		Object.assign(os, patch);
 	}
 
 	startDraggingOpenSpace(id: string, anchorX: number, anchorY: number) {
-		const os = this.site.openSpaces.find((o) => o.id === id);
+		const os = this.plan.openSpaces.find((o) => o.id === id);
 		if (!os) return;
 		this.#pushUndo();
 		this.#gestureDidMutate = false;
@@ -328,7 +404,7 @@ class ModelerStore {
 		const { openSpaceId, origPolygon, anchorX, anchorY } = this.mode;
 		const dx = x - anchorX;
 		const dy = y - anchorY;
-		const os = this.site.openSpaces.find((o) => o.id === openSpaceId);
+		const os = this.plan.openSpaces.find((o) => o.id === openSpaceId);
 		if (!os) return;
 		os.polygon = origPolygon.map((p) => [p[0] + dx, p[1] + dy]);
 		this.#gestureDidMutate = true;
@@ -341,7 +417,7 @@ class ModelerStore {
 	}
 
 	startDraggingOsVertex(id: string, vertexIndex: number) {
-		const os = this.site.openSpaces.find((o) => o.id === id);
+		const os = this.plan.openSpaces.find((o) => o.id === id);
 		if (!os) return;
 		this.#pushUndo();
 		this.#gestureDidMutate = false;
@@ -356,7 +432,7 @@ class ModelerStore {
 	updateDragOsVertex(x: number, y: number) {
 		if (this.mode.type !== 'draggingOsVertex') return;
 		const { openSpaceId, vertexIndex, origPolygon } = this.mode;
-		const os = this.site.openSpaces.find((o) => o.id === openSpaceId);
+		const os = this.plan.openSpaces.find((o) => o.id === openSpaceId);
 		if (!os) return;
 		os.polygon = origPolygon.map((p, i) =>
 			i === vertexIndex ? ([x, y] as [number, number]) : ([p[0], p[1]] as [number, number]),
@@ -401,14 +477,14 @@ class ModelerStore {
 			kind,
 			polygon: points,
 		};
-		this.site.openSpaces.push(os);
+		this.plan.openSpaces.push(os);
 		this.mode = { type: 'idle' };
 	}
 
 	deleteOpenSpace(id: string) {
 		this.#pushUndo();
-		const idx = this.site.openSpaces.findIndex((o) => o.id === id);
-		if (idx !== -1) this.site.openSpaces.splice(idx, 1);
+		const idx = this.plan.openSpaces.findIndex((o) => o.id === id);
+		if (idx !== -1) this.plan.openSpaces.splice(idx, 1);
 	}
 
 	selectPart(id: string | null) {
@@ -418,11 +494,11 @@ class ModelerStore {
 	startDragging(id: string, offsetX: number, offsetY: number, cloning = false) {
 		this.#pushUndo();
 		this.#gestureDidMutate = false;
-		const structure = this.site.structures.find((s) => s.parts.some((p) => p.id === id));
+		const structure = this.plan.structures.find((s) => s.parts.some((p) => p.id === id));
 		// Include all parts from every structure in the same group so they move as a unit
 		const groupMembers =
 			structure?.groupId
-				? this.site.structures.filter((s) => s.groupId === structure.groupId)
+				? this.plan.structures.filter((s) => s.groupId === structure.groupId)
 				: structure
 					? [structure]
 					: [];
@@ -471,7 +547,7 @@ class ModelerStore {
 		const { partId, cloning } = this.mode;
 		// Auto-group when dropped touching another structure (not while cloning)
 		if (!cloning) {
-			const draggedStructure = this.site.structures.find((s) =>
+			const draggedStructure = this.plan.structures.find((s) =>
 				s.parts.some((p) => p.id === partId),
 			);
 			if (draggedStructure) {
@@ -494,7 +570,7 @@ class ModelerStore {
 
 	#findTouchingStructure(draggedStructure: Structure): Structure | undefined {
 		const draggedAABBs = draggedStructure.parts.map((p) => getPartAABB(p));
-		for (const other of this.site.structures) {
+		for (const other of this.plan.structures) {
 			if (other.id === draggedStructure.id) continue;
 			for (const otherPart of other.parts) {
 				const otherAABB = getPartAABB(otherPart);
@@ -507,8 +583,8 @@ class ModelerStore {
 	}
 
 	#groupStructures(id1: string, id2: string) {
-		const s1 = this.site.structures.find((s) => s.id === id1);
-		const s2 = this.site.structures.find((s) => s.id === id2);
+		const s1 = this.plan.structures.find((s) => s.id === id1);
+		const s2 = this.plan.structures.find((s) => s.id === id2);
 		if (!s1 || !s2) return;
 		if (s1.groupId !== undefined && s1.groupId === s2.groupId) return;
 		const groupId = s1.groupId ?? s2.groupId ?? crypto.randomUUID();
@@ -518,12 +594,12 @@ class ModelerStore {
 
 	ungroupStructure(id: string) {
 		this.#pushUndo();
-		const structure = this.site.structures.find((s) => s.id === id);
+		const structure = this.plan.structures.find((s) => s.id === id);
 		if (!structure?.groupId) return;
 		const groupId = structure.groupId;
 		structure.groupId = undefined;
 		// If only one member remains in the group, remove its groupId too
-		const remaining = this.site.structures.filter((s) => s.groupId === groupId);
+		const remaining = this.plan.structures.filter((s) => s.groupId === groupId);
 		if (remaining.length === 1) remaining[0].groupId = undefined;
 	}
 
@@ -631,12 +707,12 @@ class ModelerStore {
 
 	deletePart(id: string) {
 		// Delete the entire structure that owns this part (1 part = 1 structure)
-		const owner = this.site.structures.find((s) => s.parts.some((p) => p.id === id));
+		const owner = this.plan.structures.find((s) => s.parts.some((p) => p.id === id));
 		if (owner) {
 			this.#pushUndo();
 			const wasActive = this.activeStructureId === owner.id;
-			this.site.structures.splice(this.site.structures.indexOf(owner), 1);
-			if (wasActive) this.activeStructureId = this.site.structures[0]?.id ?? '';
+			this.plan.structures.splice(this.plan.structures.indexOf(owner), 1);
+			if (wasActive) this.activeStructureId = this.plan.structures[0]?.id ?? '';
 		}
 		this.mode = { type: 'idle' };
 	}
@@ -665,7 +741,7 @@ class ModelerStore {
 	placeTree(x: number, y: number) {
 		this.#pushUndo();
 		const tree: Tree = { id: crypto.randomUUID(), x, y, radius: 2.5, height: 8 };
-		this.site.trees.push(tree);
+		this.plan.trees.push(tree);
 		this.mode = { type: 'selectedTree', treeId: tree.id };
 	}
 
@@ -675,8 +751,8 @@ class ModelerStore {
 
 	deleteTree(id: string) {
 		this.#pushUndo();
-		const idx = this.site.trees.findIndex((t) => t.id === id);
-		if (idx !== -1) this.site.trees.splice(idx, 1);
+		const idx = this.plan.trees.findIndex((t) => t.id === id);
+		if (idx !== -1) this.plan.trees.splice(idx, 1);
 		this.mode = { type: 'idle' };
 	}
 
@@ -688,7 +764,7 @@ class ModelerStore {
 	updateDragTree(x: number, y: number) {
 		if (this.mode.type !== 'draggingTree') return;
 		if (!this.#gestureDidMutate) { this.#pushUndo(); this.#gestureDidMutate = true; }
-		const tree = this.site.trees.find((t) => t.id === (this.mode as { treeId: string }).treeId);
+		const tree = this.plan.trees.find((t) => t.id === (this.mode as { treeId: string }).treeId);
 		if (!tree) return;
 		tree.x = x - this.mode.offsetX;
 		tree.y = y - this.mode.offsetY;
@@ -702,7 +778,7 @@ class ModelerStore {
 
 	updateTree(id: string, patch: Partial<Pick<Tree, 'radius' | 'height'>>) {
 		this.#pushUndo();
-		const tree = this.site.trees.find((t) => t.id === id);
+		const tree = this.plan.trees.find((t) => t.id === id);
 		if (tree) Object.assign(tree, patch);
 	}
 
@@ -713,7 +789,7 @@ class ModelerStore {
 
 	undo() {
 		if (this.readOnly || this.#undoStack.length === 0) return;
-		const current = $state.snapshot(this.site) as Site;
+		const current = copy(this.site);
 		this.#redoStack.push(current);
 		const prev = this.#undoStack.pop()!;
 		this.site = prev;
@@ -722,7 +798,7 @@ class ModelerStore {
 
 	redo() {
 		if (this.readOnly || this.#redoStack.length === 0) return;
-		const current = $state.snapshot(this.site) as Site;
+		const current = copy(this.site);
 		this.#undoStack.push(current);
 		const next = this.#redoStack.pop()!;
 		this.site = next;

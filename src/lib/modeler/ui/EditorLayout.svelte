@@ -83,7 +83,7 @@
 			// View only: clicking a part shows its structure in the panel; nothing moves
 			const owner =
 				result.kind === 'part' &&
-				store.site.structures.find((s) => s.parts.some((p) => p.id === result.partId));
+				store.plan.structures.find((s) => s.parts.some((p) => p.id === result.partId));
 			if (owner) store.selectStructure(owner.id);
 			else store.selectPart(null);
 			return;
@@ -98,7 +98,7 @@
 			}
 			const part = store.allParts.find((p) => p.id === partId);
 			if (!part) return;
-			const ownerStructure = store.site.structures.find((s) =>
+			const ownerStructure = store.plan.structures.find((s) =>
 				s.parts.some((p) => p.id === partId),
 			);
 			if (ownerStructure) store.setActiveStructure(ownerStructure.id);
@@ -118,7 +118,7 @@
 			store.startDraggingOpenSpace(result.openSpaceId, result.x, result.y);
 		} else if (result.kind === 'tree') {
 			rendererEl?.setPointerCapture(e.pointerId);
-			store.startDraggingTree(result.treeId, result.x - (store.site.trees.find(t => t.id === result.treeId)?.x ?? 0), result.y - (store.site.trees.find(t => t.id === result.treeId)?.y ?? 0));
+			store.startDraggingTree(result.treeId, result.x - (store.plan.trees.find(t => t.id === result.treeId)?.x ?? 0), result.y - (store.plan.trees.find(t => t.id === result.treeId)?.y ?? 0));
 		} else {
 			// Ground: deselect everything
 			store.selectPart(null);

@@ -1,14 +1,22 @@
 <script lang="ts" module>
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { store } from '../store.svelte';
-	import { duplicateSite, editUrl, viewUrl } from '../api';
+	import { planUrl } from '../api';
 
-	// Keeps the URL on the current slug: the first save moves /modeler to /modeler/<slug>,
-	// and saving a rename updates the title part.
+	// Points the address bar at the plan on screen. Within a site this is shallow (no reload),
+	// so unsaved edits survive plan switches; the first save from /modeler navigates for real.
+	export async function syncUrl() {
+		if (!store.isPersisted) return;
+		const url = planUrl(store.siteSlug, store.plan.slug, store.readOnly);
+		if (location.pathname === url) return;
+		if (page.route.id === '/modeler') await goto(url, { replace: true, reset: false });
+		else await goto(url, { shallow: true, replace: true });
+	}
+
 	export async function saveSite(): Promise<boolean> {
 		const ok = await store.save();
-		const url = editUrl(store.site.name, store.shortId);
-		if (ok && location.pathname !== url) await goto(url, { replace: true, reset: false });
+		if (ok) await syncUrl();
 		return ok;
 	}
 </script>
@@ -47,7 +55,8 @@
 		busy = true;
 		try {
 			if (!(await ensureSaved())) return;
-			await navigator.clipboard.writeText(new URL(viewUrl(store.site.name, store.shortId), location.origin).href);
+			const link = planUrl(store.siteSlug, store.plan.slug, true);
+			await navigator.clipboard.writeText(new URL(link, location.origin).href);
 			flash('Link copied');
 		} catch (e) {
 			console.error(e);
@@ -57,25 +66,17 @@
 		}
 	}
 
-	async function duplicate() {
-		busy = true;
-		try {
-			if (!(await ensureSaved())) return;
-			const copy = await duplicateSite(store.site.id);
-			await goto(editUrl(copy.name, copy.shortId));
-		} catch (e) {
-			console.error(e);
-			flash('Duplicate failed');
-		} finally {
-			busy = false;
-		}
+	// A copy of the current plan in this site, unsaved like any other edit
+	function duplicate() {
+		store.duplicatePlan();
+		syncUrl();
 	}
 </script>
 
 <div class="site-bar">
 	{#if store.readOnly}
 		<span class="view-only-tag">View only</span>
-		<a class="bar-btn" href={editUrl(store.site.name, store.shortId)}>Open in editor</a>
+		<a class="bar-btn" href={planUrl(store.siteSlug, store.plan.slug)}>Open in editor</a>
 	{:else}
 		<span class="save-status" class:save-status--error={store.saveState === 'error'} aria-live="polite">{status}</span>
 		<button
@@ -85,7 +86,7 @@
 			title="Save (Cmd+S)"
 		>Save</button>
 		<button class="bar-btn" onclick={share} disabled={busy} title="Copy a view-only link">Share</button>
-		<button class="bar-btn" onclick={duplicate} disabled={busy} title="Save a copy as a new scenario">Duplicate</button>
+		<button class="bar-btn" onclick={duplicate} title="Copy this plan as a new scenario">Duplicate</button>
 	{/if}
 	<a class="bar-btn" href="/modeler/sites">Sites</a>
 </div>

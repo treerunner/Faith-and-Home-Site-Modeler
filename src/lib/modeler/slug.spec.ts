@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { newShortId, parseShortId, siteSlug, slugify } from './slug';
+import { assignPlanSlugs, findPlanBySlug, pickSlug, slugify, RESERVED_SITE_SLUGS } from './slug';
+import type { Plan, Site } from './types';
 
 describe('slugify', () => {
 	it.each([
@@ -21,31 +22,85 @@ describe('slugify', () => {
 	});
 });
 
-describe('newShortId', () => {
-	it('makes 6 readable characters', () => {
-		for (let i = 0; i < 200; i++) expect(newShortId()).toMatch(/^[2-9a-hjkmnp-z]{6}$/);
+describe('pickSlug', () => {
+	it('uses the plain slug when free', () => {
+		expect(pickSlug('Grace Church', new Set(), [])).toBe('grace-church');
 	});
 
-	it('does not repeat in practice', () => {
-		const ids = new Set(Array.from({ length: 1000 }, newShortId));
-		expect(ids.size).toBe(1000);
+	it('numbers collisions from 2', () => {
+		expect(pickSlug('Grace Church', new Set(['grace-church']), [])).toBe('grace-church-2');
+		expect(pickSlug('Grace Church', new Set(['grace-church', 'grace-church-2']), [])).toBe('grace-church-3');
+	});
+
+	it('avoids reserved words', () => {
+		expect(pickSlug('Sites', new Set(), RESERVED_SITE_SLUGS)).toBe('sites-2');
+	});
+
+	it('keeps the current slug while it still matches the name', () => {
+		const taken = new Set(['grace-church']);
+		expect(pickSlug('Grace Church', taken, [], 'grace-church-2')).toBe('grace-church-2');
+		expect(pickSlug('Grace Church', new Set(), [], 'grace-church')).toBe('grace-church');
+	});
+
+	it('moves to a new slug after a rename', () => {
+		expect(pickSlug('Grace Chapel', new Set(), [], 'grace-church')).toBe('grace-chapel');
+	});
+
+	it('does not treat a longer name as a numbered copy', () => {
+		// "grace-church-annex" is not "grace-church-N"
+		expect(pickSlug('Grace Church', new Set(), [], 'grace-church-annex')).toBe('grace-church');
 	});
 });
 
-describe('parseShortId', () => {
-	it('reads the id after the last dash', () => {
-		expect(parseShortId('grace-church-7f3k9q')).toBe('7f3k9q');
-		expect(parseShortId(siteSlug('Scenario 2: housing', 'abc234'))).toBe('abc234');
+function makePlan(name: string, slug = '', oldSlugs?: string[]): Plan {
+	return { id: name, name, slug, oldSlugs, structures: [], openSpaces: [], trees: [], annotations: [] };
+}
+
+function makeSite(plans: Plan[]): Site {
+	return { id: 's', name: 'Site', mode: 'grid', context: { footprints: [], roads: [] }, plans };
+}
+
+describe('assignPlanSlugs', () => {
+	it('slugs new plans and numbers duplicate names', () => {
+		const site = makeSite([makePlan('Housing'), makePlan('Housing'), makePlan('View')]);
+		assignPlanSlugs(site);
+		expect(site.plans.map((p) => p.slug)).toEqual(['housing', 'housing-2', 'view-2']);
 	});
 
-	it('accepts a bare id and ignores case', () => {
-		expect(parseShortId('7F3K9Q')).toBe('7f3k9q');
+	it('keeps old slugs on rename so links redirect', () => {
+		const site = makeSite([makePlan('Cottage court', 'housing')]);
+		assignPlanSlugs(site);
+		expect(site.plans[0]).toMatchObject({ slug: 'cottage-court', oldSlugs: ['housing'] });
+		site.plans[0].name = 'Infill';
+		assignPlanSlugs(site);
+		expect(site.plans[0]).toMatchObject({ slug: 'infill', oldSlugs: ['housing', 'cottage-court'] });
 	});
 
-	// A title-only slug like "grace-church" parses as id "church"; the lookup then 404s.
-	it('rejects tails that cannot be ids', () => {
-		expect(parseShortId('grace-ch')).toBeNull();
-		expect(parseShortId('grace-church-')).toBeNull();
-		expect(parseShortId('grace-church-ab$12x')).toBeNull();
+	it("does not give a plan another plan's old slug", () => {
+		const site = makeSite([makePlan('Cottage court', 'cottage-court', ['housing']), makePlan('Housing')]);
+		assignPlanSlugs(site);
+		expect(site.plans[1].slug).toBe('housing-2');
+	});
+
+	it('reuses its own old slug when renamed back', () => {
+		const site = makeSite([makePlan('Housing', 'cottage-court', ['housing'])]);
+		assignPlanSlugs(site);
+		expect(site.plans[0]).toMatchObject({ slug: 'housing', oldSlugs: ['cottage-court'] });
+	});
+
+	it('leaves unchanged plans alone', () => {
+		const site = makeSite([makePlan('Housing', 'housing')]);
+		assignPlanSlugs(site);
+		expect(site.plans[0]).toEqual(makePlan('Housing', 'housing'));
+	});
+});
+
+describe('findPlanBySlug', () => {
+	const plans = [makePlan('A', 'a', ['old-a']), makePlan('B', 'b')];
+
+	it('matches current then old slugs', () => {
+		expect(findPlanBySlug(plans, 'b')?.name).toBe('B');
+		expect(findPlanBySlug(plans, 'old-a')?.name).toBe('A');
+		expect(findPlanBySlug(plans, 'nope')).toBeUndefined();
 	});
 });

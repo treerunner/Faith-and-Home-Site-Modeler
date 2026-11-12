@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { store } from '../store.svelte';
+	import PlanSwitcher from './PlanSwitcher.svelte';
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM } from '../units';
 	import type { CongregationProfile, Roof, Status, Structure, Use } from '../types';
@@ -32,7 +33,7 @@
 		{ value: 'object', label: 'Object' },
 	];
 
-	let structures = $derived(store.site.structures);
+	let structures = $derived(store.plan.structures);
 	let selectedOS = $derived(store.selectedOpenSpace);
 
 	// Track which structure is expanded — syncs when canvas selection changes
@@ -53,7 +54,7 @@
 	}
 
 	function toggleUse(structureId: string, use: Use, checked: boolean) {
-		const s = store.site.structures.find((s) => s.id === structureId);
+		const s = store.plan.structures.find((s) => s.id === structureId);
 		if (!s) return;
 		const uses = checked ? [...s.uses, use] : s.uses.filter((u) => u !== use);
 		const useWeights = { ...s.useWeights };
@@ -84,6 +85,7 @@
 			oninput={(e) => store.updateSiteName((e.target as HTMLInputElement).value)}
 		/>
 	</div>
+	<PlanSwitcher />
 
 	<div class="tab-strip" role="tablist">
 		<button
@@ -361,7 +363,7 @@
 
 	<!-- Tree properties when one is selected -->
 	{#if store.selectedTreeId && sidebarTab === 'spatial'}
-		{@const tree = store.site.trees.find(t => t.id === store.selectedTreeId)}
+		{@const tree = store.plan.trees.find(t => t.id === store.selectedTreeId)}
 		{#if tree}
 			<div class="section section--props">
 				<h2 class="panel-heading">Tree</h2>
@@ -466,8 +468,7 @@
 	}
 
 	.site-name-row {
-		padding: 0.5rem 0.6rem 0.4rem;
-		border-bottom: 1px solid var(--color-border);
+		padding: 0.5rem 0.6rem 0.15rem;
 		background: var(--color-surface);
 	}
 

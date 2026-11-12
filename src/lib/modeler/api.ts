@@ -1,9 +1,7 @@
-import { siteSlug } from './slug';
-
 // Identifies a saved site; returned by save and duplicate.
 export interface SiteRef {
 	id: string;
-	shortId: string;
+	slug: string;
 	name: string;
 }
 
@@ -31,5 +29,7 @@ export function deleteSite(id: string): Promise<void> {
 	return request(`/api/sites/${id}`, { method: 'DELETE' });
 }
 
-export const editUrl = (name: string, shortId: string) => `/modeler/${siteSlug(name, shortId)}`;
-export const viewUrl = (name: string, shortId: string) => `${editUrl(name, shortId)}/view`;
+// /modeler/<site> redirects to the site's first plan
+export const siteUrl = (siteSlug: string) => `/modeler/${siteSlug}`;
+export const planUrl = (siteSlug: string, planSlug: string, view = false) =>
+	`/modeler/${siteSlug}/${planSlug}${view ? '/view' : ''}`;

@@ -15,6 +15,20 @@
       "when": 1794520927109,
       "tag": "0001_blushing_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794522260160,
+      "tag": "0002_site_slugs",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794522260766,
+      "tag": "0003_drop_short_id",
+      "breakpoints": true
     }
   ]
 }

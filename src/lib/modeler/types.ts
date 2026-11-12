@@ -64,6 +64,26 @@ export interface Tree {
 	height: number; // total height in meters
 }
 
+export interface Annotation {
+	n: number;
+	x: number;
+	y: number;
+	text: string;
+}
+
+// One proposal (or the existing conditions) for a site.
+export interface Plan {
+	id: string;
+	name: string;
+	slug: string; // URL segment, unique within the site
+	oldSlugs?: string[]; // previous slugs, so links survive renames
+	structures: Structure[];
+	openSpaces: OpenSpace[];
+	trees: Tree[];
+	annotations: Annotation[];
+}
+
+// The property. Everything about the place itself lives here and is shared by its plans.
 export interface Site {
 	id: string;
 	name: string;
@@ -71,10 +91,7 @@ export interface Site {
 	origin?: { lat: number; lng: number };
 	parcel?: [number, number][];
 	siteType?: 'urban' | 'suburban' | 'rural';
-	structures: Structure[];
-	openSpaces: OpenSpace[];
-	trees: Tree[];
 	context: { footprints: [number, number][][]; roads: [number, number][][] };
-	annotations: { n: number; x: number; y: number; text: string }[];
 	congregationProfile?: CongregationProfile;
+	plans: Plan[];
 }

@@ -1,7 +1,9 @@
-import type { OpenSpace, Part, Site, Structure, Tree, Use } from './types';
+import type { Annotation, OpenSpace, Part, Plan, Site, Structure, Tree, Use } from './types';
+import { slugify } from './slug';
 
 // Validates a Site read from the database or posted to the API, and fills
 // defaults for fields added after older sites were saved. Throws on bad input.
+// Sites saved before plans existed are wrapped into one "Existing conditions" plan.
 
 export class SiteFormatError extends Error {}
 
@@ -129,13 +131,67 @@ function parseTree(v: unknown, path: string): Tree {
 	};
 }
 
+function parseAnnotation(v: unknown, path: string): Annotation {
+	const o = obj(v, path);
+	return { n: num(o.n, `${path}.n`), x: num(o.x, `${path}.x`), y: num(o.y, `${path}.y`), text: str(o.text, `${path}.text`) };
+}
+
+// The plan-level fields, shared by plans and by legacy sites that stored them at the top level.
+function parsePlanContent(o: Obj, path: string): Pick<Plan, 'structures' | 'openSpaces' | 'trees' | 'annotations'> {
+	return {
+		structures: arr(o.structures ?? [], `${path}.structures`).map((s, i) =>
+			parseStructure(s, `${path}.structures[${i}]`),
+		),
+		openSpaces: arr(o.openSpaces ?? [], `${path}.openSpaces`).map((s, i) =>
+			parseOpenSpace(s, `${path}.openSpaces[${i}]`),
+		),
+		trees: arr(o.trees ?? [], `${path}.trees`).map((t, i) => parseTree(t, `${path}.trees[${i}]`)),
+		annotations: arr(o.annotations ?? [], `${path}.annotations`).map((a, i) =>
+			parseAnnotation(a, `${path}.annotations[${i}]`),
+		),
+	};
+}
+
+function parsePlan(v: unknown, path: string): Plan {
+	const o = obj(v, path);
+	const name = str(o.name ?? '', `${path}.name`);
+	return {
+		id: str(o.id, `${path}.id`),
+		name,
+		slug: str(o.slug ?? slugify(name), `${path}.slug`),
+		oldSlugs: optional(o.oldSlugs, (v) =>
+			arr(v, `${path}.oldSlugs`).map((s, i) => str(s, `${path}.oldSlugs[${i}]`)),
+		),
+		...parsePlanContent(o, path),
+	};
+}
+
+export const DEFAULT_PLAN_NAME = 'Existing conditions';
+
 export function normalizeSite(raw: unknown): Site {
 	const o = obj(raw, 'site');
+	const id = str(o.id, 'site.id');
 	const context = o.context === undefined ? {} : obj(o.context, 'site.context');
 	const profile = optional(o.congregationProfile, (p) => obj(p, 'site.congregationProfile'));
 
+	const plans =
+		o.plans === undefined
+			? [{ id, name: DEFAULT_PLAN_NAME, slug: slugify(DEFAULT_PLAN_NAME), ...parsePlanContent(o, 'site') }]
+			: arr(o.plans, 'site.plans').map((p, i) => parsePlan(p, `site.plans[${i}]`));
+	if (plans.length === 0) fail('site.plans', 'expected at least one plan');
+	const ids = new Set<string>();
+	const slugs = new Set<string>();
+	plans.forEach((p, i) => {
+		if (ids.has(p.id)) fail(`site.plans[${i}].id`, 'duplicate plan id');
+		ids.add(p.id);
+		for (const slug of [p.slug, ...(p.oldSlugs ?? [])]) {
+			if (slugs.has(slug)) fail(`site.plans[${i}].slug`, `duplicate plan slug ${slug}`);
+			slugs.add(slug);
+		}
+	});
+
 	const site: Site = {
-		id: str(o.id, 'site.id'),
+		id,
 		name: str(o.name ?? '', 'site.name'),
 		mode: oneOf(o.mode ?? 'grid', ['grid', 'address'] as const, 'site.mode'),
 		origin: optional(o.origin, (v) => {
@@ -144,13 +200,6 @@ export function normalizeSite(raw: unknown): Site {
 		}),
 		parcel: optional(o.parcel, (v) => polygon(v, 'site.parcel')),
 		siteType: optional(o.siteType, (v) => oneOf(v, SITE_TYPES, 'site.siteType')),
-		structures: arr(o.structures ?? [], 'site.structures').map((s, i) =>
-			parseStructure(s, `site.structures[${i}]`),
-		),
-		openSpaces: arr(o.openSpaces ?? [], 'site.openSpaces').map((s, i) =>
-			parseOpenSpace(s, `site.openSpaces[${i}]`),
-		),
-		trees: arr(o.trees ?? [], 'site.trees').map((t, i) => parseTree(t, `site.trees[${i}]`)),
 		context: {
 			footprints: arr(context.footprints ?? [], 'site.context.footprints').map((p, i) =>
 				polygon(p, `site.context.footprints[${i}]`),
@@ -159,17 +208,13 @@ export function normalizeSite(raw: unknown): Site {
 				polygon(p, `site.context.roads[${i}]`),
 			),
 		},
-		annotations: arr(o.annotations ?? [], 'site.annotations').map((a, i) => {
-			const p = `site.annotations[${i}]`;
-			const ao = obj(a, p);
-			return { n: num(ao.n, `${p}.n`), x: num(ao.x, `${p}.x`), y: num(ao.y, `${p}.y`), text: str(ao.text, `${p}.text`) };
-		}),
 		// Free-form questionnaire answers; keep only string values
 		congregationProfile: profile
 			? (Object.fromEntries(
 					Object.entries(profile).filter(([, v]) => typeof v === 'string'),
 				) as Site['congregationProfile'])
 			: undefined,
+		plans,
 	};
 	return stripUndefined(site);
 }

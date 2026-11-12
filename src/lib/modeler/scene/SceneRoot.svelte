@@ -22,13 +22,13 @@
 	// Per-part lookup maps derived from structures
 	let partStatusMap = $derived<Map<string, Status>>(
 		new Map(
-			store.site.structures.flatMap((s) => s.parts.map((p) => [p.id, s.status] as [string, Status])),
+			store.plan.structures.flatMap((s) => s.parts.map((p) => [p.id, s.status] as [string, Status])),
 		),
 	);
 
 	let partHeightMap = $derived<Map<string, number>>(
 		new Map(
-			store.site.structures.flatMap((s) =>
+			store.plan.structures.flatMap((s) =>
 				s.parts.map((p) => [p.id, s.stories * s.floorHeight] as [string, number]),
 			),
 		),
@@ -36,11 +36,11 @@
 
 	let partStructureMap = $derived<Map<string, Structure>>(
 		new Map(
-			store.site.structures.flatMap((s) => s.parts.map((p) => [p.id, s] as [string, Structure])),
+			store.plan.structures.flatMap((s) => s.parts.map((p) => [p.id, s] as [string, Structure])),
 		),
 	);
 
-	let allParts = $derived(store.site.structures.flatMap((s) => s.parts));
+	let allParts = $derived(store.plan.structures.flatMap((s) => s.parts));
 
 	let ghostPart = $derived(
 		store.mode.type === 'placing'
@@ -111,7 +111,7 @@
 	// Pedestal: AABB of all parts + margin, 4 m deep
 	const PAD = 20, MIN_SIDE = 30, DEPTH = 4;
 	let pedestal = $derived.by(() => {
-		const parts = store.site.structures.flatMap((s) => s.parts);
+		const parts = store.plan.structures.flatMap((s) => s.parts);
 		if (parts.length === 0) return { cx: 0, cz: 0, w: MIN_SIDE, d: MIN_SIDE };
 		const xs = parts.flatMap((p) => [p.x - p.w / 2, p.x + p.w / 2]);
 		const zs = parts.flatMap((p) => [p.y - p.d / 2, p.y + p.d / 2]);
@@ -150,7 +150,7 @@
 	</T.Mesh>
 {/if}
 
-{#each store.site.openSpaces as os (os.id)}
+{#each store.plan.openSpaces as os (os.id)}
 	<OpenSpacePolygon openSpace={os} selected={store.selectedOpenSpaceId === os.id} />
 {/each}
 
@@ -198,6 +198,6 @@
 	<ResizeHandles part={store.selectedPart} />
 {/if}
 
-{#each store.site.trees as tree (tree.id)}
+{#each store.plan.trees as tree (tree.id)}
 	<TreeMesh {tree} selected={store.selectedTreeId === tree.id} is3D={store.viewMode === '3d'} />
 {/each}

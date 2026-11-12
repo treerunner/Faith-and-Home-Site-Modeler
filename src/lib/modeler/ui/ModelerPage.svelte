@@ -58,8 +58,9 @@
 	}
 
 	// Warn before leaving with unsaved changes. On a full unload, cancel() shows the browser's dialog.
-	beforeNavigate(({ cancel, willUnload }) => {
-		if (store.readOnly || !store.isDirty) return;
+	// Shallow navigations are our own URL updates (plan switches, renames) and keep the edits.
+	beforeNavigate(({ cancel, willUnload, shallow }) => {
+		if (shallow || store.readOnly || !store.isDirty) return;
 		if (willUnload || !confirm('Leave without saving? Your changes will be lost.')) cancel();
 	});
 </script>

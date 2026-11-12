@@ -8,7 +8,7 @@ import {
 	greenSpaceArea,
 	parkingArea,
 } from './metrics';
-import type { Site, Structure, Part } from './types';
+import type { Plan, Site, Structure, Part } from './types';
 
 function makePart(overrides: Partial<Part> = {}): Part {
 	return { id: 'p1', shape: 'rect', x: 0, y: 0, w: 10, d: 5, rotation: 0, ...overrides };
@@ -22,9 +22,12 @@ function makeStructure(overrides: Partial<Structure> = {}): Structure {
 	};
 }
 
-function makeSite(overrides: Partial<Site> = {}): Site {
+// One site with one plan, flattened: passes as the Plan, and as the Site where a metric needs both.
+type SitePlan = Site & Plan;
+
+function makeSite(overrides: Partial<SitePlan> = {}): SitePlan {
 	return {
-		id: 'site1', name: 'Test Site', mode: 'grid',
+		id: 'site1', name: 'Test Site', mode: 'grid', slug: 'plan', plans: [],
 		structures: [], openSpaces: [], trees: [], context: { footprints: [], roads: [] }, annotations: [],
 		...overrides,
 	};
@@ -76,12 +79,12 @@ describe('openSpaceAreaByKind', () => {
 describe('lotCoverage', () => {
 	it('returns null when no parcel', () => {
 		const site = makeSite({ structures: [makeStructure()] });
-		expect(lotCoverage(site)).toBeNull();
+		expect(lotCoverage(site, site)).toBeNull();
 	});
 
 	it('returns null when parcel has fewer than 3 points', () => {
 		const site = makeSite({ parcel: [[0,0],[10,0]], structures: [makeStructure()] });
-		expect(lotCoverage(site)).toBeNull();
+		expect(lotCoverage(site, site)).toBeNull();
 	});
 
 	it('50 m² footprint on 100 m² parcel → 50%', () => {
@@ -89,12 +92,12 @@ describe('lotCoverage', () => {
 			parcel: [[0,0],[10,0],[10,10],[0,10]],
 			structures: [makeStructure({ parts: [makePart({ w: 10, d: 5 })] })],
 		});
-		expect(lotCoverage(site)).toBeCloseTo(50, 1);
+		expect(lotCoverage(site, site)).toBeCloseTo(50, 1);
 	});
 
 	it('no structures → 0%', () => {
 		const site = makeSite({ parcel: [[0,0],[10,0],[10,10],[0,10]] });
-		expect(lotCoverage(site)).toBeCloseTo(0, 1);
+		expect(lotCoverage(site, site)).toBeCloseTo(0, 1);
 	});
 });
 
@@ -149,7 +152,7 @@ describe('useFloorAreaByUse', () => {
 
 describe('generateActionSteps', () => {
 	it('no structures → no steps', () => {
-		expect(generateActionSteps(makeSite())).toEqual([]);
+		expect(generateActionSteps(makeSite(), makeSite())).toEqual([]);
 	});
 
 	it('no green space → flag', () => {
@@ -157,7 +160,7 @@ describe('generateActionSteps', () => {
 			structures: [makeStructure()],
 			openSpaces: [],
 		});
-		const steps = generateActionSteps(site);
+		const steps = generateActionSteps(site, site);
 		expect(steps.some((s) => s.severity === 'flag' && s.category === 'green-space')).toBe(true);
 	});
 
@@ -165,7 +168,7 @@ describe('generateActionSteps', () => {
 		const site = makeSite({
 			structures: [makeStructure({ status: 'existing' })],
 		});
-		const steps = generateActionSteps(site);
+		const steps = generateActionSteps(site, site);
 		expect(steps.some((s) => s.severity === 'info' && s.category === 'pattern')).toBe(true);
 	});
 
@@ -174,7 +177,7 @@ describe('generateActionSteps', () => {
 			siteType: 'urban',
 			structures: [makeStructure({ stories: 1 })],
 		});
-		const steps = generateActionSteps(site);
+		const steps = generateActionSteps(site, site);
 		expect(steps.some((s) => s.severity === 'suggest' && s.category === 'density')).toBe(true);
 	});
 
@@ -182,7 +185,7 @@ describe('generateActionSteps', () => {
 		const site = makeSite({
 			structures: [makeStructure({ uses: ['housing'], dwellings: undefined })],
 		});
-		const steps = generateActionSteps(site);
+		const steps = generateActionSteps(site, site);
 		expect(steps.some((s) => s.severity === 'flag' && s.category === 'program')).toBe(true);
 	});
 
@@ -194,7 +197,7 @@ describe('generateActionSteps', () => {
 				{ id: 'os2', kind: 'lawn', polygon: [[0,0],[5,0],[5,5],[0,5]] },
 			],
 		});
-		const steps = generateActionSteps(site);
+		const steps = generateActionSteps(site, site);
 		expect(steps.some((s) => s.severity === 'suggest' && s.category === 'green-space')).toBe(true);
 	});
 });

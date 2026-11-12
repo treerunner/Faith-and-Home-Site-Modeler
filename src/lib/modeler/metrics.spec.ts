@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { partFootprint, structureFootprint, siteFootprint, grossFloorArea } from './metrics';
-import type { Part, Site, Structure } from './types';
+import type { Part, Plan, Site, Structure } from './types';
 
 function makePart(overrides: Partial<Part> = {}): Part {
 	return {
@@ -30,11 +30,14 @@ function makeStructure(overrides: Partial<Structure> = {}): Structure {
 	};
 }
 
-function makeSite(overrides: Partial<Site> = {}): Site {
+// One site with one plan, flattened: passes as the Plan, and as the Site where a metric needs both.
+type SitePlan = Site & Plan;
+
+function makeSite(overrides: Partial<SitePlan> = {}): SitePlan {
 	return {
 		id: 'site1',
 		name: 'Test',
-		mode: 'grid',
+		mode: 'grid', slug: 'plan', plans: [],
 		structures: [makeStructure()],
 		openSpaces: [],
 		trees: [],

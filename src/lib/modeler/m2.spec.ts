@@ -26,10 +26,7 @@ describe('statusColor', () => {
 import { store } from './store.svelte';
 
 function resetStore() {
-	// Drive store to a known state: empty structures, no open spaces, idle mode
-	for (const s of [...store.site.structures]) store.deleteStructure(s.id);
-	store.site.openSpaces.splice(0);
-	store.cancelPlacing();
+	store.newSite(); // one empty plan, idle mode, no history
 }
 
 describe('store.addStructure', () => {
@@ -37,8 +34,8 @@ describe('store.addStructure', () => {
 
 	it('creates a new structure and sets it active', () => {
 		store.addStructure();
-		expect(store.site.structures.length).toBe(1);
-		expect(store.activeStructureId).toBe(store.site.structures[0].id);
+		expect(store.plan.structures.length).toBe(1);
+		expect(store.activeStructureId).toBe(store.plan.structures[0].id);
 	});
 });
 
@@ -46,31 +43,31 @@ describe('store.updateStructure', () => {
 	beforeEach(() => { resetStore(); store.addStructure(); });
 
 	it('mutates label', () => {
-		const id = store.site.structures[0].id;
+		const id = store.plan.structures[0].id;
 		store.updateStructure(id, { label: 'Sanctuary' });
-		expect(store.site.structures[0].label).toBe('Sanctuary');
+		expect(store.plan.structures[0].label).toBe('Sanctuary');
 	});
 
 	it('mutates status', () => {
-		const id = store.site.structures[0].id;
+		const id = store.plan.structures[0].id;
 		store.updateStructure(id, { status: 'new' });
-		expect(store.site.structures[0].status).toBe('new');
+		expect(store.plan.structures[0].status).toBe('new');
 	});
 
 	it('mutates uses', () => {
-		const id = store.site.structures[0].id;
+		const id = store.plan.structures[0].id;
 		store.updateStructure(id, { uses: ['worship', 'education'] });
-		expect(store.site.structures[0].uses).toEqual(['worship', 'education']);
+		expect(store.plan.structures[0].uses).toEqual(['worship', 'education']);
 	});
 
 	it('does not affect other structures', () => {
 		store.addStructure();
-		const second = store.site.structures[1];
+		const second = store.plan.structures[1];
 		second.label = 'Second';
-		const first = store.site.structures[0];
+		const first = store.plan.structures[0];
 		store.updateStructure(first.id, { label: 'First updated' });
-		expect(store.site.structures[1].label).toBe('Second');
-		expect(store.site.structures[0].label).toBe('First updated');
+		expect(store.plan.structures[1].label).toBe('Second');
+		expect(store.plan.structures[0].label).toBe('First updated');
 	});
 });
 
@@ -79,19 +76,19 @@ describe('store.deleteStructure', () => {
 
 	it('removes the structure and its parts', () => {
 		store.addStructure();
-		const s = store.site.structures[0];
+		const s = store.plan.structures[0];
 		const partId = crypto.randomUUID();
 		s.parts.push({ id: partId, shape: 'rect', x: 0, y: 0, w: 10, d: 6, rotation: 0 });
 		store.deleteStructure(s.id);
-		expect(store.site.structures.length).toBe(0);
+		expect(store.plan.structures.length).toBe(0);
 	});
 
 	it('can delete down to an empty list', () => {
 		store.addStructure();
 		store.addStructure();
-		store.deleteStructure(store.site.structures[0].id);
-		store.deleteStructure(store.site.structures[0].id);
-		expect(store.site.structures.length).toBe(0);
+		store.deleteStructure(store.plan.structures[0].id);
+		store.deleteStructure(store.plan.structures[0].id);
+		expect(store.plan.structures.length).toBe(0);
 	});
 });
 
@@ -100,15 +97,15 @@ describe('store.addOpenSpace / deleteOpenSpace', () => {
 
 	it('adds an open space', () => {
 		store.addOpenSpace('lawn', [[0, 0], [10, 0], [10, 10], [0, 10]]);
-		expect(store.site.openSpaces.length).toBe(1);
-		expect(store.site.openSpaces[0].kind).toBe('lawn');
+		expect(store.plan.openSpaces.length).toBe(1);
+		expect(store.plan.openSpaces[0].kind).toBe('lawn');
 	});
 
 	it('deletes an open space', () => {
 		store.addOpenSpace('parking', [[0, 0], [5, 0], [5, 5]]);
-		const id = store.site.openSpaces[0].id;
+		const id = store.plan.openSpaces[0].id;
 		store.deleteOpenSpace(id);
-		expect(store.site.openSpaces.length).toBe(0);
+		expect(store.plan.openSpaces.length).toBe(0);
 	});
 });
 
@@ -133,6 +130,6 @@ describe('store.addOpenSpaceVertex', () => {
 		// Click within 2m of start
 		store.addOpenSpaceVertex(0.5, 0.5);
 		expect(store.mode.type).toBe('idle');
-		expect(store.site.openSpaces.length).toBe(1);
+		expect(store.plan.openSpaces.length).toBe(1);
 	});
 });

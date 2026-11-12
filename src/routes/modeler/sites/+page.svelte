@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto, refreshAll } from '$app/navigation';
 	import Masthead from '#lib/modeler/ui/Masthead.svelte';
-	import { deleteSite, duplicateSite, editUrl, viewUrl } from '#lib/modeler/api';
+	import { deleteSite, duplicateSite, planUrl, siteUrl } from '#lib/modeler/api';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -15,7 +15,7 @@
 	async function duplicate(id: string) {
 		try {
 			const copy = await duplicateSite(id);
-			await goto(editUrl(copy.name, copy.shortId));
+			await goto(siteUrl(copy.slug));
 		} catch (e) {
 			console.error(e);
 			error = 'Could not duplicate the site.';
@@ -55,13 +55,18 @@
 				{#each data.sites as site (site.id)}
 					<li class="site-row">
 						<div class="site-info">
-							<a class="site-name" href={editUrl(site.name, site.shortId)}>{site.name || 'Untitled'}</a>
+							<a class="site-name" href={siteUrl(site.slug)}>{site.name || 'Untitled'}</a>
 							<span class="site-meta">
 								Updated {dateFmt.format(new Date(site.updatedAt))}
 								{#if site.duplicatedFrom}
 									· Copy of {names.get(site.duplicatedFrom) ?? 'a deleted site'}
 								{/if}
 							</span>
+							<ul class="plan-links" aria-label="Plans in {site.name || 'Untitled'}">
+								{#each site.plans as plan (plan.slug)}
+									<li><a href={planUrl(site.slug, plan.slug)}>{plan.name || 'Untitled plan'}</a></li>
+								{/each}
+							</ul>
 						</div>
 						<div class="site-actions">
 							{#if confirmingId === site.id}
@@ -69,9 +74,9 @@
 								<button class="btn btn--danger" onclick={() => remove(site.id)}>Delete</button>
 								<button class="btn" onclick={() => (confirmingId = '')}>Cancel</button>
 							{:else}
-								<a class="btn" href={editUrl(site.name, site.shortId)}>Open</a>
-								<a class="btn" href={viewUrl(site.name, site.shortId)}>View</a>
-								<button class="btn" onclick={() => duplicate(site.id)}>Duplicate</button>
+								<a class="btn" href={siteUrl(site.slug)}>Open</a>
+								<a class="btn" href={planUrl(site.slug, site.plans[0].slug, true)}>View</a>
+								<button class="btn" onclick={() => duplicate(site.id)} title="Copy the site with all its plans">Duplicate</button>
 								<button class="btn" onclick={() => (confirmingId = site.id)}>Delete</button>
 							{/if}
 						</div>
@@ -143,6 +148,25 @@
 	}
 
 	.site-name:hover { text-decoration: underline; }
+
+	.plan-links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.15rem 0.75rem;
+		list-style: none;
+		margin: 0.2rem 0 0;
+		padding: 0;
+		font-size: 0.75rem;
+	}
+
+	.plan-links a {
+		color: var(--color-text);
+		text-decoration: underline;
+		text-decoration-color: var(--color-border);
+		text-underline-offset: 2px;
+	}
+
+	.plan-links a:hover { text-decoration-color: currentColor; }
 
 	.site-meta, .confirm-text, .empty {
 		font-size: 0.75rem;
