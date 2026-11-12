@@ -1,111 +1,159 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 // Writes to the DATABASE_URL database; deletes the rows it creates.
 
-const SHORT_ID = '[a-z0-9]{6}';
-const created: string[] = []; // short ids
+const created: string[] = []; // site ids
 
 interface Summary {
 	id: string;
-	shortId: string;
+	slug: string;
 }
 
-async function listSites(request: APIRequestContext): Promise<Summary[]> {
-	return (await request.get('/api/sites')).json();
+async function siteIdBySlug(request: APIRequestContext, slug: string): Promise<string> {
+	const sites: Summary[] = await (await request.get('/api/sites')).json();
+	const site = sites.find((s) => s.slug === slug);
+	if (!site) throw new Error(`no site with slug ${slug}`);
+	return site.id;
 }
 
 // SvelteKit rejects mutating requests without a same-origin Origin header
 test.afterAll(async ({ request, baseURL }) => {
-	for (const site of await listSites(request)) {
-		if (!created.includes(site.shortId)) continue;
-		const res = await request.delete(`/api/sites/${site.id}`, { headers: { origin: baseURL! } });
-		expect(res.status(), `cleanup of ${site.shortId}`).toBe(204);
+	for (const id of created) {
+		const res = await request.delete(`/api/sites/${id}`, { headers: { origin: baseURL! } });
+		expect(res.status(), `cleanup of ${id}`).toBe(204);
 	}
 });
 
-function shortIdFrom(url: string): string {
-	const m = url.match(new RegExp(`/modeler/[a-z0-9-]+-(${SHORT_ID})(/view)?$`));
-	if (!m) throw new Error(`no short id in ${url}`);
-	return m[1];
+function escape(s: string) {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-test('save, rename, view only, and duplicate a site', async ({ page, context, request }) => {
+const urlIs = (path: string) => new RegExp(`${escape(path)}$`);
+
+async function choosePlan(page: Page, name: string) {
+	await page.getByRole('button', { name: 'Choose plan' }).click();
+	await page.getByRole('list', { name: 'Plans' }).getByRole('button', { name, exact: true }).click();
+}
+
+async function planAction(page: Page, action: string) {
+	await page.getByRole('button', { name: 'Choose plan' }).click();
+	await page.getByRole('button', { name: action, exact: true }).click();
+}
+
+const structures = (page: Page) => page.locator('.struct-item');
+const save = (page: Page) => page.keyboard.press('ControlOrMeta+s');
+
+test('sites hold plans with clean, rename-safe URLs', async ({ page, context, request, baseURL }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-	await page.goto('/modeler');
+	const canvas = page.locator('.canvas-area canvas');
 	const stamp = Date.now();
+	const site = `/modeler/e2e-site-${stamp}`;
+
+	// New site: first save moves to /modeler/<site>/existing-conditions
+	await page.goto('/modeler');
 	await page.getByLabel('Site name').fill(`E2E site ${stamp}`);
-	await page.getByLabel('Drag to place Square').dragTo(page.locator('.canvas-area canvas'));
+	await expect(page.getByLabel('Plan name')).toHaveValue('Existing conditions');
+	await page.getByLabel('Drag to place Square').dragTo(canvas, { targetPosition: { x: 200, y: 200 } });
+	await page.getByLabel('Drag to place Square').dragTo(canvas, { targetPosition: { x: 400, y: 200 } });
+	// The second square is a proposed building
+	await page.getByRole('button', { name: 'New', exact: true }).click();
+	await expect(structures(page)).toHaveCount(2);
 	await expect(page.getByText('Unsaved changes')).toBeVisible();
-
-	// First save moves the URL to /modeler/<title>-<short id>
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
-	await expect(page).toHaveURL(new RegExp(`/modeler/e2e-site-${stamp}-${SHORT_ID}$`));
-	const shortId = shortIdFrom(page.url());
-	created.push(shortId);
-	const firstUrl = page.url();
-	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
-	await page.screenshot({ path: 'tests/screenshots/m5-toolbar.png' });
-
-	// Persists across a reload
-	await page.reload();
-	await expect(page.getByLabel('Site name')).toHaveValue(`E2E site ${stamp}`);
-	await expect(page.getByRole('button', { name: 'Expand Structure' })).toHaveCount(1);
+	await expect(page).toHaveURL(urlIs(`${site}/existing-conditions`));
+	created.push(await siteIdBySlug(request, `e2e-site-${stamp}`));
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
-	// Renaming updates the slug; the short id stays, and old links redirect
-	const name = `E2E site ${stamp} Grace`;
-	await page.getByLabel('Site name').fill(name);
-	await page.keyboard.press('ControlOrMeta+s');
-	const slugUrl = new RegExp(`/modeler/e2e-site-${stamp}-grace-${shortId}$`);
-	await expect(page).toHaveURL(slugUrl);
-	await page.goto(firstUrl);
-	await expect(page).toHaveURL(slugUrl);
-	await expect(page.getByLabel('Site name')).toHaveValue(name);
+	// The bare site URL opens the first plan
+	await page.goto(site);
+	await expect(page).toHaveURL(urlIs(`${site}/existing-conditions`));
 
-	// Links from before slugs (bare uuid) still resolve
-	const site = (await listSites(request)).find((s) => s.shortId === shortId)!;
-	await page.goto(`/modeler/${site.id}`);
-	await expect(page).toHaveURL(slugUrl);
+	// New plan keeps only the existing building
+	await planAction(page, 'New plan');
+	await expect(page.getByLabel('Plan name')).toHaveValue('New plan');
+	await expect(page).toHaveURL(urlIs(`${site}/new-plan`));
+	await expect(structures(page)).toHaveCount(1);
 
-	// Share copies the view-only link
+	// Unsaved work survives switching plans, with no leave prompt
+	await choosePlan(page, 'Existing conditions');
+	await expect(structures(page)).toHaveCount(2);
+	await expect(page).toHaveURL(urlIs(`${site}/existing-conditions`));
+	await choosePlan(page, 'New plan');
+	await expect(structures(page)).toHaveCount(1);
+
+	// Renaming a plan moves its URL on save; the old one redirects
+	await page.getByLabel('Plan name').fill('Housing on lot');
+	await save(page);
+	await expect(page).toHaveURL(urlIs(`${site}/housing-on-lot`));
+	await page.screenshot({ path: 'tests/screenshots/m5-5-plan-switcher.png' });
+	await page.goto(`${site}/new-plan`);
+	await expect(page).toHaveURL(urlIs(`${site}/housing-on-lot`));
+	await expect(page.getByLabel('Plan name')).toHaveValue('Housing on lot');
+	await expect(structures(page)).toHaveCount(1);
+
+	// Toolbar Duplicate copies the plan within the site
+	await page.getByRole('button', { name: 'Duplicate' }).click();
+	await expect(page.getByLabel('Plan name')).toHaveValue('Housing on lot copy');
+	await expect(page).toHaveURL(urlIs(`${site}/housing-on-lot-copy`));
+	await save(page);
+	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+
+	// Renaming the site moves every plan URL; old site URLs redirect
+	await page.getByLabel('Site name').fill(`E2E site ${stamp} Grace`);
+	await save(page);
+	const renamed = `${site}-grace`;
+	await expect(page).toHaveURL(urlIs(`${renamed}/housing-on-lot-copy`));
+	await page.goto(`${site}/housing-on-lot`);
+	await expect(page).toHaveURL(urlIs(`${renamed}/housing-on-lot`));
+
+	// A second site with the same name gets -2
+	const otherId = crypto.randomUUID();
+	const res = await request.put(`/api/sites/${otherId}`, {
+		headers: { origin: baseURL! },
+		data: { id: otherId, name: `E2E site ${stamp} Grace` },
+	});
+	expect(res.ok()).toBe(true);
+	created.push(otherId);
+	expect((await res.json()).slug).toBe(`e2e-site-${stamp}-grace-2`);
+
+	// Share copies the plan's view-only link; view mode can switch plans but not edit
 	await page.getByRole('button', { name: 'Share' }).click();
 	await expect(page.getByText('Link copied')).toBeVisible();
 	const link = await page.evaluate(() => navigator.clipboard.readText());
-	expect(link).toMatch(new RegExp(`/modeler/e2e-site-${stamp}-grace-${shortId}/view$`));
-
-	// View only: no palette, inputs disabled, no save controls
+	expect(link).toMatch(urlIs(`${renamed}/housing-on-lot/view`));
 	await page.goto(link);
 	await expect(page.getByText('View only')).toBeVisible();
 	await expect(page.getByRole('complementary', { name: 'Shape palette' })).toHaveCount(0);
-	await expect(page.getByLabel('Site name')).toBeDisabled();
-	await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
-	await page.getByRole('button', { name: 'Expand Structure' }).click();
-	await expect(page.getByLabel('Label', { exact: true })).toBeDisabled();
-	await page.screenshot({ path: 'tests/screenshots/m5-view-only.png' });
+	await expect(page.getByLabel('Plan name')).toBeDisabled();
+	await choosePlan(page, 'Existing conditions');
+	await expect(page).toHaveURL(urlIs(`${renamed}/existing-conditions/view`));
+	await expect(structures(page)).toHaveCount(2);
+	await page.getByRole('button', { name: 'Choose plan' }).click();
+	await expect(page.getByRole('button', { name: 'New plan' })).toHaveCount(0);
+	await page.keyboard.press('Escape');
 
-	// Duplicate opens the copy in the editor under its own short id
-	await page.getByRole('link', { name: 'Open in editor' }).click();
-	await expect(page).toHaveURL(slugUrl);
-	await page.getByRole('button', { name: 'Duplicate' }).click();
-	await expect(page).toHaveURL(new RegExp(`/modeler/e2e-site-${stamp}-grace-copy-${SHORT_ID}$`));
-	const copyId = shortIdFrom(page.url());
-	created.push(copyId);
-	expect(copyId).not.toBe(shortId);
-	await expect(page.getByLabel('Site name')).toHaveValue(`${name} copy`);
-	await expect(page.getByRole('button', { name: 'Expand Structure' })).toHaveCount(1);
+	// Deleting a plan: its URL falls back to the first plan
+	await page.goto(`${renamed}/housing-on-lot-copy`);
+	await planAction(page, 'Delete plan');
+	await page.getByRole('button', { name: 'Delete', exact: true }).click();
+	await expect(page).toHaveURL(urlIs(`${renamed}/housing-on-lot`));
+	await save(page);
+	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+	await page.goto(`${renamed}/housing-on-lot-copy`);
+	await expect(page).toHaveURL(urlIs(`${renamed}/existing-conditions`));
 
-	// Sites list shows both, with the copy linked to its source
-	await page.getByRole('link', { name: 'Sites' }).click();
-	const list = page.getByRole('list', { name: 'Saved sites' });
-	await expect(list.getByRole('link', { name, exact: true })).toHaveAttribute('href', slugUrl);
-	await expect(list.getByText(`Copy of ${name}`)).toBeVisible();
-	await page.screenshot({ path: 'tests/screenshots/m5-sites-list.png' });
+	// Sites list links each plan
+	await page.goto('/modeler/sites');
+	const plans = page.getByRole('list', { name: `Plans in E2E site ${stamp} Grace` }).first();
+	await expect(plans.getByRole('link')).toHaveText(['Existing conditions', 'Housing on lot']);
+	await expect(plans.getByRole('link', { name: 'Housing on lot' })).toHaveAttribute('href', `${renamed}/housing-on-lot`);
+	await page.screenshot({ path: 'tests/screenshots/m5-5-sites-list.png' });
 });
 
 // ssr is off, so the shell returns 200 and the load error renders client-side
 test('unknown site shows not found', async ({ page }) => {
-	await page.goto('/modeler/no-such-site-zzzzzz');
+	await page.goto('/modeler/no-such-site');
 	await expect(page.getByText('Site not found')).toBeVisible();
-	await page.goto('/modeler/00000000-0000-0000-0000-000000000000');
+	await page.goto('/modeler/00000000-0000-0000-0000-000000000000/plan');
 	await expect(page.getByText('Site not found')).toBeVisible();
 });
