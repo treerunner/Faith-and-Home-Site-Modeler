@@ -4,6 +4,7 @@
 	import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 	import type { SiteContext } from '../types';
 	import { COLORS } from '../colors';
+	import { CONTEXT_HALF_SIZE } from '../geo';
 
 	// Neighbors as white foam blocks and roads printed on the base board. Both are built as
 	// one merged geometry each: an urban block can hold hundreds of buildings.
@@ -18,7 +19,9 @@
 	// Foam, road print and board skip tone mapping: the renderer's filmic curve greys off-white
 	// down, and these must read as white foam and light print against the chipboard.
 	const PLAN_SLAB = 0.05;
-	const ROAD_Y = 0.004; // just above the board, below open spaces (0.01)
+	// Printed on the board: nearly flush, and polygonOffset (not height) keeps roads on top of
+	// the board at any distance while staying under open spaces (offset -2)
+	const ROAD_Y = 0.002;
 	const FOAM_EDGE = '#cfcac0';
 
 	function makeBuildings(buildings: SiteContext['buildings'], flat: boolean): THREE.BufferGeometry | null {
@@ -45,8 +48,10 @@
 
 	function makeRoads(roads: SiteContext['roads']): THREE.BufferGeometry | null {
 		const pos: number[] = [];
+		// Clamped to the board so the print stops at its edge instead of overhanging
+		const c = (v: number) => Math.max(-CONTEXT_HALF_SIZE, Math.min(CONTEXT_HALF_SIZE, v));
 		const tri = (ax: number, az: number, bx: number, bz: number, cx: number, cz: number) =>
-			pos.push(ax, ROAD_Y, az, bx, ROAD_Y, bz, cx, ROAD_Y, cz);
+			pos.push(c(ax), ROAD_Y, c(az), c(bx), ROAD_Y, c(bz), c(cx), ROAD_Y, c(cz));
 		for (const { line, kind } of roads) {
 			const half = (ROAD_WIDTH[kind] ?? 6) / 2;
 			for (let i = 0; i < line.length - 1; i++) {
@@ -59,8 +64,8 @@
 				tri(x1 + nx, z1 + nz, x2 + nx, z2 + nz, x2 - nx, z2 - nz);
 				tri(x1 + nx, z1 + nz, x2 - nx, z2 - nz, x1 - nx, z1 - nz);
 			}
-			// Discs at the vertices fill the gaps where segments turn
-			for (const [x, z] of line) {
+			// Discs at interior vertices fill the gaps where segments turn; ends stay square
+			for (const [x, z] of line.slice(1, -1)) {
 				for (let k = 0; k < JOINT_SEGMENTS; k++) {
 					const a1 = (k / JOINT_SEGMENTS) * Math.PI * 2;
 					const a2 = ((k + 1) / JOINT_SEGMENTS) * Math.PI * 2;
@@ -82,7 +87,14 @@
 
 {#if roadGeo}
 	<T.Mesh geometry={roadGeo} receiveShadow>
-		<T.MeshBasicMaterial color={COLORS.road} toneMapped={false} side={THREE.DoubleSide} />
+		<T.MeshBasicMaterial
+			color={COLORS.road}
+			toneMapped={false}
+			side={THREE.DoubleSide}
+			polygonOffset
+			polygonOffsetFactor={-1}
+			polygonOffsetUnits={-1}
+		/>
 	</T.Mesh>
 {/if}
 
@@ -90,7 +102,8 @@
 	<T.Mesh geometry={buildingGeo} castShadow={is3D} receiveShadow>
 		{#if is3D}
 			<!-- Emissive lift keeps foam white on top while walls still shade -->
-			<T.MeshLambertMaterial color={COLORS.context} emissive={COLORS.context} emissiveIntensity={0.45} toneMapped={false} transparent opacity={0.92} side={THREE.DoubleSide} />
+			<!-- Front faces only: the bottom cap sits on the board and would flicker through translucent walls -->
+			<T.MeshLambertMaterial color={COLORS.context} emissive={COLORS.context} emissiveIntensity={0.45} toneMapped={false} transparent opacity={0.92} side={THREE.FrontSide} />
 		{:else}
 			<T.MeshBasicMaterial color={COLORS.context} toneMapped={false} side={THREE.DoubleSide} />
 		{/if}

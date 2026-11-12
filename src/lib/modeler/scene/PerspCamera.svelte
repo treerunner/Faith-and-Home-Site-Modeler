@@ -23,11 +23,13 @@
 	});
 </script>
 
+<!-- near is 1 m, not 0.1: the extra depth precision keeps flush layers (board, road print,
+     open spaces) from flickering at viewing distance -->
 <T.PerspectiveCamera
 	bind:ref={cam}
 	makeDefault={store.viewMode === '3d'}
 	fov={45}
-	near={0.1}
+	near={1}
 	far={2000}
 	position={[60, 80, 80]}
 >
