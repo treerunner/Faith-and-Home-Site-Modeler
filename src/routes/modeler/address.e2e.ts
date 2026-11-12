@@ -98,6 +98,8 @@ test('start from an address: choose the parcel and add its buildings', async ({ 
 	// Everything persists
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+	// "Saved" shows when the write finishes; the URL moves to the site just after. Wait for it.
+	await expect(page).toHaveURL(/\/modeler\/e2e-address-\d+\/existing-conditions$/);
 	await page.reload();
 	await expect(page.getByLabel('Address').getByText(PLACE.label)).toBeVisible();
 	await expect(page.locator('.struct-item')).toHaveCount(2);
