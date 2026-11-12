@@ -76,7 +76,17 @@ interface Site {
 }
 ```
 
-Store sites as JSON in Neon, with the parcel and origin also in PostGIS columns for spatial queries later.
+Store sites as JSON in Railway Postgres (via Drizzle ORM), with the parcel and origin also in PostGIS columns for spatial queries later. The modeler schema is managed by Drizzle migrations alongside Directus content tables in the same database. As of M5 there is one `sites` table holding the Site JSON; PostGIS columns for origin and parcel arrive with address mode in M6.
+
+## Platform context
+
+This modeler will be merged into a broader Faith & Home storytelling platform. The full platform stack:
+
+- **SvelteKit** — front-end and server throughout (modeler + storytelling)
+- **Railway** — hosting for all services (SvelteKit app, Directus, Postgres)
+- **Railway Postgres** with PostGIS — single database instance
+- **Drizzle ORM** — manages the modeler schema (sites, saves, users)
+- **Directus** — headless CMS for storytelling content (stories, case studies, images); connects to the same Postgres instance; provides the admin UI for non-technical editors
 
 ## Architecture
 
@@ -111,9 +121,9 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 
 **M4. Metrics and pattern matching.** Footprint area, gross floor area, lot coverage, dwellings estimate, parking lost, green space. Infer building type. Combine with the culture questionnaire from the earlier prototype to suggest the closest pattern and show its page.
 
-**M5. Save and share.** Persist to Neon, shareable read-only links, duplicate a site to make scenarios.
+**M5. Save and share.** (Done) Persist to Railway Postgres via Drizzle ORM, shareable read-only links, duplicate a site to make scenarios. No auth yet; edit and ownership rules come with the platform work.
 
-**M6. Address mode.** Geocode, choose parcel, prefill existing buildings and context. Heights come from data where available, otherwise a default, always marked with provenance and editable. See data notes.
+**M6. Address mode.** Add PostGIS columns for origin and parcel. Geocode, choose parcel, prefill existing buildings and context. Heights come from data where available, otherwise a default, always marked with provenance and editable. See data notes.
 
 **M7. Workshop features.** Side-by-side scenarios (existing vs. proposal), numbered annotations in the pattern-book style, presenter mode for large screens.
 
