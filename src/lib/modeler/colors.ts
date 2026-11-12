@@ -24,6 +24,8 @@ export const COLORS = {
 	removed:  FH.stoneTint,
 	context:  FH.linen,
 	base:     FH.linen,
+	road:     FH.stoneTint, // printed on the base board
+	parcel:   FH.black,     // printed parcel line
 	grid:     '#d9d8d7',
 	gridSub:  '#e8e7e5',
 	selection: FH.dusk,

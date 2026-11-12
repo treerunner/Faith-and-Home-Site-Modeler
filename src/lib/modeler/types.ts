@@ -88,15 +88,25 @@ export interface Plan {
 	annotations: Annotation[];
 }
 
+// Neighboring buildings (white foam) and roads (printed on the base board), in local meters.
+export interface SiteContext {
+	buildings: { polygon: [number, number][]; height: number }[];
+	roads: { line: [number, number][]; kind: string }[]; // kind: OSM highway value
+	sources?: ContextSource[]; // shown as attribution wherever the data appears
+}
+
+export type ContextSource = 'osm' | 'pasda-lehigh';
+
 // The property. Everything about the place itself lives here and is shared by its plans.
 export interface Site {
 	id: string;
 	name: string;
 	mode: 'grid' | 'address';
-	origin?: { lat: number; lng: number };
+	address?: string;
+	origin?: { lat: number; lng: number }; // local 0,0 in address mode
 	parcel?: [number, number][];
 	siteType?: 'urban' | 'suburban' | 'rural';
-	context: { footprints: [number, number][][]; roads: [number, number][][] };
+	context: SiteContext;
 	congregationProfile?: CongregationProfile;
 	plans: Plan[];
 }

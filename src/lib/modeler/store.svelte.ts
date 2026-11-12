@@ -38,7 +38,7 @@ function makeSite(): Site {
 		id: crypto.randomUUID(),
 		name: '',
 		mode: 'grid',
-		context: { footprints: [], roads: [] },
+		context: { buildings: [], roads: [] },
 		plans: [makePlan(DEFAULT_PLAN_NAME)],
 	};
 	assignPlanSlugs(site);

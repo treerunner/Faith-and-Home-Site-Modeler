@@ -8,6 +8,9 @@
 	import ResizeHandles from './ResizeHandles.svelte';
 	import OpenSpacePolygon from './OpenSpacePolygon.svelte';
 	import TreeMesh from './TreeMesh.svelte';
+	import ContextLayer from './ContextLayer.svelte';
+	import ParcelLine from './ParcelLine.svelte';
+	import { CONTEXT_HALF_SIZE } from '../geo';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
 	import { setMainScene } from './cameraRef';
@@ -95,22 +98,26 @@
 	let lightIntensity = $derived(store.viewMode === '3d' ? 1.8 : 1.2);
 	let ambientIntensity = $derived(store.viewMode === '3d' ? 0.47 : 0.6);
 
-	// Shadow camera config — covers any reasonably-sized site
+	let isAddress = $derived(store.site.mode === 'address');
+
+	// Shadow camera config — covers any reasonably-sized site, or the whole context board
 	let dirLight: THREE.DirectionalLight | undefined = $state();
 	$effect(() => {
 		if (!dirLight) return;
-		dirLight.shadow.mapSize.set(2048, 2048);
+		const extent = isAddress ? CONTEXT_HALF_SIZE + 10 : 120;
+		dirLight.shadow.mapSize.set(isAddress ? 4096 : 2048, isAddress ? 4096 : 2048);
 		const cam = dirLight.shadow.camera as THREE.OrthographicCamera;
-		cam.left = -120; cam.right = 120;
-		cam.top = 120;   cam.bottom = -120;
+		cam.left = -extent; cam.right = extent;
+		cam.top = extent;   cam.bottom = -extent;
 		cam.near = 1;    cam.far = 400;
 		cam.updateProjectionMatrix();
 		dirLight.shadow.bias = -0.0005;
 	});
 
-	// Pedestal: AABB of all parts + margin, 4 m deep
+	// Pedestal: AABB of all parts + margin, 4 m deep. In address mode, the whole context board.
 	const PAD = 20, MIN_SIDE = 30, DEPTH = 4;
 	let pedestal = $derived.by(() => {
+		if (isAddress) return { cx: 0, cz: 0, w: CONTEXT_HALF_SIZE * 2, d: CONTEXT_HALF_SIZE * 2 };
 		const parts = store.plan.structures.flatMap((s) => s.parts);
 		if (parts.length === 0) return { cx: 0, cz: 0, w: MIN_SIDE, d: MIN_SIDE };
 		const xs = parts.flatMap((p) => [p.x - p.w / 2, p.x + p.w / 2]);
@@ -146,8 +153,15 @@
 	<!-- Pedestal base -->
 	<T.Mesh position={[pedestal.cx, -DEPTH / 2, pedestal.cz]} receiveShadow>
 		<T.BoxGeometry args={[pedestal.w, DEPTH, pedestal.d]} />
-		<T.MeshLambertMaterial color="#c8b898" />
+		<!-- Address mode: an off-white printed board; grid mode keeps the kraft base -->
+		<T.MeshLambertMaterial color={isAddress ? COLORS.base : '#c8b898'} />
 	</T.Mesh>
+{/if}
+
+<ContextLayer context={store.site.context} is3D={store.viewMode === '3d'} />
+
+{#if store.site.parcel && store.site.parcel.length >= 3}
+	<ParcelLine polygon={store.site.parcel} />
 {/if}
 
 {#each store.plan.openSpaces as os (os.id)}

@@ -23,7 +23,7 @@ function makePlan(overrides: Partial<Plan> = {}): Plan {
 function makeSite(overrides: Partial<Site> = {}): Site {
 	return {
 		id: 'site1', name: 'Grace Church', mode: 'grid', siteType: 'suburban',
-		context: { footprints: [], roads: [] },
+		context: { buildings: [], roads: [] },
 		congregationProfile: { size: 'small', tenure: 'historic', notes: 'Shared kitchen' },
 		plans: [makePlan()],
 		...overrides,
@@ -59,11 +59,31 @@ describe('normalizeSite', () => {
 			plans: [{ id: 'p', name: 'Plan', structures: [{ id: 's1', status: 'existing', parts: [{ id: 'p1', shape: 'square', x: 0, y: 0, w: 6, d: 6 }] }] }],
 		});
 		expect(site.mode).toBe('grid');
-		expect(site.context).toEqual({ footprints: [], roads: [] });
+		expect(site.context).toEqual({ buildings: [], roads: [] });
 		expect(site.plans[0].slug).toBe('plan');
 		const s = site.plans[0].structures[0];
 		expect(s).toMatchObject({ label: '', uses: [], stories: 1, floorHeight: 3.5, roof: 'flat', provenance: 'user' });
 		expect(s.parts[0].rotation).toBe(0);
+	});
+
+	it('reads the pre-M6 context shape', () => {
+		const site = normalizeSite({
+			id: 'old',
+			context: { footprints: [[[0, 0], [5, 0], [5, 5]]], roads: [[[0, 0], [10, 0]]] },
+		});
+		expect(site.context).toEqual({
+			buildings: [{ polygon: [[0, 0], [5, 0], [5, 5]], height: 8 }],
+			roads: [{ line: [[0, 0], [10, 0]], kind: 'residential' }],
+		});
+	});
+
+	it('keeps address mode fields', () => {
+		const site = makeSite({
+			mode: 'address', address: '27 Memorial Dr W, Bethlehem, PA', origin: { lat: 40.6071, lng: -75.3792 },
+			parcel: [[0, 0], [40, 0], [40, 30], [0, 30]],
+			context: { buildings: [{ polygon: [[50, 50], [60, 50], [60, 60]], height: 7 }], roads: [{ line: [[-100, 0], [100, 0]], kind: 'primary' }] },
+		});
+		expect(normalizeSite(JSON.parse(JSON.stringify(site)))).toEqual(site);
 	});
 
 	it('keeps poly outlines and requires at least 3 points', () => {

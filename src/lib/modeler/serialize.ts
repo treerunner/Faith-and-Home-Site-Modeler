@@ -1,4 +1,4 @@
-import type { Annotation, OpenSpace, Part, Plan, Site, Structure, Tree, Use } from './types';
+import type { Annotation, ContextSource, OpenSpace, Part, Plan, Site, SiteContext, Structure, Tree, Use } from './types';
 import { slugify } from './slug';
 
 // Validates a Site read from the database or posted to the API, and fills
@@ -19,6 +19,7 @@ const OPEN_SPACE_KINDS: OpenSpace['kind'][] = [
 	'parking', 'lawn', 'courtyard', 'garden', 'cemetery', 'walkway',
 ];
 const SITE_TYPES: NonNullable<Site['siteType']>[] = ['urban', 'suburban', 'rural'];
+const CONTEXT_SOURCES: ContextSource[] = ['osm', 'pasda-lehigh'];
 
 type Obj = Record<string, unknown>;
 
@@ -171,12 +172,38 @@ function parsePlan(v: unknown, path: string): Plan {
 	};
 }
 
+// Before M6, context was { footprints: polygon[], roads: line[] } and always empty in practice.
+function parseContext(v: unknown): SiteContext {
+	const o = v === undefined ? {} : obj(v, 'site.context');
+	const path = 'site.context';
+	const buildings = arr(o.buildings ?? [], `${path}.buildings`).map((b, i) => {
+		const bo = obj(b, `${path}.buildings[${i}]`);
+		return { polygon: polygon(bo.polygon, `${path}.buildings[${i}].polygon`), height: num(bo.height, `${path}.buildings[${i}].height`) };
+	});
+	const legacyFootprints = arr(o.footprints ?? [], `${path}.footprints`).map((p, i) => ({
+		polygon: polygon(p, `${path}.footprints[${i}]`),
+		height: 8,
+	}));
+	const roads = arr(o.roads ?? [], `${path}.roads`).map((r, i) =>
+		Array.isArray(r)
+			? { line: polygon(r, `${path}.roads[${i}]`), kind: 'residential' }
+			: (() => {
+					const ro = obj(r, `${path}.roads[${i}]`);
+					return { line: polygon(ro.line, `${path}.roads[${i}].line`), kind: str(ro.kind ?? 'residential', `${path}.roads[${i}].kind`) };
+				})(),
+	);
+	const sources = optional(o.sources, (v) =>
+		arr(v, `${path}.sources`).map((s, i) => oneOf(s, CONTEXT_SOURCES, `${path}.sources[${i}]`)),
+	);
+	return { buildings: [...buildings, ...legacyFootprints], roads, sources };
+}
+
 export const DEFAULT_PLAN_NAME = 'Existing conditions';
 
 export function normalizeSite(raw: unknown): Site {
 	const o = obj(raw, 'site');
 	const id = str(o.id, 'site.id');
-	const context = o.context === undefined ? {} : obj(o.context, 'site.context');
+	const context = parseContext(o.context);
 	const profile = optional(o.congregationProfile, (p) => obj(p, 'site.congregationProfile'));
 
 	const plans =
@@ -199,20 +226,14 @@ export function normalizeSite(raw: unknown): Site {
 		id,
 		name: str(o.name ?? '', 'site.name'),
 		mode: oneOf(o.mode ?? 'grid', ['grid', 'address'] as const, 'site.mode'),
+		address: optional(o.address, (a) => str(a, 'site.address')),
 		origin: optional(o.origin, (v) => {
 			const g = obj(v, 'site.origin');
 			return { lat: num(g.lat, 'site.origin.lat'), lng: num(g.lng, 'site.origin.lng') };
 		}),
 		parcel: optional(o.parcel, (v) => polygon(v, 'site.parcel')),
 		siteType: optional(o.siteType, (v) => oneOf(v, SITE_TYPES, 'site.siteType')),
-		context: {
-			footprints: arr(context.footprints ?? [], 'site.context.footprints').map((p, i) =>
-				polygon(p, `site.context.footprints[${i}]`),
-			),
-			roads: arr(context.roads ?? [], 'site.context.roads').map((p, i) =>
-				polygon(p, `site.context.roads[${i}]`),
-			),
-		},
+		context,
 		// Free-form questionnaire answers; keep only string values
 		congregationProfile: profile
 			? (Object.fromEntries(

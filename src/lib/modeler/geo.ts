@@ -32,6 +32,9 @@ export function toLatLng(x: number, y: number, origin: LatLng): LatLng {
 	return { lat: origin.lat - y / m.lat, lng: origin.lng + x / m.lng };
 }
 
+// Address mode fetches and shows context within this distance of the origin (a 300 m board).
+export const CONTEXT_HALF_SIZE = 150;
+
 // ── Polygons ────────────────────────────────────────────────────────────────
 
 // Drops a repeated closing vertex (GeoJSON and OSM rings repeat the first point).

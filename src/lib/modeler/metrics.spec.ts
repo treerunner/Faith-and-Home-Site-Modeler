@@ -41,7 +41,7 @@ function makeSite(overrides: Partial<SitePlan> = {}): SitePlan {
 		structures: [makeStructure()],
 		openSpaces: [],
 		trees: [],
-		context: { footprints: [], roads: [] },
+		context: { buildings: [], roads: [] },
 		annotations: [],
 		...overrides,
 	};

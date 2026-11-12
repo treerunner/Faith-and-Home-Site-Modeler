@@ -4,6 +4,7 @@
 	import OpenSpaceLabels from './OpenSpaceLabels.svelte';
 	import AnalysisModal from './AnalysisModal.svelte';
 	import SiteBar from './SiteBar.svelte';
+	import Attribution from './Attribution.svelte';
 	import Scene from '../scene/Scene.svelte';
 	import { store } from '../store.svelte';
 	import { clientToSite, hitTest, rendererEl } from '../scene/cameraRef';
@@ -188,6 +189,7 @@
 			onpointerdown={handlePointerDown}
 		/>
 		<OpenSpaceLabels />
+		<Attribution />
 
 		{#if store.viewMode === 'plan'}
 			<div class="scale-bar" aria-label="Scale: 33 feet">
