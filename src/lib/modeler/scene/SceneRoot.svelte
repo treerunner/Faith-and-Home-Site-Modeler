@@ -194,7 +194,7 @@
 	<PartMesh part={ghostPart} selected={false} ghost />
 {/if}
 
-{#if store.selectedPart && store.viewMode === 'plan'}
+{#if store.selectedPart && store.viewMode === 'plan' && !store.readOnly}
 	<ResizeHandles part={store.selectedPart} />
 {/if}
 

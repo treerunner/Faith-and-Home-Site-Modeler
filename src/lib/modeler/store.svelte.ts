@@ -1,6 +1,7 @@
 import type { CongregationProfile, OpenSpace, Part, Site, Structure, Tree } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
+import { putSite } from './api';
 
 const PART_DEFAULTS: Record<Part['shape'], { w: number; d: number }> = {
 	rect: { w: 10, d: 6 },
@@ -32,13 +33,69 @@ class ModelerStore {
 	viewMode = $state<'plan' | '3d'>('plan');
 	showLabels = $state(true);
 	showAnalysis = $state(false);
+	readOnly = $state(false);
+	isPersisted = $state(false); // a database row exists for site.id
+	saveState = $state<'idle' | 'saving' | 'error'>('idle');
 
 	readonly #undoStack: Site[] = [];
 	readonly #redoStack: Site[] = [];
 	#gestureDidMutate = false;
+	#savedJson = $state(JSON.stringify(this.site)); // site as last saved or loaded
+	#inflightSave: Promise<boolean> | null = null;
 
 	constructor() {
 		this.activeStructureId = '';
+	}
+
+	get isDirty(): boolean {
+		return JSON.stringify(this.site) !== this.#savedJson;
+	}
+
+	// Start a blank, unsaved site (the /modeler route).
+	newSite() {
+		this.#reset(makeSite(), false, false);
+	}
+
+	loadSite(site: Site, readOnly: boolean) {
+		this.#reset(site, true, readOnly);
+	}
+
+	#reset(site: Site, persisted: boolean, readOnly: boolean) {
+		this.site = site;
+		this.#savedJson = JSON.stringify(site);
+		this.isPersisted = persisted;
+		this.readOnly = readOnly;
+		this.saveState = 'idle';
+		this.mode = { type: 'idle' };
+		this.activeStructureId = '';
+		this.showAnalysis = false;
+		this.#undoStack.splice(0);
+		this.#redoStack.splice(0);
+	}
+
+	// Upserts the site. Edits made while a save is in flight stay dirty.
+	save(): Promise<boolean> {
+		if (this.readOnly) return Promise.resolve(false);
+		this.#inflightSave ??= this.#doSave().finally(() => {
+			this.#inflightSave = null;
+		});
+		return this.#inflightSave;
+	}
+
+	async #doSave(): Promise<boolean> {
+		const json = JSON.stringify($state.snapshot(this.site));
+		this.saveState = 'saving';
+		try {
+			await putSite(json, this.site.id);
+			this.#savedJson = json;
+			this.isPersisted = true;
+			this.saveState = 'idle';
+			return true;
+		} catch (e) {
+			console.error(e);
+			this.saveState = 'error';
+			return false;
+		}
 	}
 
 	get selectedPartId(): string | null {
@@ -652,7 +709,7 @@ class ModelerStore {
 	}
 
 	undo() {
-		if (this.#undoStack.length === 0) return;
+		if (this.readOnly || this.#undoStack.length === 0) return;
 		const current = $state.snapshot(this.site) as Site;
 		this.#redoStack.push(current);
 		const prev = this.#undoStack.pop()!;
@@ -661,7 +718,7 @@ class ModelerStore {
 	}
 
 	redo() {
-		if (this.#redoStack.length === 0) return;
+		if (this.readOnly || this.#redoStack.length === 0) return;
 		const current = $state.snapshot(this.site) as Site;
 		this.#undoStack.push(current);
 		const next = this.#redoStack.pop()!;

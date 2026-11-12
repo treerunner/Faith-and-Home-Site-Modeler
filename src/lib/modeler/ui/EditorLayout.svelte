@@ -3,6 +3,7 @@
 	import PropertiesPanel from './PropertiesPanel.svelte';
 	import OpenSpaceLabels from './OpenSpaceLabels.svelte';
 	import AnalysisModal from './AnalysisModal.svelte';
+	import SiteBar from './SiteBar.svelte';
 	import Scene from '../scene/Scene.svelte';
 	import { store } from '../store.svelte';
 	import { clientToSite, hitTest, rendererEl } from '../scene/cameraRef';
@@ -25,6 +26,7 @@
 	// ── Drag-and-drop from palette ──────────────────────────────────────────
 
 	function handleDragOver(e: DragEvent) {
+		if (store.readOnly) return;
 		e.preventDefault();
 		if (!e.dataTransfer) return;
 		e.dataTransfer.dropEffect = 'copy';
@@ -42,6 +44,7 @@
 
 	function handleDrop(e: DragEvent) {
 		e.preventDefault();
+		if (store.readOnly) return;
 		const shape = e.dataTransfer?.getData('text/plain') as Part['shape'] | undefined;
 		if (!shape || !['rect', 'square', 'tri', 'circle'].includes(shape)) return;
 		const pos = clientToSite(e.clientX, e.clientY);
@@ -75,6 +78,16 @@
 
 		const result = hitTest(e.clientX, e.clientY);
 		if (!result) return;
+
+		if (store.readOnly) {
+			// View only: clicking a part shows its structure in the panel; nothing moves
+			const owner =
+				result.kind === 'part' &&
+				store.site.structures.find((s) => s.parts.some((p) => p.id === result.partId));
+			if (owner) store.selectStructure(owner.id);
+			else store.selectPart(null);
+			return;
+		}
 
 		if (result.kind === 'part' && result.partId !== '__ghost__') {
 			let partId = result.partId;
@@ -151,7 +164,7 @@
 			else if (store.selectedOpenSpaceId) store.selectOpenSpace(null);
 			else if (store.selectedTreeId) store.selectTree(null);
 		}
-		if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === document.body) {
+		if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === document.body && !store.readOnly) {
 			if (store.selectedPartId) store.deletePart(store.selectedPartId);
 			else if (store.selectedOpenSpaceId) store.deleteOpenSpace(store.selectedOpenSpaceId);
 			else if (store.selectedTreeId) store.deleteTree(store.selectedTreeId);
@@ -162,7 +175,9 @@
 <svelte:window onkeydown={handleKeyDown} />
 
 <div class="editor">
-	<Palette />
+	{#if !store.readOnly}
+		<Palette />
+	{/if}
 	<div class="canvas-area" bind:this={canvasAreaEl}>
 		<Scene
 			ondragover={handleDragOver}
@@ -223,6 +238,7 @@
 				onclick={openAnalysis}
 				title="Open analysis report"
 			>Analysis</button>
+			<SiteBar />
 		</div>
 	</div>
 	<PropertiesPanel />

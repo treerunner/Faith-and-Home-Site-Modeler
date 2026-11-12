@@ -79,6 +79,7 @@
 			type="text"
 			aria-label="Site name"
 			placeholder="Untitled Site"
+			disabled={store.readOnly}
 			value={store.site.name}
 			oninput={(e) => store.updateSiteName((e.target as HTMLInputElement).value)}
 		/>
@@ -105,6 +106,7 @@
 		{@const profile = store.site.congregationProfile ?? {}}
 		<div class="section section--props">
 			<h2 class="panel-heading">Congregation</h2>
+			<fieldset class="ro-wrap" disabled={store.readOnly}>
 
 			<fieldset class="fieldset">
 				<legend class="field-label">Size</legend>
@@ -166,6 +168,7 @@
 				value={profile.notes ?? ''}
 				oninput={(e) => store.updateCongregationProfile({ notes: (e.target as HTMLTextAreaElement).value || undefined })}
 			></textarea>
+			</fieldset>
 		</div>
 	{/if}
 
@@ -197,6 +200,7 @@
 
 						{#if isOpen}
 							<div class="struct-props">
+								<fieldset class="ro-wrap" disabled={store.readOnly}>
 								<label class="field-label" for="struct-label-{s.id}">Label</label>
 								<input
 									id="struct-label-{s.id}"
@@ -344,6 +348,7 @@
 									{/if}
 									<button class="delete-btn" onclick={() => store.deleteStructure(s.id)}>Delete</button>
 								</div>
+								</fieldset>
 							</div>
 						{/if}
 					</li>
@@ -360,6 +365,7 @@
 		{#if tree}
 			<div class="section section--props">
 				<h2 class="panel-heading">Tree</h2>
+				<fieldset class="ro-wrap" disabled={store.readOnly}>
 				<div class="row-fields">
 					<div class="field-group">
 						<label class="field-label" for="tree-radius">Canopy (ft)</label>
@@ -395,6 +401,7 @@
 					</div>
 				</div>
 				<button class="delete-btn" onclick={() => store.deleteTree(tree.id)}>Delete</button>
+				</fieldset>
 			</div>
 		{/if}
 	{/if}
@@ -404,6 +411,7 @@
 		{@const os = selectedOS}
 		<div class="section section--props">
 			<h2 class="panel-heading">Open Space</h2>
+			<fieldset class="ro-wrap" disabled={store.readOnly}>
 
 			<label class="field-label" for="os-label">Label</label>
 			<input
@@ -421,11 +429,31 @@
 				class="delete-btn"
 				onclick={() => { store.deleteOpenSpace(os.id); store.selectOpenSpace(null); }}
 			>Delete</button>
+			</fieldset>
 		</div>
 	{/if}
 </aside>
 
 <style>
+	/* Disabled in view-only mode; otherwise invisible */
+	.ro-wrap {
+		border: 0;
+		margin: 0;
+		padding: 0;
+		min-width: 0;
+		display: contents;
+	}
+
+	.ro-wrap:disabled :is(.delete-btn, .split-btn, .action-row) { display: none; }
+	.ro-wrap:disabled :is(input, select, textarea, button) { cursor: default; }
+	.ro-wrap:disabled :is(.text-input, .num-input, .select-input) {
+		background: transparent;
+		border-color: transparent;
+		color: var(--color-text);
+		opacity: 1;
+		appearance: none;
+	}
+
 	.props-panel {
 		width: 220px;
 		flex-shrink: 0;
