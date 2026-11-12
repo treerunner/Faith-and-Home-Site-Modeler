@@ -4,7 +4,7 @@
 
 	// Required by the data licenses (OpenStreetMap: ODbL) wherever their data is shown.
 	const CREDITS: Record<ContextSource, string> = {
-		osm: '© OpenStreetMap contributors',
+		overture: '© OpenStreetMap contributors, Overture Maps Foundation',
 		'pasda-lehigh': 'Parcels: Lehigh County via PASDA',
 	};
 

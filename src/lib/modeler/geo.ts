@@ -197,7 +197,7 @@ function parseLevels(value: string | undefined): number | undefined {
 export interface StructureHeight {
 	stories: number;
 	floorHeight: number;
-	source: 'osm' | 'default';
+	source: 'data' | 'default';
 }
 
 const FLOOR = 3.5;
@@ -212,11 +212,11 @@ export function storiesFromTags(tags: Tags): StructureHeight {
 	const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 	if (levels) {
 		const floorHeight = height ? clamp(height / levels, 2.5, 15) : worship && levels === 1 ? NAVE : FLOOR;
-		return { stories: levels, floorHeight: Math.round(floorHeight * 10) / 10, source: 'osm' };
+		return { stories: levels, floorHeight: Math.round(floorHeight * 10) / 10, source: 'data' };
 	}
 	if (height) {
-		if (worship) return { stories: 1, floorHeight: Math.round(clamp(height, 4, 20) * 10) / 10, source: 'osm' };
-		return { stories: Math.max(1, Math.round(height / FLOOR)), floorHeight: FLOOR, source: 'osm' };
+		if (worship) return { stories: 1, floorHeight: Math.round(clamp(height, 4, 20) * 10) / 10, source: 'data' };
+		return { stories: Math.max(1, Math.round(height / FLOOR)), floorHeight: FLOOR, source: 'data' };
 	}
 	return { stories: 1, floorHeight: worship ? NAVE : FLOOR, source: 'default' };
 }
@@ -252,6 +252,50 @@ export function suggestSiteType(buildings: { polygon: Pt[] }[], radius = 150): N
 	}
 	const coverage = built / (Math.PI * radius * radius);
 	return coverage > URBAN_COVERAGE ? 'urban' : coverage > SUBURBAN_COVERAGE ? 'suburban' : 'rural';
+}
+
+// Clips a polyline to the square board (|x|, |y| <= half), splitting it where it leaves and
+// re-enters. Liang-Barsky per segment.
+export function clipLineToBoard(line: Pt[], half: number): Pt[][] {
+	const out: Pt[][] = [];
+	let current: Pt[] = [];
+	const flush = () => {
+		if (current.length >= 2) out.push(current);
+		current = [];
+	};
+	for (let i = 0; i < line.length - 1; i++) {
+		const [x0, y0] = line[i];
+		const [x1, y1] = line[i + 1];
+		const dx = x1 - x0;
+		const dy = y1 - y0;
+		let t0 = 0;
+		let t1 = 1;
+		let visible = true;
+		for (const [p, q] of [[-dx, x0 + half], [dx, half - x0], [-dy, y0 + half], [dy, half - y0]] as const) {
+			if (p === 0) {
+				if (q < 0) visible = false;
+			} else {
+				const t = q / p;
+				if (p < 0) t0 = Math.max(t0, t);
+				else t1 = Math.min(t1, t);
+			}
+		}
+		if (!visible || t0 > t1) {
+			flush();
+			continue;
+		}
+		const a: Pt = [x0 + t0 * dx, y0 + t0 * dy];
+		const b: Pt = [x0 + t1 * dx, y0 + t1 * dy];
+		const last = current[current.length - 1];
+		if (!last || last[0] !== a[0] || last[1] !== a[1]) {
+			flush();
+			current.push(a);
+		}
+		current.push(b);
+		if (t1 < 1) flush(); // left the board
+	}
+	flush();
+	return out;
 }
 
 // Buildings whose centroid falls inside the parcel.

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	buildingsInParcel,
+	clipLineToBoard,
 	contextHeight,
 	fitFootprint,
 	minAreaRect,
@@ -134,20 +135,20 @@ describe('fitFootprint', () => {
 
 describe('storiesFromTags', () => {
 	it('uses building:levels', () => {
-		expect(storiesFromTags({ building: 'yes', 'building:levels': '3' })).toEqual({ stories: 3, floorHeight: 3.5, source: 'osm' });
+		expect(storiesFromTags({ building: 'yes', 'building:levels': '3' })).toEqual({ stories: 3, floorHeight: 3.5, source: 'data' });
 	});
 
 	it('derives floor height from height and levels', () => {
-		expect(storiesFromTags({ building: 'school', 'building:levels': '2', height: '9 m' })).toEqual({ stories: 2, floorHeight: 4.5, source: 'osm' });
+		expect(storiesFromTags({ building: 'school', 'building:levels': '2', height: '9 m' })).toEqual({ stories: 2, floorHeight: 4.5, source: 'data' });
 	});
 
 	it('turns a bare height into stories', () => {
-		expect(storiesFromTags({ building: 'apartments', height: '14' })).toEqual({ stories: 4, floorHeight: 3.5, source: 'osm' });
+		expect(storiesFromTags({ building: 'apartments', height: '14' })).toEqual({ stories: 4, floorHeight: 3.5, source: 'data' });
 	});
 
 	it('models a church as one tall nave story', () => {
 		expect(storiesFromTags({ building: 'church' })).toEqual({ stories: 1, floorHeight: 9, source: 'default' });
-		expect(storiesFromTags({ amenity: 'place_of_worship', building: 'yes', height: '13' })).toEqual({ stories: 1, floorHeight: 13, source: 'osm' });
+		expect(storiesFromTags({ amenity: 'place_of_worship', building: 'yes', height: '13' })).toEqual({ stories: 1, floorHeight: 13, source: 'data' });
 	});
 
 	it('defaults untagged buildings to one story, marked as a default', () => {
@@ -193,5 +194,24 @@ describe('buildingsInParcel', () => {
 		const inside = { id: 'a', polygon: [[10, 10], [20, 10], [20, 20], [10, 20]] as Pt[] };
 		const straddling = { id: 'b', polygon: [[45, 10], [70, 10], [70, 20], [45, 20]] as Pt[] };
 		expect(buildingsInParcel([inside, straddling], parcel).map((b) => b.id)).toEqual(['a']);
+	});
+});
+
+describe('clipLineToBoard', () => {
+	it('keeps lines inside the board', () => {
+		expect(clipLineToBoard([[0, 0], [10, 10]], 50)).toEqual([[[0, 0], [10, 10]]]);
+	});
+
+	it('trims lines at the edge', () => {
+		expect(clipLineToBoard([[-100, 0], [100, 0]], 50)).toEqual([[[-50, 0], [50, 0]]]);
+	});
+
+	it('splits a line that leaves and comes back', () => {
+		const out = clipLineToBoard([[0, 0], [100, 0], [100, 20], [0, 20]], 50);
+		expect(out).toEqual([[[0, 0], [50, 0]], [[50, 20], [0, 20]]]);
+	});
+
+	it('drops lines entirely off the board', () => {
+		expect(clipLineToBoard([[60, 60], [80, 90]], 50)).toEqual([]);
 	});
 });

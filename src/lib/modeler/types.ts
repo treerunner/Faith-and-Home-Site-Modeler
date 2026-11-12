@@ -42,7 +42,7 @@ export interface Structure {
 	dwellings?: number;
 	basement?: boolean;
 	provenance: 'user' | 'osm' | 'overture';
-	heightSource?: 'osm' | 'default'; // where stories came from for prefilled buildings; cleared once edited
+	heightSource?: 'data' | 'default'; // where stories came from for prefilled buildings; cleared once edited
 	groupId?: string; // shared with other structures that move together
 }
 
@@ -95,7 +95,7 @@ export interface SiteContext {
 	sources?: ContextSource[]; // shown as attribution wherever the data appears
 }
 
-export type ContextSource = 'osm' | 'pasda-lehigh';
+export type ContextSource = 'overture' | 'pasda-lehigh';
 
 // The property. Everything about the place itself lives here and is shared by its plans.
 export interface Site {

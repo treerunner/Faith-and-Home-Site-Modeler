@@ -19,7 +19,7 @@ const OPEN_SPACE_KINDS: OpenSpace['kind'][] = [
 	'parking', 'lawn', 'courtyard', 'garden', 'cemetery', 'walkway',
 ];
 const SITE_TYPES: NonNullable<Site['siteType']>[] = ['urban', 'suburban', 'rural'];
-const CONTEXT_SOURCES: ContextSource[] = ['osm', 'pasda-lehigh'];
+const CONTEXT_SOURCES: ContextSource[] = ['overture', 'pasda-lehigh'];
 
 type Obj = Record<string, unknown>;
 
@@ -111,7 +111,7 @@ function parseStructure(v: unknown, path: string): Structure {
 			return b;
 		}),
 		provenance: oneOf(o.provenance ?? 'user', PROVENANCES, `${path}.provenance`),
-		heightSource: optional(o.heightSource, (h) => oneOf(h, ['osm', 'default'] as const, `${path}.heightSource`)),
+		heightSource: optional(o.heightSource, (h) => oneOf(h, ['data', 'default'] as const, `${path}.heightSource`)),
 		groupId: optional(o.groupId, (g) => str(g, `${path}.groupId`)),
 	};
 }
