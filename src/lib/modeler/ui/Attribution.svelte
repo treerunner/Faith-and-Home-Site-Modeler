@@ -19,7 +19,7 @@
 	.attribution {
 		position: absolute;
 		left: 0.5rem;
-		bottom: 2.4rem; /* above the view toolbar */
+		top: 0.5rem; /* clear of the setup banner, toolbar and scale bar along the bottom */
 		margin: 0;
 		font-size: 0.6rem;
 		color: var(--fh-stone);
