@@ -8,7 +8,7 @@
 	import { store } from '../store.svelte';
 	import { clientToSite, hitTest, rendererEl } from '../scene/cameraRef';
 	import { exportPNG } from '../sceneExport';
-	import type { Part } from '../types';
+	import type { PaletteShape, Part } from '../types';
 	import type { ResizeHandle } from '../interaction';
 
 	let canvasAreaEl: HTMLDivElement | undefined = $state();
@@ -45,7 +45,7 @@
 	function handleDrop(e: DragEvent) {
 		e.preventDefault();
 		if (store.readOnly) return;
-		const shape = e.dataTransfer?.getData('text/plain') as Part['shape'] | undefined;
+		const shape = e.dataTransfer?.getData('text/plain') as PaletteShape | undefined;
 		if (!shape || !['rect', 'square', 'tri', 'circle'].includes(shape)) return;
 		const pos = clientToSite(e.clientX, e.clientY);
 		if (!pos) return;

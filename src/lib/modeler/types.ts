@@ -13,9 +13,12 @@ export type Use =
 export type Roof = 'flat' | 'gable' | 'object';
 
 
+// Shapes you can place from the palette; 'poly' only comes from real footprints (address mode)
+export type PaletteShape = Exclude<Part['shape'], 'poly'>;
+
 export interface Part {
 	id: string;
-	shape: 'rect' | 'square' | 'tri' | 'circle';
+	shape: 'rect' | 'square' | 'tri' | 'circle' | 'poly';
 	x: number; // meters, local site coords (east-west)
 	y: number; // meters, local site coords (north-south)
 	w: number; // width (x-axis) meters
@@ -23,6 +26,7 @@ export interface Part {
 	rotation: number; // degrees
 	ridgeAxis?: 'w' | 'd'; // pinned gable ridge direction; falls back to longer dimension if absent
 	storiesOverride?: number;
+	points?: [number, number][]; // poly only: outline normalized to the w×d box, each coordinate in -0.5..0.5
 }
 
 export interface Structure {
@@ -38,6 +42,7 @@ export interface Structure {
 	dwellings?: number;
 	basement?: boolean;
 	provenance: 'user' | 'osm' | 'overture';
+	heightSource?: 'osm' | 'default'; // where stories came from for prefilled buildings; cleared once edited
 	groupId?: string; // shared with other structures that move together
 }
 

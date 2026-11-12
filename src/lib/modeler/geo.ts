@@ -1,0 +1,257 @@
+// Geometry for address mode: projection between lat/lng and local site meters, fitting
+// real building footprints to parts, and reading heights from OpenStreetMap tags.
+// Site coordinates: x is east, y is south (north is up in plan view, which is -y).
+
+import { polygonArea } from './metrics';
+import type { Part, Site } from './types';
+
+export interface LatLng {
+	lat: number;
+	lng: number;
+}
+
+type Pt = [number, number];
+
+// Meters per degree at a latitude (series expansion; accurate to centimeters at site scale,
+// unlike a spherical earth, which is off by ~0.25% here)
+function metersPerDegree(lat: number): { lat: number; lng: number } {
+	const φ = (lat * Math.PI) / 180;
+	return {
+		lat: 111132.92 - 559.82 * Math.cos(2 * φ) + 1.175 * Math.cos(4 * φ),
+		lng: 111412.84 * Math.cos(φ) - 93.5 * Math.cos(3 * φ),
+	};
+}
+
+export function toLocal(lat: number, lng: number, origin: LatLng): Pt {
+	const m = metersPerDegree(origin.lat);
+	return [(lng - origin.lng) * m.lng, (origin.lat - lat) * m.lat];
+}
+
+export function toLatLng(x: number, y: number, origin: LatLng): LatLng {
+	const m = metersPerDegree(origin.lat);
+	return { lat: origin.lat - y / m.lat, lng: origin.lng + x / m.lng };
+}
+
+// ── Polygons ────────────────────────────────────────────────────────────────
+
+// Drops a repeated closing vertex (GeoJSON and OSM rings repeat the first point).
+export function openRing(ring: Pt[]): Pt[] {
+	const [a, b] = [ring[0], ring[ring.length - 1]];
+	return ring.length > 1 && a[0] === b[0] && a[1] === b[1] ? ring.slice(0, -1) : ring;
+}
+
+export function polygonCentroid(polygon: Pt[]): Pt {
+	let a = 0;
+	let cx = 0;
+	let cy = 0;
+	for (let i = 0; i < polygon.length; i++) {
+		const [x1, y1] = polygon[i];
+		const [x2, y2] = polygon[(i + 1) % polygon.length];
+		const cross = x1 * y2 - x2 * y1;
+		a += cross;
+		cx += (x1 + x2) * cross;
+		cy += (y1 + y2) * cross;
+	}
+	if (Math.abs(a) < 1e-9) {
+		// Degenerate: average the vertices
+		const n = polygon.length;
+		return [polygon.reduce((s, p) => s + p[0], 0) / n, polygon.reduce((s, p) => s + p[1], 0) / n];
+	}
+	return [cx / (3 * a), cy / (3 * a)];
+}
+
+export function pointInPolygon([x, y]: Pt, polygon: Pt[]): boolean {
+	let inside = false;
+	for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+		const [xi, yi] = polygon[i];
+		const [xj, yj] = polygon[j];
+		if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+	}
+	return inside;
+}
+
+// Andrew's monotone chain
+function convexHull(points: Pt[]): Pt[] {
+	const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+	if (pts.length < 3) return pts;
+	const cross = (o: Pt, a: Pt, b: Pt) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+	const lower: Pt[] = [];
+	for (const p of pts) {
+		while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+		lower.push(p);
+	}
+	const upper: Pt[] = [];
+	for (const p of [...pts].reverse()) {
+		while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+		upper.push(p);
+	}
+	return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+interface OrientedRect {
+	x: number;
+	y: number;
+	w: number; // along the rotated x axis; always the longer side
+	d: number;
+	rotation: number; // degrees, same convention as Part.rotation
+}
+
+// Smallest-area rectangle around the polygon. One side of it always lies along a hull edge,
+// so trying each edge's angle is enough (rotating calipers).
+export function minAreaRect(polygon: Pt[]): OrientedRect {
+	const hull = convexHull(polygon);
+	let best: (OrientedRect & { area: number }) | null = null;
+	for (let i = 0; i < hull.length; i++) {
+		const [x1, y1] = hull[i];
+		const [x2, y2] = hull[(i + 1) % hull.length];
+		const θ = Math.atan2(y2 - y1, x2 - x1);
+		const c = Math.cos(θ);
+		const s = Math.sin(θ);
+		// Project onto the edge's frame: local = R(-θ) · world
+		let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+		for (const [x, y] of hull) {
+			const u = x * c + y * s;
+			const v = -x * s + y * c;
+			minU = Math.min(minU, u); maxU = Math.max(maxU, u);
+			minV = Math.min(minV, v); maxV = Math.max(maxV, v);
+		}
+		const area = (maxU - minU) * (maxV - minV);
+		if (!best || area < best.area - 1e-9) {
+			const cu = (minU + maxU) / 2;
+			const cv = (minV + maxV) / 2;
+			best = {
+				area,
+				x: cu * c - cv * s,
+				y: cu * s + cv * c,
+				w: maxU - minU,
+				d: maxV - minV,
+				rotation: (θ * 180) / Math.PI,
+			};
+		}
+	}
+	if (!best) return { x: 0, y: 0, w: 0, d: 0, rotation: 0 };
+	let { x, y, w, d, rotation } = best;
+	if (d > w) {
+		[w, d] = [d, w];
+		rotation += 90;
+	}
+	rotation = ((rotation % 180) + 180) % 180; // a rectangle looks the same turned 180°
+	return { x, y, w, d, rotation };
+}
+
+// How much of its oriented rectangle a footprint must fill to be modeled as a plain rectangle.
+const RECT_FILL = 0.95;
+
+export type FittedPart = Pick<Part, 'shape' | 'x' | 'y' | 'w' | 'd' | 'rotation' | 'points'>;
+
+// Turns a real footprint (local meters) into part geometry. Near-rectangles become `rect`
+// parts, which keep every editing tool including gable roofs; other outlines become `poly`
+// parts whose points are normalized to the w×d box, so resize and rotate still work.
+export function fitFootprint(polygon: Pt[]): FittedPart {
+	const ring = openRing(polygon);
+	const r = minAreaRect(ring);
+	const round = (n: number, step = 0.01) => Math.round(n / step) * step;
+	const base = { x: round(r.x), y: round(r.y), w: round(r.w), d: round(r.d), rotation: round(r.rotation, 0.1) };
+	if (r.w === 0 || r.d === 0 || polygonArea(ring) / (r.w * r.d) >= RECT_FILL) {
+		return { shape: 'rect', ...base };
+	}
+	const θ = (r.rotation * Math.PI) / 180;
+	const c = Math.cos(θ);
+	const s = Math.sin(θ);
+	const points = ring.map(([x, y]): Pt => {
+		const dx = x - r.x;
+		const dy = y - r.y;
+		return [round((dx * c + dy * s) / r.w, 0.0001), round((-dx * s + dy * c) / r.d, 0.0001)];
+	});
+	return { shape: 'poly', ...base, points };
+}
+
+// ── Heights from OpenStreetMap tags ─────────────────────────────────────────
+
+export type Tags = Record<string, string | undefined>;
+
+const WORSHIP_BUILDINGS = ['church', 'chapel', 'cathedral', 'mosque', 'synagogue', 'temple', 'religious'];
+
+export function isWorship(tags: Tags): boolean {
+	return WORSHIP_BUILDINGS.includes(tags.building ?? '') || tags.amenity === 'place_of_worship';
+}
+
+// "12", "12 m", "12.5m" -> 12.5. Feet ("40'") are converted. Anything else is ignored.
+function parseMeters(value: string | undefined): number | undefined {
+	if (!value) return undefined;
+	const feet = value.match(/^\s*([\d.]+)\s*(ft|')\s*$/);
+	if (feet) return Number(feet[1]) * 0.3048;
+	const m = value.match(/^\s*([\d.]+)\s*(m)?\s*$/);
+	const n = m ? Number(m[1]) : NaN;
+	return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function parseLevels(value: string | undefined): number | undefined {
+	const n = Number(value);
+	return Number.isFinite(n) && n >= 1 ? Math.round(n) : undefined;
+}
+
+export interface StructureHeight {
+	stories: number;
+	floorHeight: number;
+	source: 'osm' | 'default';
+}
+
+const FLOOR = 3.5;
+const NAVE = 9; // PLAN.md: nave default
+
+// Stories and floor height for a building on the parcel. Worship buildings without levels
+// are modeled as one tall story (a nave) rather than several short ones.
+export function storiesFromTags(tags: Tags): StructureHeight {
+	const worship = isWorship(tags);
+	const levels = parseLevels(tags['building:levels']);
+	const height = parseMeters(tags.height);
+	const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+	if (levels) {
+		const floorHeight = height ? clamp(height / levels, 2.5, 15) : worship && levels === 1 ? NAVE : FLOOR;
+		return { stories: levels, floorHeight: Math.round(floorHeight * 10) / 10, source: 'osm' };
+	}
+	if (height) {
+		if (worship) return { stories: 1, floorHeight: Math.round(clamp(height, 4, 20) * 10) / 10, source: 'osm' };
+		return { stories: Math.max(1, Math.round(height / FLOOR)), floorHeight: FLOOR, source: 'osm' };
+	}
+	return { stories: 1, floorHeight: worship ? NAVE : FLOOR, source: 'default' };
+}
+
+const SMALL_BUILDINGS = ['garage', 'garages', 'shed', 'carport', 'hut'];
+const HOUSES = ['house', 'residential', 'detached', 'semidetached_house', 'terrace', 'bungalow'];
+
+// Height of a neighboring foam block. Only needs to look right, so defaults are by type.
+export function contextHeight(tags: Tags): number {
+	const height = parseMeters(tags.height);
+	if (height) return height;
+	const levels = parseLevels(tags['building:levels']);
+	if (levels) return levels * 3.2;
+	const kind = tags.building ?? '';
+	if (SMALL_BUILDINGS.includes(kind)) return 3;
+	if (HOUSES.includes(kind)) return 7;
+	if (isWorship(tags)) return 12;
+	return 8;
+}
+
+// ── Site-level helpers ──────────────────────────────────────────────────────
+
+// Coverage thresholds are placeholders for the team to tune (PLAN.md: design decisions stay with the team).
+const URBAN_COVERAGE = 0.25;
+const SUBURBAN_COVERAGE = 0.08;
+
+// Suggests urban, suburban or rural from how much of the surrounding circle is built on.
+export function suggestSiteType(buildings: { polygon: Pt[] }[], radius = 150): NonNullable<Site['siteType']> {
+	let built = 0;
+	for (const b of buildings) {
+		const [cx, cy] = polygonCentroid(b.polygon);
+		if (Math.hypot(cx, cy) <= radius) built += polygonArea(b.polygon);
+	}
+	const coverage = built / (Math.PI * radius * radius);
+	return coverage > URBAN_COVERAGE ? 'urban' : coverage > SUBURBAN_COVERAGE ? 'suburban' : 'rural';
+}
+
+// Buildings whose centroid falls inside the parcel.
+export function buildingsInParcel<B extends { polygon: Pt[] }>(buildings: B[], parcel: Pt[]): B[] {
+	return buildings.filter((b) => pointInPolygon(polygonCentroid(b.polygon), parcel));
+}

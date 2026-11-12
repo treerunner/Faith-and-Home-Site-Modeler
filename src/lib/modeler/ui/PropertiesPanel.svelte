@@ -335,7 +335,7 @@
 									onchange={(e) => store.updateStructure(s.id, { roof: (e.target as HTMLSelectElement).value as Roof })}
 								>
 									{#each ROOF_OPTIONS as opt (opt.value)}
-										{@const noGable = s.parts.some(p => p.shape === 'tri' || p.shape === 'circle')}
+										{@const noGable = s.parts.some(p => p.shape === 'tri' || p.shape === 'circle' || p.shape === 'poly')}
 										{#if !(opt.value === 'gable' && noGable)}
 											<option value={opt.value}>{opt.label}</option>
 										{/if}

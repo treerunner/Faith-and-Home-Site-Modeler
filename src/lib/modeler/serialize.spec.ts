@@ -66,6 +66,23 @@ describe('normalizeSite', () => {
 		expect(s.parts[0].rotation).toBe(0);
 	});
 
+	it('keeps poly outlines and requires at least 3 points', () => {
+		const poly = { id: 'p2', shape: 'poly' as const, x: 0, y: 0, w: 30, d: 22, rotation: 25, points: [[-0.5, -0.5], [0.5, -0.5], [0, 0.5]] as [number, number][] };
+		const plan = makePlan({ structures: [{ ...makePlan().structures[0], heightSource: 'default', parts: [poly] }] });
+		expect(normalizeSite(JSON.parse(JSON.stringify(makeSite({ plans: [plan] })))).plans[0].structures[0]).toMatchObject({
+			heightSource: 'default',
+			parts: [poly],
+		});
+		const bad = makePlan({ structures: [{ ...makePlan().structures[0], parts: [{ ...poly, points: [[0, 0]] }] }] });
+		expect(() => normalizeSite(makeSite({ plans: [bad] }))).toThrow('site.plans[0].structures[0].parts[0].points');
+	});
+
+	it('drops points from non-poly parts', () => {
+		const rect = { id: 'p3', shape: 'rect' as const, x: 0, y: 0, w: 1, d: 1, rotation: 0, points: [[0, 0], [1, 0], [1, 1]] as [number, number][] };
+		const plan = makePlan({ structures: [{ ...makePlan().structures[0], parts: [rect] }] });
+		expect(normalizeSite(makeSite({ plans: [plan] })).plans[0].structures[0].parts[0].points).toBeUndefined();
+	});
+
 	it('drops unknown fields', () => {
 		const site = normalizeSite({ ...makeSite(), extra: 'x' });
 		expect('extra' in site).toBe(false);

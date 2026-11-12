@@ -1,6 +1,7 @@
 import type { OpenSpace, Part, Plan, Site, Structure, Use } from './types';
 
 export function partFootprint(part: Part): number {
+	if (part.shape === 'poly' && part.points) return polygonArea(part.points) * part.w * part.d;
 	return part.w * part.d;
 }
 

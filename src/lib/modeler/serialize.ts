@@ -7,7 +7,7 @@ import { slugify } from './slug';
 
 export class SiteFormatError extends Error {}
 
-const SHAPES: Part['shape'][] = ['rect', 'square', 'tri', 'circle'];
+const SHAPES: Part['shape'][] = ['rect', 'square', 'tri', 'circle', 'poly'];
 const STATUSES: Structure['status'][] = ['existing', 'adaptive_reuse', 'new', 'removed'];
 const USES: Use[] = [
 	'worship', 'fellowship', 'education', 'office', 'housing',
@@ -67,9 +67,12 @@ function polygon(v: unknown, path: string): [number, number][] {
 
 function parsePart(v: unknown, path: string): Part {
 	const o = obj(v, path);
+	const shape = oneOf(o.shape, SHAPES, `${path}.shape`);
+	const points = optional(o.points, (p) => polygon(p, `${path}.points`));
+	if (shape === 'poly' && (!points || points.length < 3)) fail(`${path}.points`, 'poly parts need at least 3 points');
 	return {
 		id: str(o.id, `${path}.id`),
-		shape: oneOf(o.shape, SHAPES, `${path}.shape`),
+		shape,
 		x: num(o.x, `${path}.x`),
 		y: num(o.y, `${path}.y`),
 		w: num(o.w, `${path}.w`),
@@ -77,6 +80,7 @@ function parsePart(v: unknown, path: string): Part {
 		rotation: num(o.rotation ?? 0, `${path}.rotation`),
 		ridgeAxis: optional(o.ridgeAxis, (r) => oneOf(r, ['w', 'd'] as const, `${path}.ridgeAxis`)),
 		storiesOverride: optional(o.storiesOverride, (n) => num(n, `${path}.storiesOverride`)),
+		points: shape === 'poly' ? points : undefined,
 	};
 }
 
@@ -106,6 +110,7 @@ function parseStructure(v: unknown, path: string): Structure {
 			return b;
 		}),
 		provenance: oneOf(o.provenance ?? 'user', PROVENANCES, `${path}.provenance`),
+		heightSource: optional(o.heightSource, (h) => oneOf(h, ['osm', 'default'] as const, `${path}.heightSource`)),
 		groupId: optional(o.groupId, (g) => str(g, `${path}.groupId`)),
 	};
 }

@@ -27,16 +27,21 @@
 	const SLAB_HEIGHT = 0.1;
 	const EDGE_COLOR = '#4a3f30';
 
-	function makeGeo(shape: Part['shape'], w: number, d: number, h: number, floors: number) {
-		if (shape === 'circle') {
+	// Shape outline in part-local meters; shape y becomes site y (+Z) after rotateX below
+	function outline(p: Part): [number, number][] | null {
+		if (p.shape === 'tri') return [[-p.w / 2, p.d / 2], [p.w / 2, p.d / 2], [0, -p.d / 2]];
+		if (p.shape === 'poly' && p.points) return p.points.map(([u, v]) => [u * p.w, v * p.d]);
+		return null;
+	}
+
+	function makeGeo(p: Part, h: number, floors: number) {
+		const { w, d } = p;
+		if (p.shape === 'circle') {
 			return new THREE.CylinderGeometry(w / 2, w / 2, h, 32, floors);
 		}
-		if (shape === 'tri') {
-			const s = new THREE.Shape();
-			s.moveTo(-w / 2, d / 2);
-			s.lineTo(w / 2, d / 2);
-			s.lineTo(0, -d / 2);
-			s.closePath();
+		const pts = outline(p);
+		if (pts) {
+			const s = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
 			const geo = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false });
 			geo.rotateX(Math.PI / 2);
 			geo.translate(0, h / 2, 0); // center on Y=0 to match BoxGeometry (extrusion is in -Y after rotateX)
@@ -50,7 +55,7 @@
 	let actualFloors = $derived(is3D ? stories : 1);
 	let posY = $derived(is3D ? (height as number) / 2 : SLAB_HEIGHT / 2);
 
-	let geo = $derived(makeGeo(part.shape, part.w, part.d, actualH, actualFloors));
+	let geo = $derived(makeGeo(part, actualH, actualFloors));
 	let edgeGeo = $derived(is3D ? new THREE.EdgesGeometry(geo) : null);
 
 	let isRemoved = $derived(status === 'removed');

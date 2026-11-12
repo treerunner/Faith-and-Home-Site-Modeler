@@ -92,9 +92,26 @@
 		return flatGeo;
 	}
 
+	// Object roof over a real outline: a fan of slopes from each edge up to one peak
+	function makePolyPyramidGeometry(p: Part): THREE.BufferGeometry {
+		const pts = p.points ?? [];
+		const rH = roofHeight(p);
+		const vertices: number[] = [];
+		for (let i = 0; i < pts.length; i++) {
+			const [u1, v1] = pts[i];
+			const [u2, v2] = pts[(i + 1) % pts.length];
+			vertices.push(u1 * p.w, 0, v1 * p.d, u2 * p.w, 0, v2 * p.d, 0, rH, 0);
+		}
+		const geo = new THREE.BufferGeometry();
+		geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+		geo.computeVertexNormals();
+		return geo;
+	}
+
 	let roofGeo = $derived.by(() => {
 		if (roof === 'gable') return makeGableGeometry(part);
 		if (part.shape === 'tri') return makeTriPyramidGeometry(part);
+		if (part.shape === 'poly') return makePolyPyramidGeometry(part);
 		return makePyramidGeometry(part);
 	});
 

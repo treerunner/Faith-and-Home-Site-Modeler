@@ -1,11 +1,11 @@
-import type { CongregationProfile, OpenSpace, Part, Plan, Site, Structure, Tree } from './types';
+import type { CongregationProfile, OpenSpace, PaletteShape, Part, Plan, Site, Structure, Tree } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
 
-const PART_DEFAULTS: Record<Part['shape'], { w: number; d: number }> = {
+const PART_DEFAULTS: Record<PaletteShape, { w: number; d: number }> = {
 	rect: { w: 10, d: 6 },
 	circle: { w: 6, d: 6 },
 	square: { w: 6, d: 6 },
@@ -283,7 +283,7 @@ class ModelerStore {
 		}
 	}
 
-	placePart(shape: Part['shape'], x: number, y: number) {
+	placePart(shape: PaletteShape, x: number, y: number) {
 		this.#pushUndo();
 		const defaults = PART_DEFAULTS[shape];
 		const part: Part = {
