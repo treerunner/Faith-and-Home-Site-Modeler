@@ -35,6 +35,7 @@ class ModelerStore {
 	showAnalysis = $state(false);
 	readOnly = $state(false);
 	isPersisted = $state(false); // a database row exists for site.id
+	shortId = $state(''); // URL key, assigned by the server on first save
 	saveState = $state<'idle' | 'saving' | 'error'>('idle');
 
 	readonly #undoStack: Site[] = [];
@@ -53,17 +54,18 @@ class ModelerStore {
 
 	// Start a blank, unsaved site (the /modeler route).
 	newSite() {
-		this.#reset(makeSite(), false, false);
+		this.#reset(makeSite(), '', false);
 	}
 
-	loadSite(site: Site, readOnly: boolean) {
-		this.#reset(site, true, readOnly);
+	loadSite(site: Site, shortId: string, readOnly: boolean) {
+		this.#reset(site, shortId, readOnly);
 	}
 
-	#reset(site: Site, persisted: boolean, readOnly: boolean) {
+	#reset(site: Site, shortId: string, readOnly: boolean) {
 		this.site = site;
 		this.#savedJson = JSON.stringify(site);
-		this.isPersisted = persisted;
+		this.shortId = shortId;
+		this.isPersisted = shortId !== '';
 		this.readOnly = readOnly;
 		this.saveState = 'idle';
 		this.mode = { type: 'idle' };
@@ -86,7 +88,8 @@ class ModelerStore {
 		const json = JSON.stringify($state.snapshot(this.site));
 		this.saveState = 'saving';
 		try {
-			await putSite(json, this.site.id);
+			const ref = await putSite(json, this.site.id);
+			this.shortId = ref.shortId;
 			this.#savedJson = json;
 			this.isPersisted = true;
 			this.saveState = 'idle';

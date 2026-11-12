@@ -15,7 +15,7 @@
 	async function duplicate(id: string) {
 		try {
 			const copy = await duplicateSite(id);
-			await goto(editUrl(copy.id));
+			await goto(editUrl(copy.name, copy.shortId));
 		} catch (e) {
 			console.error(e);
 			error = 'Could not duplicate the site.';
@@ -55,7 +55,7 @@
 				{#each data.sites as site (site.id)}
 					<li class="site-row">
 						<div class="site-info">
-							<a class="site-name" href={editUrl(site.id)}>{site.name || 'Untitled'}</a>
+							<a class="site-name" href={editUrl(site.name, site.shortId)}>{site.name || 'Untitled'}</a>
 							<span class="site-meta">
 								Updated {dateFmt.format(new Date(site.updatedAt))}
 								{#if site.duplicatedFrom}
@@ -69,8 +69,8 @@
 								<button class="btn btn--danger" onclick={() => remove(site.id)}>Delete</button>
 								<button class="btn" onclick={() => (confirmingId = '')}>Cancel</button>
 							{:else}
-								<a class="btn" href={editUrl(site.id)}>Open</a>
-								<a class="btn" href={viewUrl(site.id)}>View</a>
+								<a class="btn" href={editUrl(site.name, site.shortId)}>Open</a>
+								<a class="btn" href={viewUrl(site.name, site.shortId)}>View</a>
 								<button class="btn" onclick={() => duplicate(site.id)}>Duplicate</button>
 								<button class="btn" onclick={() => (confirmingId = site.id)}>Delete</button>
 							{/if}

@@ -5,6 +5,7 @@ import type { Site } from '../../modeler/types';
 // `name` is copied out only so the sites list doesn't need to read the JSON.
 export const sites = pgTable('sites', {
 	id: uuid('id').primaryKey(),
+	shortId: text('short_id').notNull().unique(), // public URL key, see modeler/slug.ts
 	name: text('name').notNull().default(''),
 	data: jsonb('data').$type<Site>().notNull(),
 	duplicatedFrom: uuid('duplicated_from'),

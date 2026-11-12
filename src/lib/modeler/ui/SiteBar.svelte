@@ -3,11 +3,12 @@
 	import { store } from '../store.svelte';
 	import { duplicateSite, editUrl, viewUrl } from '../api';
 
-	// The first save of a new site moves the URL from /modeler to /modeler/<id> so reloads keep it.
+	// Keeps the URL on the current slug: the first save moves /modeler to /modeler/<slug>,
+	// and saving a rename updates the title part.
 	export async function saveSite(): Promise<boolean> {
-		const firstSave = !store.isPersisted;
 		const ok = await store.save();
-		if (ok && firstSave) await goto(editUrl(store.site.id), { replace: true, reset: false });
+		const url = editUrl(store.site.name, store.shortId);
+		if (ok && location.pathname !== url) await goto(url, { replace: true, reset: false });
 		return ok;
 	}
 </script>
@@ -46,7 +47,7 @@
 		busy = true;
 		try {
 			if (!(await ensureSaved())) return;
-			await navigator.clipboard.writeText(new URL(viewUrl(store.site.id), location.origin).href);
+			await navigator.clipboard.writeText(new URL(viewUrl(store.site.name, store.shortId), location.origin).href);
 			flash('Link copied');
 		} catch (e) {
 			console.error(e);
@@ -61,7 +62,7 @@
 		try {
 			if (!(await ensureSaved())) return;
 			const copy = await duplicateSite(store.site.id);
-			await goto(editUrl(copy.id));
+			await goto(editUrl(copy.name, copy.shortId));
 		} catch (e) {
 			console.error(e);
 			flash('Duplicate failed');
@@ -74,7 +75,7 @@
 <div class="site-bar">
 	{#if store.readOnly}
 		<span class="view-only-tag">View only</span>
-		<a class="bar-btn" href={editUrl(store.site.id)}>Open in editor</a>
+		<a class="bar-btn" href={editUrl(store.site.name, store.shortId)}>Open in editor</a>
 	{:else}
 		<span class="save-status" class:save-status--error={store.saveState === 'error'} aria-live="polite">{status}</span>
 		<button
