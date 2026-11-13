@@ -95,3 +95,16 @@ export function scaleBar(viewHeight: number): { feet: number; fraction: number }
 	);
 	return { feet, fraction: ftToM(feet) / viewHeight };
 }
+
+// 3D orbit: the camera stays above whatever is under it (`top`, the highest thing in the
+// model there, such as a roof) and above the ground, so it never sees under the board or from
+// inside a hill or a building. Without terrain the ground is the flat board at y = 0.
+export const CAMERA_CLEARANCE = 2;
+export function cameraFloor(
+	ground: { groundAt(x: number, y: number): number } | null,
+	x: number,
+	z: number,
+	top: number | null = null,
+): number {
+	return Math.max(ground ? ground.groundAt(x, z) : 0, top ?? -Infinity) + CAMERA_CLEARANCE;
+}

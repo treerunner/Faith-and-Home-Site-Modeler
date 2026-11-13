@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { contentBounds, fitView, maxViewHeight, panBy, scaleBar, zoomAt, DEFAULT_VIEW } from './view';
+import { cameraFloor, CAMERA_CLEARANCE, contentBounds, fitView, maxViewHeight, panBy, scaleBar, zoomAt, DEFAULT_VIEW } from './view';
 import { ftToM } from './units';
 
 const HALF = 150; // default address board
@@ -100,5 +100,22 @@ describe('scaleBar', () => {
 			expect(fraction).toBeGreaterThan(0.05);
 			expect(fraction).toBeLessThan(0.2);
 		}
+	});
+});
+
+describe('cameraFloor', () => {
+	it('keeps the camera above the flat board', () => {
+		expect(cameraFloor(null, 500, -20)).toBe(CAMERA_CLEARANCE);
+	});
+
+	it('follows the ground under the camera', () => {
+		const slope = { groundAt: (x: number, y: number) => x * 0.1 + y * 0.05 };
+		expect(cameraFloor(slope, 100, 40)).toBeCloseTo(10 + 2 + CAMERA_CLEARANCE);
+		expect(cameraFloor(slope, -100, 0)).toBeCloseTo(-10 + CAMERA_CLEARANCE);
+	});
+
+	it('clears a roof under the camera, but not a hole below the ground', () => {
+		expect(cameraFloor(null, 0, 0, 14)).toBe(14 + CAMERA_CLEARANCE);
+		expect(cameraFloor(null, 0, 0, -3)).toBe(CAMERA_CLEARANCE);
 	});
 });

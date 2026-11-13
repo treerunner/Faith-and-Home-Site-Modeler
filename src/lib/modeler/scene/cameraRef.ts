@@ -37,6 +37,19 @@ export type HitResult =
 	| { kind: 'tree'; treeId: string; x: number; y: number }
 	| { kind: 'ground'; x: number; y: number };
 
+// The highest visible surface of the model straight below (x, z), or null over nothing
+const down = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+export function topBelow(x: number, z: number): number | null {
+	if (!mainScene) return null;
+	down.ray.origin.set(x, 10000, z);
+	for (const hit of down.intersectObjects(mainScene.children, true)) {
+		const obj = hit.object as THREE.Mesh;
+		const material = obj.material as THREE.Material | undefined;
+		if (obj.isMesh && material?.visible !== false) return hit.point.y;
+	}
+	return null;
+}
+
 function makeRaycaster(clientX: number, clientY: number): THREE.Raycaster | null {
 	if (!planCamera || !rendererEl) return null;
 	const rect = rendererEl.getBoundingClientRect();
