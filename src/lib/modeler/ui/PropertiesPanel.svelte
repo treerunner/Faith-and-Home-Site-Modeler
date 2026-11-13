@@ -27,6 +27,32 @@
 		{ value: 'other', label: 'Other' },
 	];
 
+	// Proposed culture questions, drafts for the team to review (docs/PLAN.md). Answers feed
+	// pattern matching.
+	type CultureKey = 'partnering' | 'capacity' | 'change' | 'role';
+	const CULTURE_QUESTIONS: { key: CultureKey; question: string; options: { value: string; label: string }[] }[] = [
+		{
+			key: 'partnering',
+			question: 'Would you partner with a housing or community organization?',
+			options: [{ value: 'open', label: 'Open' }, { value: 'unsure', label: 'Unsure' }, { value: 'not_now', label: 'Not now' }],
+		},
+		{
+			key: 'capacity',
+			question: 'Who would steward a project?',
+			options: [{ value: 'volunteers', label: 'Volunteers' }, { value: 'some_staff', label: 'Some staff' }, { value: 'staffed', label: 'Dedicated staff' }],
+		},
+		{
+			key: 'change',
+			question: 'How much change to the property feels right?',
+			options: [{ value: 'preserve', label: 'Preserve' }, { value: 'adapt', label: 'Adapt' }, { value: 'transform', label: 'Transform' }],
+		},
+		{
+			key: 'role',
+			question: 'What role do you want in the neighborhood?',
+			options: [{ value: 'gathering', label: 'Gathering place' }, { value: 'service', label: 'Service provider' }, { value: 'housing_partner', label: 'Housing partner' }],
+		},
+	];
+
 	const SITE_TYPES: { value: NonNullable<Site['siteType']>; label: string }[] = [
 		{ value: 'urban', label: 'Urban' },
 		{ value: 'suburban', label: 'Suburban' },
@@ -190,6 +216,24 @@
 					{/each}
 				</div>
 			</fieldset>
+
+			{#each CULTURE_QUESTIONS as q (q.key)}
+				<fieldset class="fieldset">
+					<legend class="field-label culture-question">{q.question}</legend>
+					<div class="pill-group">
+						{#each q.options as opt (opt.value)}
+							{@const on = profile[q.key] === opt.value}
+							<button
+								class="pill"
+								class:pill--active={on}
+								aria-pressed={on}
+								style={on ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
+								onclick={() => store.updateCongregationProfile({ [q.key]: on ? undefined : opt.value } as Partial<CongregationProfile>)}
+							>{opt.label}</button>
+						{/each}
+					</div>
+				</fieldset>
+			{/each}
 
 			<label class="field-label" for="profile-notes">Notes</label>
 			<textarea
@@ -591,6 +635,8 @@
 
 <style>
 	.section--site-type { padding-bottom: 0.6rem; }
+	/* Questions are full sentences; the small caps label style reads poorly at that length */
+	.culture-question { text-transform: none; letter-spacing: 0; font-weight: 600; line-height: 1.3; }
 
 	.reuse-section {
 		display: flex;
