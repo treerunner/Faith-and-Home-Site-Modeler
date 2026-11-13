@@ -109,6 +109,11 @@
 			return;
 		}
 
+		if (store.mode.type === 'cutting') {
+			if (pos) beginPress(e, () => store.addCutPoint(pos.x, pos.y));
+			return;
+		}
+
 		const result = hitTest(e.clientX, e.clientY);
 		if (!result) return;
 
@@ -191,6 +196,8 @@
 			store.hoverParcel(store.parcelAt(pos.x, pos.y));
 		} else if (store.mode.type === 'drawingParcel') {
 			store.updateParcelCursor(pos.x, pos.y);
+		} else if (store.mode.type === 'cutting') {
+			store.updateCutCursor(pos.x, pos.y);
 		} else if (store.mode.type === 'draggingOpenSpace') {
 			store.updateDragOpenSpace(pos.x, pos.y);
 		} else if (store.mode.type === 'draggingOsVertex') {
@@ -217,6 +224,7 @@
 			if (store.showAnalysis) { store.showAnalysis = false; store.viewMode = viewModeBeforeAnalysis; return; }
 			if (store.mode.type === 'drawingParcel' && store.setup?.context.parcels.length) store.mode = { type: 'choosingParcel' };
 			else if (store.mode.type === 'drawingParcel' || store.mode.type === 'choosingParcel') store.finishSetup();
+			else if (store.mode.type === 'cutting') store.selectStructure(store.mode.structureId);
 			else if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree') store.cancelPlacing();
 			else if (store.selectedOpenSpaceId) store.selectOpenSpace(null);
 			else if (store.selectedTreeId) store.selectTree(null);
@@ -254,6 +262,18 @@
 			<div class="scale-bar" aria-label="Scale: {bar.feet} feet">
 				<div class="scale-bar__line" style="width: {bar.fraction * 100}cqh"></div>
 				<span class="scale-bar__label">{bar.feet} ft</span>
+			</div>
+		{/if}
+
+		{#if store.mode.type === 'cutting'}
+			<div class="drawing-hint">
+				{#if store.mode.missed}
+					Draw the line across the building. Esc to cancel.
+				{:else if store.mode.start}
+					Click the second point.
+				{:else}
+					Click two points across the building to cut it. Esc to cancel.
+				{/if}
 			</div>
 		{/if}
 

@@ -45,6 +45,13 @@ export type InteractionMode =
 	  }
 	| { type: 'choosingParcel'; hoverId?: string }
 	| { type: 'drawingParcel'; points: [number, number][]; cursorPoint?: [number, number] }
+	| {
+			type: 'cutting';
+			structureId: string;
+			start?: [number, number];
+			cursor?: [number, number];
+			missed?: boolean; // the last line didn't cross the building
+	  }
 	| { type: 'placingTree' }
 	| { type: 'selectedTree'; treeId: string }
 	| { type: 'draggingTree'; treeId: string; offsetX: number; offsetY: number };

@@ -7,6 +7,7 @@ import {
 	boardHalfFor,
 	buildingsInParcel,
 	mergeParcels,
+	splitPart,
 	CONTEXT_HALF_SIZE,
 	fitFootprint,
 	GROUND_HALF,
@@ -14,7 +15,7 @@ import {
 	storiesFromTags,
 	suggestSiteType,
 } from './geo';
-import { polygonArea } from './metrics';
+import { partFootprint, polygonArea } from './metrics';
 import { contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } from './view';
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
@@ -300,6 +301,66 @@ class ModelerStore {
 		this.plan.structures.push(newStructure);
 		this.activeStructureId = newStructure.id;
 		return newParts[partIndex >= 0 ? partIndex : 0].id;
+	}
+
+	// ── Cutting ──────────────────────────────────────────────────────────────
+
+	startCutting(structureId: string) {
+		this.mode = { type: 'cutting', structureId };
+	}
+
+	addCutPoint(x: number, y: number) {
+		if (this.mode.type !== 'cutting') return;
+		const { structureId, start } = this.mode;
+		if (!start) {
+			this.mode = { type: 'cutting', structureId, start: [x, y], cursor: [x, y] };
+			return;
+		}
+		const first = this.cutStructure(structureId, start, [x, y]);
+		this.mode = first ? { type: 'selected', partId: first } : { type: 'cutting', structureId, missed: true };
+	}
+
+	updateCutCursor(x: number, y: number) {
+		if (this.mode.type === 'cutting' && this.mode.start) this.mode = { ...this.mode, cursor: [x, y] };
+	}
+
+	// Cuts a structure along the line a-b into pieces that stay one building: the largest piece
+	// keeps the structure, the others become new structures in the same group, each free to take
+	// its own stories, roof, status and uses (additions often differ). Returns the kept part's id,
+	// or null if the line misses.
+	cutStructure(id: string, a: [number, number], b: [number, number]): string | null {
+		const structure = this.plan.structures.find((s) => s.id === id);
+		if (!structure) return null;
+		const cuts = structure.parts.map((part) => ({ part, pieces: splitPart(part, a, b) }));
+		if (!cuts.some((c) => c.pieces)) return null;
+		this.#pushUndo();
+
+		const kept = cuts.filter((c) => !c.pieces).map((c) => c.part);
+		const pieces: Part[] = cuts
+			.flatMap((c) => c.pieces ?? [])
+			.map((g) => ({ id: crypto.randomUUID(), ...g }))
+			.sort((p, q) => partFootprint(q) - partFootprint(p));
+		const [largest, ...rest] = pieces;
+		const groupId = structure.groupId ?? crypto.randomUUID();
+		// Gables need rectangles; irregular pieces fall back to flat, as the roof menu does
+		const roofFor = (parts: Part[]) =>
+			structure.roof === 'gable' && parts.some((p) => p.shape !== 'rect' && p.shape !== 'square') ? 'flat' : structure.roof;
+
+		structure.parts = [...kept, largest];
+		structure.groupId = groupId;
+		const template = copy(structure);
+		structure.roof = roofFor(structure.parts);
+		rest.forEach((part, i) => {
+			this.plan.structures.push({
+				...template,
+				id: crypto.randomUUID(),
+				label: `${template.label} ${i + 2}`,
+				parts: [part],
+				roof: roofFor([part]),
+				dwellings: undefined, // stays with the original piece
+			});
+		});
+		return largest.id;
 	}
 
 	splitStructure(id: string) {

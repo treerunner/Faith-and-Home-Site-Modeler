@@ -45,6 +45,23 @@
 
 	let allParts = $derived(store.plan.structures.flatMap((s) => s.parts));
 
+	// Cutting: the building being cut is highlighted, with a dashed line from the first click
+	let cutting = $derived(store.mode.type === 'cutting' ? store.mode : null);
+	let cutPartIds = $derived(
+		new Set(cutting ? (store.plan.structures.find((s) => s.id === cutting.structureId)?.parts.map((p) => p.id) ?? []) : []),
+	);
+	let cutLine = $derived.by(() => {
+		if (!cutting?.start || !cutting.cursor) return null;
+		return new THREE.BufferGeometry().setFromPoints([
+			new THREE.Vector3(cutting.start[0], 0.3, cutting.start[1]),
+			new THREE.Vector3(cutting.cursor[0], 0.3, cutting.cursor[1]),
+		]);
+	});
+	let cutLineRef: THREE.Line | undefined = $state();
+	$effect(() => {
+		if (cutLineRef && cutLine) cutLineRef.computeLineDistances();
+	});
+
 	let ghostPart = $derived(
 		store.mode.type === 'placing'
 			? ({
@@ -228,7 +245,7 @@
 	{@const struct = partStructureMap.get(part.id)}
 	<PartMesh
 		{part}
-		selected={store.selectedPartId === part.id}
+		selected={store.selectedPartId === part.id || cutPartIds.has(part.id)}
 		status={partStatusMap.get(part.id) ?? 'existing'}
 		cloning={store.mode.type === 'dragging' && store.mode.cloning === true && store.mode.companions.some((c) => c.id === part.id)}
 		height={store.viewMode === '3d' ? (partHeightMap.get(part.id) ?? 3.5) : undefined}
@@ -243,6 +260,12 @@
 		/>
 	{/if}
 {/each}
+
+{#if cutLine}
+	<T.Line bind:ref={cutLineRef} geometry={cutLine}>
+		<T.LineDashedMaterial color={COLORS.parcel} dashSize={1} gapSize={0.6} />
+	</T.Line>
+{/if}
 
 {#if ghostPart}
 	<PartMesh part={ghostPart} selected={false} ghost />

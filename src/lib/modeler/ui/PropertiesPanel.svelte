@@ -376,6 +376,7 @@
 								</select>
 
 								<div class="action-row">
+									<button class="split-btn" onclick={() => store.startCutting(s.id)} title="Cut into pieces, like additions">Cut</button>
 									{#if s.groupId}
 										<button class="split-btn" onclick={() => store.ungroupStructure(s.id)}>
 											Ungroup
