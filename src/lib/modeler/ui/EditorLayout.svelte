@@ -268,11 +268,11 @@
 		{#if store.mode.type === 'cutting'}
 			<div class="drawing-hint">
 				{#if store.mode.missed}
-					Draw the line across the building. Esc to cancel.
+					Nothing was cut. Draw the line fully across the part. Esc to cancel.
 				{:else if store.mode.start}
 					Click the second point.
 				{:else}
-					Click two points across the building to cut it. Esc to cancel.
+					Click two points across the part to cut off. The cut stops at your clicks. Esc to cancel.
 				{/if}
 			</div>
 		{/if}

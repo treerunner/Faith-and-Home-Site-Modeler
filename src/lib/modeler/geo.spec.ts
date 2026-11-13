@@ -299,6 +299,39 @@ describe('splitPolygon', () => {
 		expect(pieces.reduce((sum, p) => sum + polygonArea(p), 0)).toBeCloseTo(polygonArea(l));
 	});
 
+	// Two additions off one corridor, like the reported building: a top-right wing and a long
+	// bottom wing, both reachable by the same straight line
+	const twoWings: Pt[] = [[0, 0], [40, 0], [40, 10], [30, 10], [30, 30], [20, 30], [20, 10], [10, 10], [10, 30], [0, 30]];
+
+	it('cuts only where the drawn segment runs, not along its extension', () => {
+		// A short cut across the right wing only (x 20..30 at y 20); the line y=20 also crosses the left wing
+		const pieces = splitPolygon(twoWings, [18, 20], [32, 20]);
+		expect(pieces).toHaveLength(2);
+		const areas = pieces.map(polygonArea).sort((p, q) => p - q);
+		expect(areas[0]).toBeCloseTo(100); // the cut-off end of the right wing: 10 x 10
+		expect(areas[1]).toBeCloseTo(polygonArea(twoWings) - 100); // everything else, still one piece
+	});
+
+	it('cuts every arm the segment spans', () => {
+		expect(splitPolygon(twoWings, [-2, 20], [32, 20])).toHaveLength(3);
+	});
+
+	it('does not cut when the segment stops short inside the building', () => {
+		expect(splitPolygon(twoWings, [18, 20], [25, 20])).toEqual([]);
+	});
+
+	it('cuts a wing off along the edge it shares with the corridor, as in the reported case', () => {
+		// Along y = 10 from outside the right wing to just short of its inside corner (x = 20)
+		const pieces = splitPolygon(twoWings, [32, 10], [20.6, 10]);
+		expect(pieces).toHaveLength(2);
+		expect(pieces.map(polygonArea).sort((p, q) => p - q)).toEqual([200, polygonArea(twoWings) - 200]);
+		// The left wing sits on the same line but beyond the cut, so it stays attached
+	});
+
+	it('reaches a corner up to 1 m past the click, but no further', () => {
+		expect(splitPolygon(twoWings, [32, 10], [21.5, 10])).toEqual([]); // 1.5 m short: no cut
+	});
+
 	it('returns nothing when the line misses or only grazes an edge', () => {
 		expect(splitPolygon(rect, [30, -5], [30, 15])).toEqual([]);
 		expect(splitPolygon(rect, [20, -5], [20, 15])).toEqual([]);

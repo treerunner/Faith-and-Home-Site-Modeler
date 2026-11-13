@@ -353,16 +353,22 @@ export function partOutline(part: Part): Pt[] {
 	return local.map(([x, y]): Pt => [part.x + x * c - y * s, part.y + x * s + y * c]);
 }
 
-// Cuts a polygon along the infinite line through a and b. Each side may hold several pieces
-// (a line through both arms of an L makes three). Empty if the line misses.
+const CUT_REACH = 1; // m: a cut still separates up to this far past each click (to reach a corner)
+const ON_LINE = 1e-6; // m: tolerance for a piece's edge lying on the cut line
+
+// Cuts a polygon along the segment from a to b, like a knife: only where the drawn segment
+// runs. The polygon is first split along the whole line through a and b, then pieces whose
+// shared seam extends past the segment's ends are merged back, since the cut never reached
+// them (another arm of a building the line happens to pass through). Empty if nothing is cut.
 export function splitPolygon(polygon: Pt[], a: Pt, b: Pt): Pt[][] {
 	const dx = b[0] - a[0];
 	const dy = b[1] - a[1];
 	const len = Math.hypot(dx, dy);
 	if (len === 0) return [];
-	// Half-planes as huge quads on either side of the line
-	const far = 1e5;
 	const [ux, uy] = [dx / len, dy / len];
+
+	// Split along the infinite line: half-planes as huge quads on either side
+	const far = 1e5;
 	const [nx, ny] = [-uy * far, ux * far];
 	const p1: Pt = [a[0] - ux * far, a[1] - uy * far];
 	const p2: Pt = [a[0] + ux * far, a[1] + uy * far];
@@ -370,14 +376,50 @@ export function splitPolygon(polygon: Pt[], a: Pt, b: Pt): Pt[][] {
 		p1, p2, [p2[0] + sign * nx, p2[1] + sign * ny], [p1[0] + sign * nx, p1[1] + sign * ny], p1,
 	]];
 	const subject: polygonClipping.Polygon = [[...polygon, polygon[0]]];
-	const pieces = [1, -1].map((sign) =>
+	const pieces = [1, -1].flatMap((sign) =>
 		polygonClipping
 			.intersection(subject, side(sign))
-			.map((p) => openRing(p[0] as Pt[]))
-			.filter((ring) => polygonArea(ring) >= MIN_PIECE_AREA),
+			.map((p) => ({ ring: openRing(p[0] as Pt[]), sign }))
+			.filter(({ ring }) => polygonArea(ring) >= MIN_PIECE_AREA),
 	);
-	// A real cut leaves something on both sides
-	return pieces[0].length && pieces[1].length ? [...pieces[0], ...pieces[1]] : [];
+	if (!pieces.some((p) => p.sign > 0) || !pieces.some((p) => p.sign < 0)) return [];
+
+	// Where each piece's edges lie on the line, as intervals of distance along it from a
+	const along = ([x, y]: Pt) => (x - a[0]) * ux + (y - a[1]) * uy;
+	const off = ([x, y]: Pt) => (x - a[0]) * -uy + (y - a[1]) * ux;
+	const seams = pieces.map(({ ring }) =>
+		ring.flatMap((p, i): [number, number][] => {
+			const q = ring[(i + 1) % ring.length];
+			if (Math.abs(off(p)) > ON_LINE || Math.abs(off(q)) > ON_LINE) return [];
+			return [[Math.min(along(p), along(q)), Math.max(along(p), along(q))]];
+		}),
+	);
+	const [lo, hi] = [-CUT_REACH, len + CUT_REACH];
+
+	// Pieces on opposite sides stay joined if their shared seam runs outside the drawn cut
+	const parent = pieces.map((_, i) => i);
+	const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+	for (let i = 0; i < pieces.length; i++) {
+		for (let j = i + 1; j < pieces.length; j++) {
+			if (pieces[i].sign === pieces[j].sign) continue;
+			const uncut = seams[i].some(([s1, e1]) =>
+				seams[j].some(([s2, e2]) => {
+					const [s, e] = [Math.max(s1, s2), Math.min(e1, e2)];
+					return e - s > ON_LINE && (s < lo - ON_LINE || e > hi + ON_LINE);
+				}),
+			);
+			if (uncut) parent[find(i)] = find(j);
+		}
+	}
+	const groups = new Map<number, Pt[][]>();
+	pieces.forEach(({ ring }, i) => groups.set(find(i), [...(groups.get(find(i)) ?? []), ring]));
+	if (groups.size < 2) return [];
+	return [...groups.values()].map((rings) => {
+		if (rings.length === 1) return rings[0];
+		const [first, ...rest] = rings.map((r) => [[...r, r[0]]] as polygonClipping.Polygon);
+		const merged = polygonClipping.union(first, ...rest);
+		return openRing(merged[0][0] as Pt[]);
+	});
 }
 
 // A part cut into new part geometries, or null if the line doesn't cross it.

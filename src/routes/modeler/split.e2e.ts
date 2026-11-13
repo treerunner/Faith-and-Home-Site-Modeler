@@ -41,7 +41,7 @@ test('cut a building into pieces: Box-Plus, with an override that persists', asy
 
 	// Cut across the square, 1 m east of center
 	await page.getByRole('button', { name: 'Cut', exact: true }).click();
-	await expect(page.getByText('Click two points across the building to cut it. Esc to cancel.')).toBeVisible();
+	await expect(page.getByText('Click two points across the part to cut off. The cut stops at your clicks. Esc to cancel.')).toBeVisible();
 	await clickSite(page, 1, -10);
 	await expect(page.getByText('Click the second point.')).toBeVisible();
 	await clickSite(page, 1, 10);
@@ -58,7 +58,7 @@ test('cut a building into pieces: Box-Plus, with an override that persists', asy
 	await page.getByRole('button', { name: 'Cut', exact: true }).first().click();
 	await clickSite(page, 30, -10);
 	await clickSite(page, 30, 10);
-	await expect(page.getByText('Draw the line across the building. Esc to cancel.')).toBeVisible();
+	await expect(page.getByText('Nothing was cut. Draw the line fully across the part. Esc to cancel.')).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(page.locator('.struct-item')).toHaveCount(2);
 
