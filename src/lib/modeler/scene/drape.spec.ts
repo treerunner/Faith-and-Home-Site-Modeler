@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { bandsGeometry, drapeGeometry } from './drape';
-import { terrainModel } from '../terrain';
+import { drapeGeometry, piecesGeometry } from './drape';
+import { gradedSurface, terrainModel } from '../terrain';
 
 type Pt = [number, number];
 
@@ -20,21 +20,24 @@ function faceNormalsY(geo: THREE.BufferGeometry): number[] {
 	return ys;
 }
 
-describe('bandsGeometry', () => {
-	it('faces every layer top up, whichever way its outline winds', () => {
-		const square: Pt[] = [[0, 0], [10, 0], [10, 10], [0, 10]];
-		const geo = bandsGeometry([{ y: 0, polygon: square }, { y: 1, polygon: [...square].reverse() }]);
-		const ys = faceNormalsY(geo);
+describe('piecesGeometry', () => {
+	it('faces every piece up, whichever way its outline winds', () => {
+		const square: [number, number, number][] = [[0, 0, 0], [10, 0, 0], [10, 10, 1], [0, 10, 1]];
+		const ys = faceNormalsY(piecesGeometry([square, [...square].reverse()]));
 		expect(ys).toHaveLength(4);
-		for (const y of ys) expect(y).toBeCloseTo(1);
+		for (const y of ys) expect(y).toBeGreaterThan(0.9);
 	});
+});
 
-	it('faces the terrain layers up', () => {
+describe('the terrain surface', () => {
+	it('faces the ground and draped shapes up', () => {
 		const n = 21, heights: number[] = [];
 		for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) heights.push(100 + i * 0.5 + Math.sin(j / 3));
 		const model = terrainModel({ spacing: 5, heights }, 50)!;
-		for (const y of faceNormalsY(bandsGeometry(model.bands))) expect(y).toBeCloseTo(1);
+		const surface = gradedSurface(model, [[[[-5, -5], [5, -5], [5, 5], [-5, 5]]]]);
+		const ground = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(surface.positions, 3));
+		for (const y of faceNormalsY(ground)) expect(y).toBeGreaterThan(0);
 		const road = new THREE.PlaneGeometry(20, 6).rotateX(-Math.PI / 2);
-		for (const y of faceNormalsY(drapeGeometry(road, model))) expect(y).toBeCloseTo(1);
+		for (const y of faceNormalsY(drapeGeometry(road, surface))) expect(y).toBeGreaterThan(0);
 	});
 });

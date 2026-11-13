@@ -2,7 +2,7 @@
 	import { T } from '@threlte/core';
 	import * as THREE from 'three';
 	import { COLORS } from '../colors';
-	import type { TerrainModel } from '../terrain';
+	import type { GradedSurface } from '../terrain';
 	import { drapeGeometry } from './drape';
 
 	// Dims the board outside the chosen parcel so the property reads as the focus:
@@ -12,10 +12,10 @@
 		parcel: [number, number][];
 		half: number; // board half-width
 		is3D: boolean;
-		terrain: TerrainModel | null; // in 3D: laid onto the layers
+		surface: GradedSurface | null; // in 3D: laid on it
 	}
 
-	let { parcel, half, is3D, terrain }: Props = $props();
+	let { parcel, half, is3D, surface }: Props = $props();
 
 	const OPACITY = 0.22;
 	// Plan: just above the foam footprint slabs (0.05), below parts (0.1).
@@ -33,7 +33,7 @@
 		sheet.holes.push(new THREE.Path(parcel.map(([x, y]) => new THREE.Vector2(x, y))));
 		const g = new THREE.ShapeGeometry(sheet);
 		g.rotateX(Math.PI / 2); // shape y -> site y (+Z)
-		return terrain ? drapeGeometry(g, terrain) : g;
+		return surface ? drapeGeometry(g, surface) : g;
 	});
 </script>
 

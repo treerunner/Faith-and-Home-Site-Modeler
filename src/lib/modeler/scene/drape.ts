@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { drapeLine, drapeTriangles, type TerrainModel } from '../terrain';
+import { drapeLine, drapeTriangles, type GradedSurface } from '../terrain';
 
 type Pt = [number, number];
+type P3 = [number, number, number]; // site x, site y, height
 
-// Lays flat scene geometry (built on the board, y constant) onto the terrain layers: each
-// triangle is split where it crosses a layer edge, and each piece is raised to its layer.
-export function drapeGeometry(geo: THREE.BufferGeometry, model: TerrainModel): THREE.BufferGeometry {
+// Lays flat scene geometry (built on the board, y constant) onto the terrain surface: each
+// triangle is split where it crosses surface triangles, and each piece follows the surface.
+export function drapeGeometry(geo: THREE.BufferGeometry, surface: GradedSurface): THREE.BufferGeometry {
 	const pos = geo.getAttribute('position');
 	const index = geo.getIndex();
 	const count = index ? index.count : pos.count;
@@ -15,22 +16,21 @@ export function drapeGeometry(geo: THREE.BufferGeometry, model: TerrainModel): T
 	};
 	const tris: [Pt, Pt, Pt][] = [];
 	for (let k = 0; k + 2 < count; k += 3) tris.push([vertex(k), vertex(k + 1), vertex(k + 2)]);
-	return bandsGeometry(drapeTriangles(model, tris));
+	return piecesGeometry(drapeTriangles(surface, tris));
 }
 
 // Twice the signed area in site coordinates (x east, y south)
-const signedArea = (poly: Pt[]) => poly.reduce((a, [x1, y1], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return a + x1 * y2 - x2 * y1; }, 0);
+const signedArea = (poly: P3[]) => poly.reduce((a, [x1, y1], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return a + x1 * y2 - x2 * y1; }, 0);
 
-// Pieces of layer tops as one triangle geometry, each fanned from its first point. Wound to face
-// up: a face wound the other way faces down, and one-sided materials skip it from above.
-export function bandsGeometry(bands: { y: number; polygon: Pt[] }[], lift = 0): THREE.BufferGeometry {
+// Convex pieces as one triangle geometry, each fanned from its first point. Wound to face up: a
+// face wound the other way faces down, and one-sided materials skip it from above.
+export function piecesGeometry(pieces: P3[][]): THREE.BufferGeometry {
 	const out: number[] = [];
-	for (const band of bands) {
-		const { y } = band;
-		const polygon = signedArea(band.polygon) > 0 ? [...band.polygon].reverse() : band.polygon;
-		const [x0, z0] = polygon[0];
-		for (let i = 1; i + 1 < polygon.length; i++) {
-			out.push(x0, y + lift, z0, polygon[i][0], y + lift, polygon[i][1], polygon[i + 1][0], y + lift, polygon[i + 1][1]);
+	for (const piece of pieces) {
+		const poly = signedArea(piece) > 0 ? [...piece].reverse() : piece;
+		const [x0, y0, h0] = poly[0];
+		for (let i = 1; i + 1 < poly.length; i++) {
+			out.push(x0, h0, y0, poly[i][0], poly[i][2], poly[i][1], poly[i + 1][0], poly[i + 1][2], poly[i + 1][1]);
 		}
 	}
 	const g = new THREE.BufferGeometry();
@@ -39,12 +39,12 @@ export function bandsGeometry(bands: { y: number; polygon: Pt[] }[], lift = 0): 
 	return g;
 }
 
-// A polyline as segment pairs for LineSegments: flat at `y`, or draped onto the layers
-export function lineGeometry(points: Pt[], y: number, model: TerrainModel | null): THREE.BufferGeometry {
-	const segs = model
-		? drapeLine(model, points).map((s) => ({ ...s, y: s.y + y }))
-		: points.slice(0, -1).map((a, i) => ({ y, a, b: points[i + 1] }));
+// A polyline as segment pairs for LineSegments: flat at `y`, or on the surface raised by `y`
+export function lineGeometry(points: Pt[], y: number, surface: GradedSurface | null): THREE.BufferGeometry {
+	const segs: { a: P3; b: P3 }[] = surface
+		? drapeLine(surface, points)
+		: points.slice(0, -1).map((a, i) => ({ a: [a[0], a[1], 0], b: [points[i + 1][0], points[i + 1][1], 0] }));
 	return new THREE.BufferGeometry().setFromPoints(
-		segs.flatMap((s) => [new THREE.Vector3(s.a[0], s.y, s.a[1]), new THREE.Vector3(s.b[0], s.y, s.b[1])]),
+		segs.flatMap(({ a, b }) => [new THREE.Vector3(a[0], a[2] + y, a[1]), new THREE.Vector3(b[0], b[2] + y, b[1])]),
 	);
 }

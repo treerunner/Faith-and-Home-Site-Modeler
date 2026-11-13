@@ -33,8 +33,8 @@
 	}
 
 	let flatGeo = $derived(makeGeo(openSpace.polygon));
-	// In 3D on terrain, laid onto the layers
-	let geo = $derived(flatGeo && store.terrain3D ? drapeGeometry(flatGeo, store.terrain3D) : flatGeo);
+	// In 3D on terrain, laid on the surface
+	let geo = $derived(flatGeo && store.ground ? drapeGeometry(flatGeo, store.ground) : flatGeo);
 	let color = $derived(OPEN_SPACE_COLORS[openSpace.kind]);
 	let opacity = $derived(draft ? 0.3 : selected ? 0.75 : 0.55);
 </script>

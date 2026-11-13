@@ -19,8 +19,9 @@
 
 	const Y = 0.03;
 
-	// In 3D on terrain, laid onto the layers
-	let geo = $derived(lineGeometry([...polygon, polygon[0]], Y, store.terrain3D));
+	// In 3D on terrain, laid on the surface, a little higher so it stays in front of the slope
+	const DRAPED_Y = 0.1;
+	let geo = $derived(lineGeometry([...polygon, polygon[0]], store.ground ? DRAPED_Y : Y, store.ground));
 
 	let lineRef: THREE.LineSegments | undefined = $state();
 	$effect(() => {
@@ -34,7 +35,7 @@
 		if (!fill || polygon.length < 3) return null;
 		const geo = new THREE.ShapeGeometry(new THREE.Shape(polygon.map(([x, y]) => new THREE.Vector2(x, y))));
 		geo.rotateX(Math.PI / 2); // shape y -> site y (+Z)
-		return store.terrain3D ? drapeGeometry(geo, store.terrain3D) : geo;
+		return store.ground ? drapeGeometry(geo, store.ground) : geo;
 	});
 </script>
 

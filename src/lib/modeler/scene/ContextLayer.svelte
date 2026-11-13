@@ -4,7 +4,7 @@
 	import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 	import type { SiteContext } from '../types';
 	import { COLORS } from '../colors';
-	import { baseOf, type TerrainModel } from '../terrain';
+	import { baseOf, type GradedSurface, type TerrainModel } from '../terrain';
 	import { drapeGeometry } from './drape';
 
 	// Neighbors as white foam blocks and roads printed on the base board. Both are built as
@@ -14,10 +14,11 @@
 		context: SiteContext;
 		half: number; // board half-width
 		is3D: boolean;
-		terrain: TerrainModel | null; // in 3D: foam stands on the layers and roads lie on them
+		terrain: TerrainModel | null; // in 3D: foam stands on the lowest ground under it
+		surface: GradedSurface | null; // in 3D: roads lie on it
 	}
 
-	let { context, half, is3D, terrain }: Props = $props();
+	let { context, half, is3D, terrain, surface }: Props = $props();
 
 	// Foam, road print and board skip tone mapping: the renderer's filmic curve greys off-white
 	// down, and these must read as white foam and light print against the chipboard.
@@ -49,7 +50,7 @@
 	};
 	const JOINT_SEGMENTS = 10;
 
-	function makeRoads(roads: SiteContext['roads'], half: number, model: TerrainModel | null): THREE.BufferGeometry | null {
+	function makeRoads(roads: SiteContext['roads'], half: number, surface: GradedSurface | null): THREE.BufferGeometry | null {
 		const pos: number[] = [];
 		// Clamped to the board so the print stops at its edge instead of overhanging
 		const c = (v: number) => Math.max(-half, Math.min(half, v));
@@ -79,8 +80,8 @@
 		if (pos.length === 0) return null;
 		const geo = new THREE.BufferGeometry();
 		geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-		if (model) {
-			const draped = drapeGeometry(geo, model);
+		if (surface) {
+			const draped = drapeGeometry(geo, surface);
 			draped.translate(0, ROAD_Y, 0);
 			return draped;
 		}
@@ -90,7 +91,7 @@
 
 	let buildingGeo = $derived(makeBuildings(context.buildings, !is3D, terrain));
 	let buildingEdges = $derived(buildingGeo ? new THREE.EdgesGeometry(buildingGeo, 20) : null);
-	let roadGeo = $derived(makeRoads(context.roads, half, terrain));
+	let roadGeo = $derived(makeRoads(context.roads, half, surface));
 </script>
 
 {#if roadGeo}

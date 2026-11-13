@@ -12,9 +12,7 @@
 	import ParcelLine from './ParcelLine.svelte';
 	import ParcelMask from './ParcelMask.svelte';
 	import ReuseZoneMesh from './ReuseZoneMesh.svelte';
-	import TerrainLayers from './TerrainLayers.svelte';
-	import { partOutline } from '../geo';
-	import { baseOf } from '../terrain';
+	import TerrainSurface from './TerrainSurface.svelte';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
 	import { setMainScene } from './cameraRef';
@@ -49,15 +47,12 @@
 
 	let allParts = $derived(store.plan.structures.flatMap((s) => s.parts));
 
-	// In 3D on terrain, each structure stands on the lowest layer under any of its pieces, so a
-	// building never floats and its pieces stay level with each other. Derived, never saved.
+	// In 3D on terrain, each structure stands on its graded pad, at the lowest ground under any
+	// of its pieces, so a building never floats and its pieces stay level. Derived, never saved.
 	let structureBase = $derived.by(() => {
-		const model = store.terrain3D;
 		const bases = new Map<string, number>();
-		if (!model) return bases;
-		for (const s of store.plan.structures) {
-			bases.set(s.id, Math.min(...s.parts.map((p) => baseOf(model, partOutline(p)))));
-		}
+		const ground = store.ground;
+		if (ground) store.plan.structures.forEach((s, i) => bases.set(s.id, ground.bases[i]));
 		return bases;
 	});
 	const baseFor = (s: Structure | undefined) => (s ? (structureBase.get(s.id) ?? 0) : 0);
@@ -209,7 +204,7 @@
 {#if store.viewMode === '3d'}
 	<!-- Pedestal base -->
 	<!-- On terrain, the board sits under the lowest layer -->
-	{@const boardTop = store.terrain3D ? store.terrain3D.minY - 0.01 : 0}
+	{@const boardTop = store.ground ? store.ground.minY - 0.01 : 0}
 	<T.Mesh position={[pedestal.cx, boardTop - DEPTH / 2, pedestal.cz]} receiveShadow>
 		<T.BoxGeometry args={[pedestal.w, DEPTH, pedestal.d]} />
 		<!-- Address mode: an off-white printed board; grid mode keeps the kraft base -->
@@ -222,15 +217,15 @@
 {/if}
 
 {#if store.terrain}
-	<TerrainLayers model={store.terrain} is3D={store.viewMode === '3d'} />
+	<TerrainSurface model={store.terrain} surface={store.ground} />
 {/if}
 
-<ContextLayer context={store.site.context} half={store.boardHalf} is3D={store.viewMode === '3d'} terrain={store.terrain3D} />
+<ContextLayer context={store.site.context} half={store.boardHalf} is3D={store.viewMode === '3d'} terrain={store.ground ? store.terrain : null} surface={store.ground} />
 
 {#if store.site.parcel && store.site.parcel.length >= 3}
 	<ParcelLine polygon={store.site.parcel} />
 	{#if isAddress && store.mode.type !== 'choosingParcel'}
-		<ParcelMask parcel={store.site.parcel} half={store.boardHalf} is3D={store.viewMode === '3d'} terrain={store.terrain3D} />
+		<ParcelMask parcel={store.site.parcel} half={store.boardHalf} is3D={store.viewMode === '3d'} surface={store.ground} />
 	{/if}
 {/if}
 
@@ -326,7 +321,7 @@
 {/if}
 
 {#each store.plan.trees as tree (tree.id)}
-	<T.Group position.y={store.terrain3D?.stepAt(tree.x, tree.y) ?? 0}>
+	<T.Group position.y={store.ground?.groundAt(tree.x, tree.y) ?? 0}>
 		<TreeMesh {tree} selected={store.selectedTreeId === tree.id} is3D={store.viewMode === '3d'} />
 	</T.Group>
 {/each}
