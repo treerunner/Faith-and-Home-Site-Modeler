@@ -36,4 +36,13 @@ describe('credits', () => {
 			'Data: OpenStreetMap contributors, Microsoft, Overture Maps Foundation, TomTom, Lehigh County via PASDA',
 		);
 	});
+
+	it('credits elevation only when the site has terrain', () => {
+		const terrain = { spacing: 5, heights: [100, 101, 102, 103] };
+		expect(creditGroups(ctx({ sources: ['overture'] })).map((g) => g.heading)).not.toContain('Elevation');
+		expect(creditGroups(ctx({ sources: ['overture'], terrain })).at(-1)).toEqual({ heading: 'Elevation', credits: ['USGS 3D Elevation Program (public domain)'] });
+		expect(creditLine(ctx({ sources: ['overture'], buildingSources: ['OpenStreetMap'], terrain }))).toBe(
+			'Data: OpenStreetMap contributors, Overture Maps Foundation, TomTom, USGS',
+		);
+	});
 });

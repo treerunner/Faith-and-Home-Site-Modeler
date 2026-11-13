@@ -51,19 +51,19 @@ Outbound requests identify themselves with the User-Agent in `src/lib/server/htt
 | Terms | Public domain; storing results is fine. No key. No service-level agreement |
 | Notes | US only. Interpolates along the street centerline, so points can land in the road |
 
-### Railway Postgres with PostGIS (our own storage)
-Not outside data, but where everything above ends up. Each site's neighborhood, roads, parcel and origin are fetched once at setup and saved with the site in `sites.data`. The origin and parcel are also written as PostGIS geography (`sites.origin`, `sites.parcel`) for spatial queries. Nothing is re-fetched when a site loads.
-
-## Planned
-
-### USGS 3DEP: elevation (M6.5 terrain)
+### USGS 3DEP: elevation
 | | |
 |---|---|
-| Provides | Ground elevation for stacked chipboard contours |
-| Source | `https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer`, `getSamples` with multipoint geometry (JSON) |
-| Resolution | 1 m lidar where available |
-| Terms | Public domain (USGS). No key |
-| Notes | US only. Verified near Lehigh: about 90 m of relief across 400 m |
+| Provides | Ground elevation for stacked chipboard terrain layers and plan contours |
+| Source | `https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage` |
+| Access | One request per board: `format=tiff`, `pixelType=F32`, `compression=None`, bilinear, 2.5 m pixels in degrees (`bboxSR=imageSR=4326`). About 130 KB, 5 to 10 s cold, under 1 s warm. Parsed by our own minimal GeoTIFF reader (`src/lib/server/tiff.ts`), resampled to a 5 m grid saved with the site. No key |
+| Called from | `src/lib/server/elevation.ts`, via `/api/terrain` (separate from `/api/context`, so setup never waits on it) |
+| Terms | Public domain (USGS) |
+| Attribution shown | "USGS 3D Elevation Program" when a site has terrain |
+| Coverage notes | US only, 1 m lidar where available. Outside the US the service hangs and returns 504 (London tested); the board stays flat. `getSamples` was tried first: over 20 s for 500 points, and 2,000 points timed out |
+
+### Railway Postgres with PostGIS (our own storage)
+Not outside data, but where everything above ends up. Each site's neighborhood, roads, parcel, terrain and origin are fetched once at setup and saved with the site in `sites.data`. The origin and parcel are also written as PostGIS geography (`sites.origin`, `sites.parcel`) for spatial queries. Nothing is re-fetched when a site loads.
 
 ## Considered, not used
 
@@ -80,10 +80,10 @@ Not outside data, but where everything above ends up. Each site's neighborhood, 
 | MapLibre and map tiles | Address picking happens in the model instead; no raster tiles in the model |
 
 ## Credits
-Built from what each site actually uses (`src/lib/modeler/credits.ts`). At setup, the distinct Overture building sources (`@geometry_source`) are saved with the site, so only those are credited; roads always credit OpenStreetMap and TomTom; parcels are credited only when a county parcel was used. Sites saved before 2026-11-13 get a general Overture building credit.
+Built from what each site actually uses (`src/lib/modeler/credits.ts`). At setup, the distinct Overture building sources (`@geometry_source`) are saved with the site, so only those are credited; roads always credit OpenStreetMap and TomTom; parcels are credited only when a county parcel was used; elevation only when the site has terrain. Sites saved before 2026-11-13 get a general Overture building credit.
 
 They appear in three places:
-- **Map:** a small "i" button in the canvas corner (address mode) opens the full credits, grouped by Buildings, Roads, Parcels.
+- **Map:** a small "i" button in the canvas corner (address mode) opens the full credits, grouped by Buildings, Roads, Parcels, Elevation.
 - **Analysis:** one "Data: …" line at the end of the report, so it prints with it.
 - **PNG export:** the same line printed in the image's bottom-right corner.
 
