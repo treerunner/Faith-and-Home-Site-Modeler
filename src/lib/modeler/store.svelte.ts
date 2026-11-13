@@ -1,8 +1,8 @@
-import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, ReuseZone, Site, Structure, Tree, Use } from './types';
+import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, ReuseZone, Site, Structure, Terrain, Tree, Use } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
-import { fetchContext, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
+import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
 import {
 	boardHalfFor,
 	buildingsInParcel,
@@ -84,6 +84,8 @@ class ModelerStore {
 	#planAspect = 0; // canvas width / height, reported by the plan camera
 	#fitPending = false;
 	#parcelVersion = 0; // bumped on every parcel change, so slow reloads can tell they're stale
+	#terrainVersion = 0; // bumped on every terrain request and address change, for the same reason
+	terrainState = $state<'idle' | 'loading' | 'failed'>('idle'); // not saved
 	// Address setup, between picking an address and finishing the parcel. Not saved.
 	setup = $state<{
 		context: ContextResponse;
@@ -125,6 +127,8 @@ class ModelerStore {
 	#reset(site: Site, siteSlug: string, planId: string, readOnly: boolean) {
 		this.site = site;
 		this.setup = null;
+		this.#terrainVersion++;
+		this.terrainState = 'idle';
 		this.planView = DEFAULT_VIEW;
 		this.fitPlan();
 		this.#savedJson = JSON.stringify(site);
@@ -978,6 +982,7 @@ class ModelerStore {
 			buildingSources: context.buildingSources,
 		};
 		this.site.siteType ??= this.suggestedSiteType;
+		void this.loadTerrain();
 		this.setup = { context, selected: [], prefill: null };
 		// The parcel under the address is the likely one: preselect it to confirm or change
 		const underAddress = this.parcelAt(0, 0);
@@ -1043,6 +1048,25 @@ class ModelerStore {
 		if (this.mode.type === 'drawingParcel') this.mode = { ...this.mode, cursorPoint: [x, y] };
 	}
 
+	// Ground elevation for the board, fetched apart from the neighborhood so setup never waits on
+	// it. Context, like the neighborhood: no undo step. Outside the US the board stays flat.
+	async loadTerrain() {
+		const origin = this.site.origin;
+		if (this.site.mode !== 'address' || !origin) return;
+		const version = ++this.#terrainVersion;
+		const half = this.boardHalf;
+		this.terrainState = 'loading';
+		let terrain: Terrain | null = null;
+		try {
+			terrain = await fetchTerrain(origin.lat, origin.lng, half);
+		} catch (e) {
+			console.error('could not load terrain', e);
+		}
+		if (version !== this.#terrainVersion || half !== this.boardHalf) return; // the board changed while loading
+		if (terrain) this.site.context.terrain = terrain;
+		this.terrainState = terrain ? 'idle' : 'failed';
+	}
+
 	// Half the board's width: it bounds pan and zoom, and in address mode the context
 	get boardHalf(): number {
 		return this.site.mode === 'address' ? (this.site.context.halfSize ?? CONTEXT_HALF_SIZE) : GROUND_HALF;
@@ -1074,6 +1098,7 @@ class ModelerStore {
 				buildingSources: context.buildingSources,
 				halfSize: half,
 			};
+			void this.loadTerrain(); // the bigger board needs its own
 			if (this.setup) this.setup = { ...this.setup, context: { ...context, parcels: this.setup.context.parcels } };
 			this.fitPlan();
 		} catch (e) {
@@ -1134,6 +1159,8 @@ class ModelerStore {
 		this.site.parcel = undefined;
 		this.site.context = { buildings: [], roads: [] };
 		this.#parcelVersion++;
+		this.#terrainVersion++;
+		this.terrainState = 'idle';
 		this.finishSetup();
 	}
 
