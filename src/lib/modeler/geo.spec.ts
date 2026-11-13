@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
 	boardHalfFor,
+	partOutline,
+	splitPart,
+	splitPolygon,
 	mergeParcels,
 	buildingsInParcel,
 	clipLineToBoard,
@@ -258,5 +261,77 @@ describe('mergeParcels', () => {
 	it('passes a single lot through', () => {
 		expect(mergeParcels([lot(0, 0, 5, 5)])).toEqual(lot(0, 0, 5, 5));
 		expect(mergeParcels([])).toBeNull();
+	});
+});
+
+describe('partOutline', () => {
+	it('places every shape in site coordinates', () => {
+		const rect: Part = { id: 'r', shape: 'rect', x: 10, y: 5, w: 4, d: 2, rotation: 0 };
+		expect(polygonArea(partOutline(rect))).toBeCloseTo(8);
+		const circle: Part = { ...rect, shape: 'circle', w: 10, d: 10 };
+		// A 32-sided polygon covers ~0.6% less than the true circle
+		expect(polygonArea(partOutline(circle)) / (Math.PI * 25)).toBeGreaterThan(0.99);
+		const tri: Part = { ...rect, shape: 'tri', w: 6, d: 6, rotation: 90 };
+		expect(polygonArea(partOutline(tri))).toBeCloseTo(18);
+		expect(polygonCentroid(partOutline({ ...rect, rotation: 45 }))[0]).toBeCloseTo(10);
+	});
+
+	it('matches a fitted poly part to its source outline', () => {
+		const l: Pt[] = rotate([[0, 0], [30, 0], [30, 12], [20, 12], [20, 22], [10, 22], [10, 12], [0, 12]], 25, [100, 50]);
+		const part = { id: 'p', ...fitFootprint(l) } as Part;
+		expect(polygonArea(partOutline(part))).toBeCloseTo(polygonArea(l), 0);
+	});
+});
+
+describe('splitPolygon', () => {
+	const rect: Pt[] = [[0, 0], [20, 0], [20, 10], [0, 10]];
+
+	it('cuts a rectangle in two, conserving area', () => {
+		const pieces = splitPolygon(rect, [12, -5], [12, 15]);
+		expect(pieces).toHaveLength(2);
+		expect(pieces.map(polygonArea).sort((a, b) => a - b)).toEqual([80, 120]);
+	});
+
+	it('cuts both arms of an L into three pieces', () => {
+		const l: Pt[] = [[0, 0], [30, 0], [30, 10], [10, 10], [10, 30], [0, 30]];
+		const pieces = splitPolygon(l, [-5, 25], [25, -5]); // diagonal across the corner
+		expect(pieces).toHaveLength(3);
+		expect(pieces.reduce((sum, p) => sum + polygonArea(p), 0)).toBeCloseTo(polygonArea(l));
+	});
+
+	it('returns nothing when the line misses or only grazes an edge', () => {
+		expect(splitPolygon(rect, [30, -5], [30, 15])).toEqual([]);
+		expect(splitPolygon(rect, [20, -5], [20, 15])).toEqual([]);
+		expect(splitPolygon(rect, [5, 5], [5, 5])).toEqual([]);
+	});
+});
+
+describe('splitPart', () => {
+	it('cuts a rotated rect into rect pieces that fill the original', () => {
+		const part: Part = { id: 'r', shape: 'rect', x: 0, y: 0, w: 30, d: 10, rotation: 30 };
+		// A line through the center, perpendicular to the long side
+		const across = rotate([[0, -20], [0, 20]], 30);
+		const pieces = splitPart(part, across[0], across[1])!;
+		expect(pieces).toHaveLength(2);
+		for (const p of pieces) {
+			expect(p.shape).toBe('rect');
+			expect(p.w * p.d).toBeCloseTo(150, 0);
+		}
+	});
+
+	it('cuts a poly church footprint into pieces whose areas add up', () => {
+		const cross: Pt[] = [[-5, -20], [5, -20], [5, -5], [15, -5], [15, 5], [5, 5], [5, 20], [-5, 20], [-5, 5], [-15, 5], [-15, -5], [-5, -5]];
+		const part = { id: 'c', ...fitFootprint(cross) } as Part;
+		expect(part.shape).toBe('poly');
+		const pieces = splitPart(part, [-30, 6], [30, 6])!; // cuts off the top arm
+		expect(pieces).toHaveLength(2);
+		const total = pieces.reduce((sum, p) => sum + partFootprint({ id: 'x', ...p } as Part), 0);
+		expect(total).toBeCloseTo(polygonArea(cross), 0);
+		expect(pieces.some((p) => p.shape === 'rect')).toBe(true); // the cut-off arm is a plain rectangle
+	});
+
+	it('returns null when the line misses the part', () => {
+		const part: Part = { id: 'r', shape: 'square', x: 0, y: 0, w: 6, d: 6, rotation: 0 };
+		expect(splitPart(part, [50, -10], [50, 10])).toBeNull();
 	});
 });

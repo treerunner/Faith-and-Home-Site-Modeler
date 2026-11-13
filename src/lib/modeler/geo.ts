@@ -4,6 +4,7 @@
 
 import polygonClipping from 'polygon-clipping';
 import { polygonArea } from './metrics';
+import { getPartCorners } from './snap';
 import type { Part, Site } from './types';
 
 export interface LatLng {
@@ -325,4 +326,62 @@ export function mergeParcels(parcels: Pt[][]): Pt[] | null {
 	const merged = polygonClipping.union(first, ...rest);
 	if (merged.length !== 1) return null;
 	return openRing(merged[0][0] as Pt[]); // outer ring; an enclosed hole would be a lot left out
+}
+
+// ── Cutting parts ───────────────────────────────────────────────────────────
+
+const CIRCLE_SEGMENTS = 32;
+const MIN_PIECE_AREA = 1; // m²; slivers from a cut along an edge are dropped
+
+// A part's outline in site coordinates, for any shape.
+export function partOutline(part: Part): Pt[] {
+	if (part.shape === 'rect' || part.shape === 'square') return getPartCorners(part);
+	let local: Pt[];
+	if (part.shape === 'tri') {
+		local = [[-part.w / 2, part.d / 2], [part.w / 2, part.d / 2], [0, -part.d / 2]];
+	} else if (part.shape === 'circle') {
+		local = Array.from({ length: CIRCLE_SEGMENTS }, (_, i): Pt => {
+			const a = (i / CIRCLE_SEGMENTS) * Math.PI * 2;
+			return [(Math.cos(a) * part.w) / 2, (Math.sin(a) * part.d) / 2];
+		});
+	} else {
+		local = (part.points ?? []).map(([u, v]): Pt => [u * part.w, v * part.d]);
+	}
+	const θ = (part.rotation * Math.PI) / 180;
+	const c = Math.cos(θ);
+	const s = Math.sin(θ);
+	return local.map(([x, y]): Pt => [part.x + x * c - y * s, part.y + x * s + y * c]);
+}
+
+// Cuts a polygon along the infinite line through a and b. Each side may hold several pieces
+// (a line through both arms of an L makes three). Empty if the line misses.
+export function splitPolygon(polygon: Pt[], a: Pt, b: Pt): Pt[][] {
+	const dx = b[0] - a[0];
+	const dy = b[1] - a[1];
+	const len = Math.hypot(dx, dy);
+	if (len === 0) return [];
+	// Half-planes as huge quads on either side of the line
+	const far = 1e5;
+	const [ux, uy] = [dx / len, dy / len];
+	const [nx, ny] = [-uy * far, ux * far];
+	const p1: Pt = [a[0] - ux * far, a[1] - uy * far];
+	const p2: Pt = [a[0] + ux * far, a[1] + uy * far];
+	const side = (sign: number): polygonClipping.Polygon => [[
+		p1, p2, [p2[0] + sign * nx, p2[1] + sign * ny], [p1[0] + sign * nx, p1[1] + sign * ny], p1,
+	]];
+	const subject: polygonClipping.Polygon = [[...polygon, polygon[0]]];
+	const pieces = [1, -1].map((sign) =>
+		polygonClipping
+			.intersection(subject, side(sign))
+			.map((p) => openRing(p[0] as Pt[]))
+			.filter((ring) => polygonArea(ring) >= MIN_PIECE_AREA),
+	);
+	// A real cut leaves something on both sides
+	return pieces[0].length && pieces[1].length ? [...pieces[0], ...pieces[1]] : [];
+}
+
+// A part cut into new part geometries, or null if the line doesn't cross it.
+export function splitPart(part: Part, a: Pt, b: Pt): FittedPart[] | null {
+	const pieces = splitPolygon(partOutline(part), a, b);
+	return pieces.length ? pieces.map(fitFootprint) : null;
 }
