@@ -6,7 +6,7 @@
 
 	// useThrelte().size is a CurrentReadable backed by a $state.raw; reading
 	// .current inside $effect registers it as a reactive dependency.
-	const { size: sizeStore } = useThrelte();
+	const { size: sizeStore, invalidate } = useThrelte();
 
 	let cam: THREE.OrthographicCamera | undefined = $state();
 
@@ -24,6 +24,8 @@
 		cam.updateProjectionMatrix();
 		cam.updateMatrixWorld();
 		setPlanCamera(cam);
+		// Rendering is on demand; a camera changed by hand (like a wheel zoom) needs a new frame
+		invalidate();
 	});
 </script>
 
