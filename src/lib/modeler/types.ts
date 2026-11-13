@@ -71,6 +71,11 @@ export interface CongregationProfile {
 	tenure?: 'new' | 'recent' | 'established' | 'historic';
 	ownership?: 'owned' | 'leased';
 	notes?: string;
+	// Proposed culture questions, drafts for the team to review (see docs/PLAN.md)
+	partnering?: 'open' | 'unsure' | 'not_now'; // would partner with a housing or community organization
+	capacity?: 'volunteers' | 'some_staff' | 'staffed'; // who would steward a project
+	change?: 'preserve' | 'adapt' | 'transform'; // how much change to the property feels right
+	role?: 'gathering' | 'service' | 'housing_partner'; // role wanted in the neighborhood
 }
 
 export interface Tree {
