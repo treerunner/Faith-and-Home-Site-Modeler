@@ -2,7 +2,7 @@
 	import { T } from '@threlte/core';
 	import * as THREE from 'three';
 	import { COLORS } from '../colors';
-	import type { GradedSurface } from '../terrain';
+	import type { TerrainSurface } from '../terrain';
 	import { drapeGeometry } from './drape';
 
 	// Dims the board outside the chosen parcel so the property reads as the focus:
@@ -12,7 +12,7 @@
 		parcel: [number, number][];
 		half: number; // board half-width
 		is3D: boolean;
-		surface: GradedSurface | null; // in 3D: laid on it
+		surface: TerrainSurface | null; // in 3D: laid on it
 	}
 
 	let { parcel, half, is3D, surface }: Props = $props();
@@ -21,6 +21,7 @@
 	// Plan: just above the foam footprint slabs (0.05), below parts (0.1).
 	// 3D: on the board, ordered by polygonOffset above roads (-1) and below open spaces (-2).
 	const PLAN_Y = 0.06;
+	const DRAPED_Y = 0.06; // on terrain: above roads (0.04), below open spaces (0.08)
 
 	let geo = $derived.by(() => {
 		const h = half;
@@ -37,7 +38,7 @@
 	});
 </script>
 
-<T.Mesh geometry={geo} position={[0, is3D ? 0.002 : PLAN_Y, 0]} renderOrder={1}>
+<T.Mesh geometry={geo} position={[0, surface ? DRAPED_Y : is3D ? 0.002 : PLAN_Y, 0]} renderOrder={1}>
 	<T.MeshBasicMaterial
 		color={COLORS.existing}
 		transparent

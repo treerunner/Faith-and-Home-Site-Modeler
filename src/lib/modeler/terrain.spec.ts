@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { APRON, baseOf, contourInterval, drapeLine, drapeTriangles, gradedSurface, terrainModel, type GradedSurface } from './terrain';
+import { buildingFooting, contourInterval, drapeLine, drapeTriangles, footingOf, terrainModel, terrainSurface, type TerrainSurface } from './terrain';
 import type { Terrain } from './types';
 
 type Pt = [number, number];
@@ -20,7 +20,7 @@ const rect = (x: number, y: number, w: number, d: number): Pt[] => [[x, y], [x +
 const slope = grid(100, 5, (_x, y) => 100 + y / 10);
 
 // Mesh triangles in site coordinates, from the scene buffer (x, up, z)
-function meshTriangles(s: GradedSurface): P3[][] {
+function meshTriangles(s: TerrainSurface): P3[][] {
 	const out: P3[][] = [];
 	for (let i = 0; i < s.positions.length; i += 9) {
 		const p = s.positions;
@@ -63,77 +63,53 @@ describe('terrainModel', () => {
 		expect(new Set(m.contours.filter((c) => c.index).map((c) => Math.round(c.a[2])))).toEqual(new Set([0, 10]));
 	});
 
-	it('bases a footprint on the lowest ground under it, without rounding', () => {
-		expect(baseOf(m, rect(-10, 3, 20, 30))).toBeCloseTo(0.3);
+	it('foots a building between the lowest and highest ground under it', () => {
+		// 3 m to 33 m south: ground from 0.3 to 3.3
+		expect(footingOf(m, rect(-10, 3, 20, 30))).toEqual({ base: expect.closeTo(0.3), floor: expect.closeTo(3.3) });
 		const bowl = terrainModel(grid(100, 5, (x, y) => (Math.abs(x) < 6 && Math.abs(y) < 6 ? 95 : 105 + y / 50)), 100)!;
-		expect(baseOf(bowl, rect(-30, -30, 60, 60))).toBeCloseTo(bowl.heightAt(0, 0));
+		expect(footingOf(bowl, rect(-30, -30, 60, 60)).base).toBeCloseTo(bowl.heightAt(0, 0));
+	});
+
+	it('gives a building of several pieces one floor and one plinth', () => {
+		// Like St. Timothy's: 4 m of fall across the church and its wing
+		expect(buildingFooting(m, [rect(-15, -20, 30, 20), rect(-5, 0, 10, 20)])).toEqual({ base: expect.closeTo(-2), floor: expect.closeTo(2) });
 	});
 });
 
-describe('gradedSurface', () => {
+describe('terrainSurface', () => {
 	const m = terrainModel(slope, 100)!;
-	// A church 40 m deep running up the slope, like St. Timothy's: 4 m of fall under it
-	const church = rect(-15, -20, 30, 40);
-	const s = gradedSurface(m, [[church]]);
+	const s = terrainSurface(m);
 
-	it('grades a pad to the lowest ground under the building', () => {
-		expect(s.bases).toEqual([expect.closeTo(-2)]);
-		for (const [x, y] of [[0, 0], [-14, -19], [14, 19], [0, 18]] as Pt[]) expect(s.groundAt(x, y)).toBeCloseTo(-2, 5);
+	it('is the natural ground, meeting buildings flush', () => {
+		for (const [x, y] of [[0, 0], [12.5, -31], [-99, 99]] as Pt[]) expect(s.groundAt(x, y)).toBeCloseTo(m.heightAt(x, y), 5);
 	});
 
-	it('returns to the slope across a bank', () => {
-		// Uphill (south) of the church: a cut from the pad back up to the slope over APRON m
-		expect(s.groundAt(0, 20 + APRON)).toBeCloseTo(m.heightAt(0, 20 + APRON), 5);
-		expect(s.groundAt(0, 30)).toBeCloseTo(m.heightAt(0, 30), 5);
-		const mid = s.groundAt(0, 20 + APRON / 2);
-		expect(mid).toBeGreaterThan(-2);
-		expect(mid).toBeLessThan(m.heightAt(0, 20 + APRON / 2));
-		// The uphill wall stands clear: the pad is 4 m below the natural ground there
-		expect(m.heightAt(0, 20) - s.groundAt(0, 19.5)).toBeGreaterThan(3.9);
-	});
-
-	it('lets the nearest footprint win where pads meet', () => {
-		const two = gradedSurface(m, [[rect(-20, -40, 10, 10)], [rect(-8, 20, 10, 10)]]);
-		expect(two.bases[0]).toBeCloseTo(-4);
-		expect(two.bases[1]).toBeCloseTo(2);
-		expect(two.groundAt(-15, -35)).toBeCloseTo(-4, 5);
-		expect(two.groundAt(-3, 25)).toBeCloseTo(2, 5);
-	});
-
-	it('covers the board exactly, facing up, finer only near buildings', () => {
+	it('covers the board exactly with the grid triangles, facing up', () => {
 		const tris = meshTriangles(s);
+		expect(tris).toHaveLength(40 * 40 * 2);
 		const total = tris.reduce((a, t) => a + area(t.map((p) => [p[0], p[1]] as Pt)), 0);
 		expect(total).toBeCloseTo(200 * 200, 3);
-		const plain = gradedSurface(m, []);
-		expect(plain.positions.length / 9).toBe(40 * 40 * 2);
-		// The church and its bank (x -18 to 18, y -23 to 23) reach 8 x 10 cells; each splits into 10 x 10 squares
-		expect(tris.length).toBe((40 * 40 - 80) * 2 + 80 * 200);
-		for (const t of tris) {
-			const [a, b, c] = t;
+		for (const [a, b, c] of tris) {
 			const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
 			expect(cross).toBeLessThanOrEqual(0); // clockwise in site coordinates: up in the scene
 		}
 		for (let i = 1; i < s.normals.length; i += 3) expect(s.normals[i]).toBeGreaterThan(0);
 	});
 
-	it('etches contours on the surface, around the pad', () => {
-		for (const c of s.contours) {
-			for (const p of [c.a, c.b]) expect(s.groundAt(p[0], p[1])).toBeCloseTo(p[2], 3);
-		}
-		// No contour crosses the level pad
-		expect(s.contours.some((c) => c.a[0] > -14 && c.a[0] < 14 && c.a[1] > -19 && c.a[1] < 19)).toBe(false);
+	it('etches the natural contours on it', () => {
+		for (const c of s.contours) for (const p of [c.a, c.b]) expect(s.groundAt(p[0], p[1])).toBeCloseTo(p[2], 3);
 	});
 
 	it('runs its edge around the board on the surface', () => {
 		expect(s.edge[0]).toEqual([-100, -100, expect.closeTo(-10)]);
-		expect(s.edge).toHaveLength(4 * 400);
+		expect(s.edge).toHaveLength(4 * 40);
 		expect(s.minY).toBeCloseTo(-10);
 	});
 });
 
 describe('drape', () => {
 	const m = terrainModel(slope, 100)!;
-	const s = gradedSurface(m, [[rect(-15, -20, 30, 40)]]);
+	const s = terrainSurface(m);
 
 	it('lays a flat shape on the surface, keeping its area', () => {
 		const tris: [Pt, Pt, Pt][] = [[[20, 0], [60, 0], [60, 30]], [[20, 0], [60, 30], [20, 30]]];
@@ -142,7 +118,7 @@ describe('drape', () => {
 		for (const p of pieces) for (const q of p) expect(q[2]).toBeCloseTo(s.groundAt(q[0], q[1]), 3);
 	});
 
-	it('lays a line on the surface, across the pad', () => {
+	it('lays a line on the surface', () => {
 		const segs = drapeLine(s, [[0, -40], [0, 40]]);
 		expect(segs.reduce((a, g) => a + Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]), 0)).toBeCloseTo(80, 3);
 		for (const g of segs) for (const q of [g.a, g.b]) expect(q[2]).toBeCloseTo(s.groundAt(q[0], q[1]), 3);
@@ -159,7 +135,7 @@ describe('on real ground', async () => {
 	it('builds the surface quickly', () => {
 		const t = performance.now();
 		const m = terrainModel(terrain, 150)!;
-		const s = gradedSurface(m, [[rect(-12, -10, 24, 14)], [rect(-8, 8, 12, 8)], [rect(40, -20, 15, 12)]]);
+		const s = terrainSurface(m);
 		expect(performance.now() - t).toBeLessThan(300);
 		expect(s.positions.length).toBeGreaterThan(0);
 	});
@@ -169,7 +145,7 @@ describe('on real ground', async () => {
 		for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) heights.push(Math.round((118 + 12 * Math.sin(i / 20) + 10 * Math.cos(j / 25)) * 10) / 10);
 		const t = performance.now();
 		const m = terrainModel({ spacing: 5, heights }, 400)!;
-		gradedSurface(m, [[rect(-12, -10, 24, 14)], [rect(-8, 8, 12, 8)], [rect(40, -20, 15, 12)]]);
+		terrainSurface(m);
 		expect(performance.now() - t).toBeLessThan(300);
 	});
 });

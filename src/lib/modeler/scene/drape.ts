@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { drapeLine, drapeTriangles, type GradedSurface } from '../terrain';
+import { drapeLine, drapeTriangles, type TerrainSurface } from '../terrain';
 
 type Pt = [number, number];
 type P3 = [number, number, number]; // site x, site y, height
 
 // Lays flat scene geometry (built on the board, y constant) onto the terrain surface: each
 // triangle is split where it crosses surface triangles, and each piece follows the surface.
-export function drapeGeometry(geo: THREE.BufferGeometry, surface: GradedSurface): THREE.BufferGeometry {
+export function drapeGeometry(geo: THREE.BufferGeometry, surface: TerrainSurface): THREE.BufferGeometry {
 	const pos = geo.getAttribute('position');
 	const index = geo.getIndex();
 	const count = index ? index.count : pos.count;
@@ -40,7 +40,7 @@ export function piecesGeometry(pieces: P3[][]): THREE.BufferGeometry {
 }
 
 // A polyline as segment pairs for LineSegments: flat at `y`, or on the surface raised by `y`
-export function lineGeometry(points: Pt[], y: number, surface: GradedSurface | null): THREE.BufferGeometry {
+export function lineGeometry(points: Pt[], y: number, surface: TerrainSurface | null): THREE.BufferGeometry {
 	const segs: { a: P3; b: P3 }[] = surface
 		? drapeLine(surface, points)
 		: points.slice(0, -1).map((a, i) => ({ a: [a[0], a[1], 0], b: [points[i + 1][0], points[i + 1][1], 0] }));

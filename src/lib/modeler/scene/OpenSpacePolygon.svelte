@@ -15,6 +15,7 @@
 	let { openSpace, draft = false, selected = false }: Props = $props();
 
 	const Y_FILL = 0.01;   // above grid, below parts
+	const DRAPED_Y = 0.08; // on terrain: above roads and the parcel mask
 	const Y_HANDLE = 0.3;
 	const HANDLE_R = 0.9;
 
@@ -41,7 +42,7 @@
 
 {#if geo}
 	<!-- Visible fill — polygonOffset pulls depth toward camera to beat the pedestal -->
-	<T.Mesh position={[0, Y_FILL, 0]} geometry={geo}>
+	<T.Mesh position={[0, store.ground ? DRAPED_Y : Y_FILL, 0]} geometry={geo}>
 		<T.MeshLambertMaterial {color} {opacity} transparent side={THREE.DoubleSide}
 			polygonOffset={true} polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
 	</T.Mesh>

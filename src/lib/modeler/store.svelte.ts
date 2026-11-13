@@ -2,7 +2,7 @@ import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, Pal
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
-import { gradedSurface, terrainModel } from './terrain';
+import { terrainModel, terrainSurface, type TerrainSurface } from './terrain';
 import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
 import {
 	boardHalfFor,
@@ -16,7 +16,6 @@ import {
 	CONTEXT_HALF_SIZE,
 	fitFootprint,
 	GROUND_HALF,
-	partOutline,
 	pointInPolygon,
 	storiesFromTags,
 	suggestSiteType,
@@ -92,13 +91,11 @@ class ModelerStore {
 	terrain = $derived(
 		this.site.mode === 'address' && this.site.context.terrain ? terrainModel(this.site.context.terrain, this.boardHalf) : null,
 	);
-	// The ground 3D shows: each structure on a graded pad. Plan view and editing stay flat, and
-	// moving a building in plan view doesn't rebuild it.
-	ground = $derived(
-		this.viewMode === '3d' && this.terrain
-			? gradedSurface(this.terrain, this.plan.structures.map((s) => s.parts.map(partOutline)))
-			: null,
-	);
+	#surface = $derived(this.terrain ? terrainSurface(this.terrain) : null);
+	// The ground 3D shows; plan view and editing stay flat
+	get ground(): TerrainSurface | null {
+		return this.viewMode === '3d' ? this.#surface : null;
+	}
 	// Address setup, between picking an address and finishing the parcel. Not saved.
 	setup = $state<{
 		context: ContextResponse;

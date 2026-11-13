@@ -4,7 +4,7 @@
 	import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 	import type { SiteContext } from '../types';
 	import { COLORS } from '../colors';
-	import { baseOf, type GradedSurface, type TerrainModel } from '../terrain';
+	import { footingOf, type TerrainSurface, type TerrainModel } from '../terrain';
 	import { drapeGeometry } from './drape';
 
 	// Neighbors as white foam blocks and roads printed on the base board. Both are built as
@@ -14,8 +14,8 @@
 		context: SiteContext;
 		half: number; // board half-width
 		is3D: boolean;
-		terrain: TerrainModel | null; // in 3D: foam stands on the lowest ground under it
-		surface: GradedSurface | null; // in 3D: roads lie on it
+		terrain: TerrainModel | null; // in 3D: foam meets the ground flush, full height uphill
+		surface: TerrainSurface | null; // in 3D: roads lie on it
 	}
 
 	let { context, half, is3D, terrain, surface }: Props = $props();
@@ -26,6 +26,9 @@
 	// Printed on the board: nearly flush, and polygonOffset (not height) keeps roads on top of
 	// the board at any distance while staying under open spaces (offset -2)
 	const ROAD_Y = 0.002;
+	// On terrain, everything printed is lifted a little more: on a slope a few millimeters lose
+	// the depth test as the camera turns, and roads speckle. Order: roads, parcel mask, open spaces.
+	const DRAPED_ROAD_Y = 0.04;
 	const FOAM_EDGE = '#cfcac0';
 
 	function makeBuildings(buildings: SiteContext['buildings'], flat: boolean, model: TerrainModel | null): THREE.BufferGeometry | null {
@@ -33,11 +36,13 @@
 			.filter((b) => b.polygon.length >= 3)
 			.map((b) => {
 				const shape = new THREE.Shape(b.polygon.map(([x, y]) => new THREE.Vector2(x, y)));
-				const depth = flat ? PLAN_SLAB : b.height;
+				// On terrain: from the lowest ground under it, its height above the highest
+				const footing = model ? footingOf(model, b.polygon) : { base: 0, floor: 0 };
+				const depth = flat ? PLAN_SLAB : b.height + footing.floor - footing.base;
 				const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
 				// Same mapping as parts: shape y -> site y (+Z); extrusion -> up
 				geo.rotateX(Math.PI / 2);
-				geo.translate(0, depth + (model ? baseOf(model, b.polygon) : 0), 0);
+				geo.translate(0, depth + footing.base, 0);
 				return geo;
 			});
 		return geos.length ? mergeGeometries(geos) : null;
@@ -50,7 +55,7 @@
 	};
 	const JOINT_SEGMENTS = 10;
 
-	function makeRoads(roads: SiteContext['roads'], half: number, surface: GradedSurface | null): THREE.BufferGeometry | null {
+	function makeRoads(roads: SiteContext['roads'], half: number, surface: TerrainSurface | null): THREE.BufferGeometry | null {
 		const pos: number[] = [];
 		// Clamped to the board so the print stops at its edge instead of overhanging
 		const c = (v: number) => Math.max(-half, Math.min(half, v));
@@ -82,7 +87,7 @@
 		geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
 		if (surface) {
 			const draped = drapeGeometry(geo, surface);
-			draped.translate(0, ROAD_Y, 0);
+			draped.translate(0, DRAPED_ROAD_Y, 0);
 			return draped;
 		}
 		geo.computeVertexNormals();

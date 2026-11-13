@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { drapeGeometry, piecesGeometry } from './drape';
-import { gradedSurface, terrainModel } from '../terrain';
+import { terrainModel, terrainSurface } from '../terrain';
 
 type Pt = [number, number];
 
@@ -34,7 +34,7 @@ describe('the terrain surface', () => {
 		const n = 21, heights: number[] = [];
 		for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) heights.push(100 + i * 0.5 + Math.sin(j / 3));
 		const model = terrainModel({ spacing: 5, heights }, 50)!;
-		const surface = gradedSurface(model, [[[[-5, -5], [5, -5], [5, 5], [-5, 5]]]]);
+		const surface = terrainSurface(model);
 		const ground = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(surface.positions, 3));
 		for (const y of faceNormalsY(ground)) expect(y).toBeGreaterThan(0);
 		const road = new THREE.PlaneGeometry(20, 6).rotateX(-Math.PI / 2);

@@ -2,7 +2,7 @@
 	import { T } from '@threlte/core';
 	import * as THREE from 'three';
 	import { COLORS, FH } from '../colors';
-	import type { Contour, GradedSurface, TerrainModel } from '../terrain';
+	import type { Contour, TerrainSurface, TerrainModel } from '../terrain';
 
 	// Ground as a milled site model: in 3D, a smooth surface in the board's off-white with
 	// contours etched on it and buildings on graded pads. Plan view prints the natural contours,
@@ -10,7 +10,7 @@
 
 	interface Props {
 		model: TerrainModel;
-		surface: GradedSurface | null; // in 3D
+		surface: TerrainSurface | null; // in 3D
 	}
 
 	let { model, surface }: Props = $props();
@@ -27,7 +27,7 @@
 		);
 	}
 
-	function surfaceGeometry(s: GradedSurface): THREE.BufferGeometry {
+	function surfaceGeometry(s: TerrainSurface): THREE.BufferGeometry {
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.BufferAttribute(s.positions, 3));
 		g.setAttribute('normal', new THREE.BufferAttribute(s.normals, 3));
@@ -35,7 +35,7 @@
 	}
 
 	// The board's sides: from the surface's edge down to the base board under its lowest point
-	function sideGeometry(s: GradedSurface): THREE.BufferGeometry {
+	function sideGeometry(s: TerrainSurface): THREE.BufferGeometry {
 		const out: number[] = [];
 		const lo = s.minY - 0.01;
 		for (let i = 0; i < s.edge.length; i++) {

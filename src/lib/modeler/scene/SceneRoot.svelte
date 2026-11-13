@@ -13,6 +13,8 @@
 	import ParcelMask from './ParcelMask.svelte';
 	import ReuseZoneMesh from './ReuseZoneMesh.svelte';
 	import TerrainSurface from './TerrainSurface.svelte';
+	import { partOutline } from '../geo';
+	import { buildingFooting } from '../terrain';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
 	import { setMainScene } from './cameraRef';
@@ -47,15 +49,16 @@
 
 	let allParts = $derived(store.plan.structures.flatMap((s) => s.parts));
 
-	// In 3D on terrain, each structure stands on its graded pad, at the lowest ground under any
-	// of its pieces, so a building never floats and its pieces stay level. Derived, never saved.
-	let structureBase = $derived.by(() => {
-		const bases = new Map<string, number>();
-		const ground = store.ground;
-		if (ground) store.plan.structures.forEach((s, i) => bases.set(s.id, ground.bases[i]));
-		return bases;
+	// In 3D on terrain, the ground meets each building flush. Its floors start at the highest
+	// ground under any of its pieces, so it shows its full height uphill; a plinth reaches down to
+	// the lowest, so it never floats. Derived, never saved.
+	let footings = $derived.by(() => {
+		const out = new Map<string, { base: number; floor: number }>();
+		const model = store.ground ? store.terrain : null;
+		if (model) for (const s of store.plan.structures) if (s.parts.length) out.set(s.id, buildingFooting(model, s.parts.map(partOutline)));
+		return out;
 	});
-	const baseFor = (s: Structure | undefined) => (s ? (structureBase.get(s.id) ?? 0) : 0);
+	const baseFor = (s: Structure | undefined) => (s ? (footings.get(s.id)?.floor ?? 0) : 0);
 
 	// Cutting: the building being cut is highlighted, with a dashed line from the first click
 	let cutting = $derived(store.mode.type === 'cutting' ? store.mode : null);
@@ -271,6 +274,17 @@
 
 {#each allParts as part (part.id)}
 	{@const struct = partStructureMap.get(part.id)}
+	{@const footing = struct ? footings.get(struct.id) : undefined}
+	{#if footing && footing.floor - footing.base > 0.01}
+		<T.Group position.y={footing.base}>
+			<PartMesh
+				{part}
+				selected={store.selectedPartId === part.id || cutPartIds.has(part.id)}
+				status={partStatusMap.get(part.id) ?? 'existing'}
+				height={footing.floor - footing.base}
+			/>
+		</T.Group>
+	{/if}
 	<T.Group position.y={baseFor(struct)}>
 		<PartMesh
 			{part}

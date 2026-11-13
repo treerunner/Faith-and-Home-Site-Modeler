@@ -2,7 +2,7 @@ import { pointInPolygon } from './geo';
 import type { Terrain } from './types';
 
 // Terrain as a milled site model: a smooth surface from the elevation grid, with contours
-// etched on it and a level pad graded under each building. Pure, and derived from the stored
+// etched on it. The ground meets buildings flush, as it does. Pure, and derived from the stored
 // heights on every render; nothing here is saved.
 //
 // The grid is split into triangles (each cell on its NW-SE diagonal), and the surface is flat
@@ -14,8 +14,6 @@ type P3 = [number, number, number]; // site x, site y, height
 const INTERVALS = [0.5, 1, 2, 5];
 const MAX_CONTOURS = 15;
 const EPS = 1e-9;
-export const APRON = 3; // meters of bank between a pad and the natural slope
-const PAD_CELL = 0.5; // mesh resolution near pads, so their edges and banks stay crisp
 
 // The finest contour interval that keeps the board to MAX_CONTOURS lines, or null when it is
 // about flat (and gets no terrain at all)
@@ -96,9 +94,10 @@ export function terrainModel(terrain: Terrain, half: number): TerrainModel | nul
 	return { interval, half, spacing, zero, heightAt: (x, y) => absoluteAt(x, y) - zero, contours };
 }
 
-// The lowest natural ground under a footprint, so a building never floats: its corners, points
-// along its edges, its center and the grid points inside it
-export function baseOf(model: TerrainModel, footprint: Pt[]): number {
+// The natural ground under a footprint, sampled at its corners, points along its edges, its
+// center and the grid points inside it. A building's floors start at the highest of it, so it
+// shows its full height uphill; below them a plinth reaches the lowest, so it never floats.
+export function footingOf(model: TerrainModel, footprint: Pt[]): { base: number; floor: number } {
 	const samples: Pt[] = [];
 	for (let i = 0; i < footprint.length; i++) {
 		const [x1, y1] = footprint[i], [x2, y2] = footprint[(i + 1) % footprint.length];
@@ -112,27 +111,26 @@ export function baseOf(model: TerrainModel, footprint: Pt[]): number {
 	for (let x = Math.ceil((minX + h) / g) * g - h; x <= maxX; x += g)
 		for (let y = Math.ceil((minY + h) / g) * g - h; y <= maxY; y += g)
 			if (pointInPolygon([x, y], footprint)) samples.push([x, y]);
-	return Math.min(...samples.map(([x, y]) => model.heightAt(x, y)));
+	const heights = samples.map(([x, y]) => model.heightAt(x, y));
+	return { base: Math.min(...heights), floor: Math.max(...heights) };
 }
 
-// ── Graded surface ───────────────────────────────────────────────────────────
+// The footing of a building made of several pieces: one floor level and one plinth for all
+export function buildingFooting(model: TerrainModel, outlines: Pt[][]): { base: number; floor: number } {
+	const each = outlines.map((o) => footingOf(model, o));
+	return { base: Math.min(...each.map((f) => f.base)), floor: Math.max(...each.map((f) => f.floor)) };
+}
 
-export interface GradedSurface {
+// ── Surface mesh ─────────────────────────────────────────────────────────────
+
+export interface TerrainSurface {
 	positions: Float32Array; // triangles in scene coordinates (x, up, z = site y), facing up
 	normals: Float32Array;
-	bases: number[]; // per structure, the height its pad is graded to
 	groundAt(x: number, y: number): number; // the drawn surface's height
-	contours: Contour[]; // etched on the surface, bending around pads
+	contours: Contour[]; // etched on the surface: the natural contours, which lie on it
 	edge: P3[]; // the surface along the board's outer edge, clockwise, for its side
 	minY: number;
 	trianglesIn(minX: number, minY: number, maxX: number, maxY: number): P3[][];
-}
-
-function distToSegment([px, py]: Pt, [ax, ay]: Pt, [bx, by]: Pt): number {
-	const dx = bx - ax, dy = by - ay;
-	const len2 = dx * dx + dy * dy;
-	const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
-	return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
 // Height of the plane through a triangle at a point
@@ -151,72 +149,22 @@ function inTriangle(tri: P3[], x: number, y: number): boolean {
 	return !((d1 < -EPS || d2 < -EPS || d3 < -EPS) && (d1 > EPS || d2 > EPS || d3 > EPS));
 }
 
-// The ground with each structure on a level pad: `structures` lists each one's piece outlines.
-// A pad sits at the lowest natural ground under its structure, so the building stands at full
-// height and never floats; around it, a bank APRON m wide returns to the slope.
-export function gradedSurface(model: TerrainModel, structures: Pt[][][]): GradedSurface {
-	const { half, spacing, interval, zero } = model;
-	const bases = structures.map((parts) => (parts.length ? Math.min(...parts.map((p) => baseOf(model, p))) : 0));
-	const pads = structures.flatMap((parts, s) =>
-		parts.map((outline) => {
-			const xs = outline.map((p) => p[0]), ys = outline.map((p) => p[1]);
-			return {
-				outline,
-				base: bases[s],
-				box: [Math.min(...xs) - APRON, Math.min(...ys) - APRON, Math.max(...xs) + APRON, Math.max(...ys) + APRON],
-			};
-		}),
-	);
+// The natural ground as a mesh for 3D: the grid's own triangles, with smooth normals
+export function terrainSurface(model: TerrainModel): TerrainSurface {
+	const { half, spacing } = model;
+	const ground = model.heightAt;
 
-	// Inside a footprint: its pad. In the bank: from the pad back to the slope. The nearest
-	// footprint wins where pads meet.
-	function ground(x: number, y: number): number {
-		let best = APRON, base = 0;
-		for (const pad of pads) {
-			const [x0, y0, x1, y1] = pad.box;
-			if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-			let d = 0;
-			if (!pointInPolygon([x, y], pad.outline)) {
-				d = Infinity;
-				for (let i = 0; i < pad.outline.length; i++) d = Math.min(d, distToSegment([x, y], pad.outline[i], pad.outline[(i + 1) % pad.outline.length]));
-			}
-			if (d < best || (d === 0 && best === 0 && pad.base < base)) {
-				best = d;
-				base = pad.base;
-			}
-		}
-		const natural = model.heightAt(x, y);
-		if (best >= APRON) return natural;
-		const t = best / APRON;
-		return base * (1 - t) + natural * t;
-	}
-
-	// Mesh: 5 m cells, subdivided where a pad or its bank reaches. Triangles are emitted cell by
-	// cell, so each cell's triangles are one run, for lookups.
+	// Triangles are emitted cell by cell, so each cell's triangles are one run, for lookups
 	const cells = Math.round((2 * half) / spacing);
 	const tris: P3[][] = [];
 	const cellStart = new Int32Array(cells * cells + 1);
-	const touchesPad = (x0: number, y0: number, x1: number, y1: number) =>
-		pads.some(({ box }) => x1 >= box[0] && x0 <= box[2] && y1 >= box[1] && y0 <= box[3]);
 	for (let i = 0; i < cells; i++) {
 		for (let j = 0; j < cells; j++) {
 			cellStart[i * cells + j] = tris.length;
-			const x0 = -half + j * spacing, y0 = -half + i * spacing;
-			const k = touchesPad(x0, y0, x0 + spacing, y0 + spacing) ? Math.round(spacing / PAD_CELL) : 1;
-			const step = spacing / k;
-			const row: P3[][] = [];
-			for (let a = 0; a <= k; a++) {
-				row.push([]);
-				for (let b = 0; b <= k; b++) {
-					const x = x0 + b * step, y = y0 + a * step;
-					row[a].push([x, y, ground(x, y)]);
-				}
-			}
-			for (let a = 0; a < k; a++) {
-				for (let b = 0; b < k; b++) {
-					tris.push([row[a][b], row[a][b + 1], row[a + 1][b + 1]], [row[a][b], row[a + 1][b + 1], row[a + 1][b]]);
-				}
-			}
+			const x0 = -half + j * spacing, y0 = -half + i * spacing, x1 = x0 + spacing, y1 = y0 + spacing;
+			const p00: P3 = [x0, y0, ground(x0, y0)], p10: P3 = [x1, y0, ground(x1, y0)];
+			const p01: P3 = [x0, y1, ground(x0, y1)], p11: P3 = [x1, y1, ground(x1, y1)];
+			tris.push([p00, p10, p11], [p00, p11, p01]);
 		}
 	}
 	cellStart[cells * cells] = tris.length;
@@ -245,7 +193,7 @@ export function gradedSurface(model: TerrainModel, structures: Pt[][][]): Graded
 		const key = `${x.toFixed(3)},${y.toFixed(3)}`;
 		let nrm = normalCache.get(key);
 		if (!nrm) {
-			const h = PAD_CELL / 2;
+			const h = spacing / 2;
 			const gx = (ground(x + h, y) - ground(x - h, y)) / (2 * h);
 			const gy = (ground(x, y + h) - ground(x, y - h)) / (2 * h);
 			const len = Math.hypot(gx, 1, gy);
@@ -272,19 +220,16 @@ export function gradedSurface(model: TerrainModel, structures: Pt[][][]): Graded
 		});
 	});
 
-	const contours: Contour[] = [];
-	for (const tri of tris) contoursOf(tri, interval, zero, contours);
-
-	// The outer edge, at the mesh's finest spacing so the side meets the surface everywhere
+	// The outer edge, at the grid points, where the side meets the surface
 	const edge: P3[] = [];
-	const steps = Math.round((2 * half) / PAD_CELL);
+	const steps = cells;
 	const along = (s: number) => -half + (2 * half * s) / steps;
 	for (let s = 0; s < steps; s++) edge.push([along(s), -half, groundAt(along(s), -half)]);
 	for (let s = 0; s < steps; s++) edge.push([half, along(s), groundAt(half, along(s))]);
 	for (let s = steps; s > 0; s--) edge.push([along(s), half, groundAt(along(s), half)]);
 	for (let s = steps; s > 0; s--) edge.push([-half, along(s), groundAt(-half, along(s))]);
 
-	return { positions, normals, bases, groundAt, contours, edge, minY, trianglesIn };
+	return { positions, normals, groundAt, contours: model.contours, edge, minY, trianglesIn };
 }
 
 // ── Draping ──────────────────────────────────────────────────────────────────
@@ -328,7 +273,7 @@ const bbox = (pts: Pt[]) => {
 
 // Lays flat triangles (a road ribbon, a triangulated open space) onto the surface: each piece
 // lies within one surface triangle, its corners at the surface's height
-export function drapeTriangles(surface: GradedSurface, triangles: [Pt, Pt, Pt][]): P3[][] {
+export function drapeTriangles(surface: TerrainSurface, triangles: [Pt, Pt, Pt][]): P3[][] {
 	const out: P3[][] = [];
 	for (const tri of triangles) {
 		for (const cell of surface.trianglesIn(...bbox(tri))) {
@@ -340,7 +285,7 @@ export function drapeTriangles(surface: GradedSurface, triangles: [Pt, Pt, Pt][]
 }
 
 // Lays a polyline onto the surface: segments, each within one surface triangle
-export function drapeLine(surface: GradedSurface, points: Pt[]): { a: P3; b: P3 }[] {
+export function drapeLine(surface: TerrainSurface, points: Pt[]): { a: P3; b: P3 }[] {
 	const out: { a: P3; b: P3 }[] = [];
 	for (let i = 0; i < points.length - 1; i++) {
 		const p = points[i], q = points[i + 1];
