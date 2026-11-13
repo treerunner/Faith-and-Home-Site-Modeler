@@ -1,4 +1,4 @@
-import type { Annotation, ContextSource, OpenSpace, Part, Plan, ReuseZone, Site, SiteContext, Structure, Terrain, Tree, Use } from './types';
+import type { Annotation, ContextSource, OpenSpace, Part, Plan, ReuseZone, Site, SiteContext, Structure, Terrain, TerrainRegion, Tree, Use } from './types';
 import { slugify } from './slug';
 import { CONTEXT_HALF_SIZE, wholePartZone } from './geo';
 
@@ -253,6 +253,8 @@ function parseContext(v: unknown): SiteContext {
 	return { buildings: [...buildings, ...legacyFootprints], roads, sources, halfSize, buildingSources, terrain };
 }
 
+const TERRAIN_REGIONS: unknown[] = ['world', 'au', 'at', 'ca', 'eu', 'mx', 'nz', 'no', 'uk'] satisfies TerrainRegion[];
+
 // Malformed terrain is dropped rather than rejected: the board just loads flat. The grid must
 // be square and span the board exactly.
 function parseTerrain(v: unknown, half: number): Terrain | undefined {
@@ -262,7 +264,9 @@ function parseTerrain(v: unknown, half: number): Terrain | undefined {
 	const n = Math.round(Math.sqrt(heights.length));
 	if (n < 2 || n * n !== heights.length || Math.abs((n - 1) * spacing - 2 * half) > 1e-6) return undefined;
 	if (!heights.every((h) => typeof h === 'number' && Number.isFinite(h))) return undefined;
-	return { spacing, heights };
+	const { regions } = v as Record<string, unknown>;
+	const known = Array.isArray(regions) ? regions.filter((r): r is TerrainRegion => TERRAIN_REGIONS.includes(r)) : undefined;
+	return { spacing, heights, ...(known ? { regions: known } : {}) };
 }
 
 export const DEFAULT_PLAN_NAME = 'Existing conditions';
