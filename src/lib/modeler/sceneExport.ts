@@ -31,8 +31,9 @@ export function capturePlanImage(plan: Plan): string | null {
 	const grids = scene.children.filter((c) => c instanceof THREE.GridHelper);
 	grids.forEach((g) => { g.visible = false; });
 
-	// Save frustum so we can restore it after the tight-crop render.
+	// Save frustum and position (the user may have panned) to restore after the tight-crop render.
 	const { left, right, top, bottom } = planCamera;
+	const position = planCamera.position.clone();
 
 	if (xs.length > 0) {
 		const minX = Math.min(...xs) - PAD, maxX = Math.max(...xs) + PAD;
@@ -46,11 +47,14 @@ export function capturePlanImage(plan: Plan): string | null {
 		if (halfW / halfD > aspect) halfD = halfW / aspect;
 		else halfW = halfD * aspect;
 
-		planCamera.left   = cx - halfW;
-		planCamera.right  = cx + halfW;
-		planCamera.top    = -cz + halfD;
-		planCamera.bottom = -cz - halfD;
+		// Center the camera on the content rather than offsetting the frustum from a panned view
+		planCamera.position.set(cx, position.y, cz);
+		planCamera.left   = -halfW;
+		planCamera.right  = halfW;
+		planCamera.top    = halfD;
+		planCamera.bottom = -halfD;
 		planCamera.updateProjectionMatrix();
+		planCamera.updateMatrixWorld();
 	}
 
 	renderer.render(scene, planCamera);
@@ -61,7 +65,9 @@ export function capturePlanImage(plan: Plan): string | null {
 	// sees the tight-crop or grid-hidden state.
 	planCamera.left = left; planCamera.right = right;
 	planCamera.top = top;   planCamera.bottom = bottom;
+	planCamera.position.copy(position);
 	planCamera.updateProjectionMatrix();
+	planCamera.updateMatrixWorld();
 	grids.forEach((g) => { g.visible = true; });
 	renderer.render(scene, planCamera);
 

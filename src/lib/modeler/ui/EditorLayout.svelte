@@ -12,6 +12,7 @@
 	import { exportPNG } from '../sceneExport';
 	import type { PaletteShape, Part } from '../types';
 	import type { ResizeHandle } from '../interaction';
+	import { panBy, type PlanView } from '../view';
 
 	let canvasAreaEl: HTMLDivElement | undefined = $state();
 	let viewModeBeforeAnalysis = $state<'plan' | '3d'>('plan');
@@ -60,41 +61,51 @@
 
 	// ── Pointer events ──────────────────────────────────────────────────────
 
-	// Plan view zooms around the site origin; 3D has its own orbit controls
+	// Plan view zooms toward the cursor; 3D has its own orbit controls. Trackpad pinch
+	// arrives as a wheel event too.
 	function handleWheel(e: WheelEvent) {
 		if (store.viewMode !== 'plan') return;
 		e.preventDefault();
-		store.zoomPlan(e.deltaY > 0 ? 1.1 : 1 / 1.1);
+		const pos = clientToSite(e.clientX, e.clientY);
+		store.zoomPlan(e.deltaY > 0 ? 1.1 : 1 / 1.1, pos ? [pos.x, pos.y] : undefined);
+	}
+
+	// A press on empty ground, or any press while drawing or choosing: released in place it
+	// acts as a click; moved past a few pixels it pans the view instead.
+	const PAN_THRESHOLD = 4;
+	let press = $state<{ x: number; y: number; view: PlanView; panning: boolean; click: () => void } | null>(null);
+
+	function beginPress(e: PointerEvent, click: () => void) {
+		press = { x: e.clientX, y: e.clientY, view: store.planView, panning: false, click };
+		rendererEl?.setPointerCapture(e.pointerId);
 	}
 
 	function handlePointerDown(e: PointerEvent) {
 		if (e.buttons === 0) return;
 		if (store.viewMode === '3d') return;
 
+		const pos = clientToSite(e.clientX, e.clientY);
+
 		if (store.mode.type === 'placingTree') {
-			const pos = clientToSite(e.clientX, e.clientY);
-			if (!pos) return;
-			store.placeTree(pos.x, pos.y);
+			if (pos) beginPress(e, () => store.placeTree(pos.x, pos.y));
 			return;
 		}
 
 		if (store.mode.type === 'drawingOpenSpace') {
-			const pos = clientToSite(e.clientX, e.clientY);
-			if (!pos) return;
-			store.addOpenSpaceVertex(pos.x, pos.y);
+			if (pos) beginPress(e, () => store.addOpenSpaceVertex(pos.x, pos.y));
 			return;
 		}
 
 		if (store.mode.type === 'choosingParcel') {
-			const pos = clientToSite(e.clientX, e.clientY);
-			const id = pos && store.parcelAt(pos.x, pos.y);
-			if (id) store.chooseParcel(id);
+			beginPress(e, () => {
+				const id = pos && store.parcelAt(pos.x, pos.y);
+				if (id) store.chooseParcel(id);
+			});
 			return;
 		}
 
 		if (store.mode.type === 'drawingParcel') {
-			const pos = clientToSite(e.clientX, e.clientY);
-			if (pos) store.addParcelVertex(pos.x, pos.y);
+			if (pos) beginPress(e, () => store.addParcelVertex(pos.x, pos.y));
 			return;
 		}
 
@@ -107,7 +118,7 @@
 				result.kind === 'part' &&
 				store.plan.structures.find((s) => s.parts.some((p) => p.id === result.partId));
 			if (owner) store.selectStructure(owner.id);
-			else store.selectPart(null);
+			else beginPress(e, () => store.selectPart(null));
 			return;
 		}
 
@@ -142,14 +153,27 @@
 			rendererEl?.setPointerCapture(e.pointerId);
 			store.startDraggingTree(result.treeId, result.x - (store.plan.trees.find(t => t.id === result.treeId)?.x ?? 0), result.y - (store.plan.trees.find(t => t.id === result.treeId)?.y ?? 0));
 		} else {
-			// Ground: deselect everything
-			store.selectPart(null);
-			store.selectOpenSpace(null);
-			store.selectTree(null);
+			// Ground: a click deselects everything; a drag pans and keeps the selection
+			beginPress(e, () => {
+				store.selectPart(null);
+				store.selectOpenSpace(null);
+				store.selectTree(null);
+			});
 		}
 	}
 
 	function handlePointerMove(e: PointerEvent) {
+		if (press) {
+			const dx = e.clientX - press.x;
+			const dy = e.clientY - press.y;
+			if (!press.panning && Math.hypot(dx, dy) > PAN_THRESHOLD) press.panning = true;
+			if (press.panning) {
+				// From the view at press time, so the drag never drifts
+				store.planView = panBy(press.view, dx, dy, rendererEl?.clientHeight || 1);
+				return;
+			}
+		}
+
 		const pos = clientToSite(e.clientX, e.clientY);
 		if (!pos) return;
 
@@ -175,6 +199,11 @@
 	}
 
 	function handlePointerUp() {
+		if (press) {
+			if (!press.panning) press.click();
+			press = null;
+			return;
+		}
 		if (store.mode.type === 'dragging') store.endDrag();
 		else if (store.mode.type === 'resizing') store.endResize();
 		else if (store.mode.type === 'rotating') store.endRotation();
@@ -206,7 +235,7 @@
 	{#if !store.readOnly}
 		<Palette />
 	{/if}
-	<div class="canvas-area" bind:this={canvasAreaEl}>
+	<div class="canvas-area" class:canvas-area--panning={press?.panning} bind:this={canvasAreaEl}>
 		<Scene
 			onwheel={handleWheel}
 			ondragover={handleDragOver}
@@ -252,6 +281,13 @@
 					onclick={() => { store.viewMode = '3d'; }}
 				>3D</button>
 			</div>
+			{#if store.viewMode === 'plan'}
+				<div class="zoom-group" role="group" aria-label="Zoom">
+					<button class="zoom-btn" onclick={() => store.zoomPlan(1.25)} aria-label="Zoom out" title="Zoom out (or scroll)">−</button>
+					<button class="zoom-btn" onclick={() => store.zoomPlan(0.8)} aria-label="Zoom in" title="Zoom in (or scroll)">+</button>
+					<button class="zoom-btn zoom-btn--text" onclick={() => store.fitPlan()} title="Fit the site in view. Drag empty space to pan.">Fit</button>
+				</div>
+			{/if}
 			<button
 				class="labels-btn"
 				class:labels-btn--off={!store.showLabels}
@@ -386,6 +422,28 @@
 
 	.export-btn:hover:not(:disabled) { background: #ece8e0; }
 	.export-btn:disabled { opacity: 0.4; cursor: default; }
+
+	.canvas-area--panning { cursor: grabbing; }
+
+	.zoom-group {
+		display: flex;
+		gap: 2px;
+	}
+
+	.zoom-btn {
+		min-width: 1.6rem;
+		padding: 0.2rem 0.4rem;
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		background: none;
+		font-size: 0.75rem;
+		line-height: 1;
+		color: var(--color-text);
+		cursor: pointer;
+	}
+
+	.zoom-btn--text { font-size: 0.7rem; }
+	.zoom-btn:hover { background: #ece8e0; }
 
 	.labels-btn {
 		padding: 0.2rem 0.6rem;

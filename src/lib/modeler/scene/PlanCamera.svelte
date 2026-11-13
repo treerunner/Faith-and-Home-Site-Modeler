@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { T, useThrelte } from '@threlte/core';
 	import * as THREE from 'three';
 	import { setPlanCamera } from './cameraRef';
@@ -13,13 +14,15 @@
 	$effect(() => {
 		if (!cam) return;
 		const { width, height } = sizeStore.current;
-		const halfH = store.planViewHeight / 2; // meters visible top to bottom
+		const { center, height: viewHeight } = store.planView;
+		const halfH = viewHeight / 2; // meters visible top to bottom
 		const halfW = height > 0 ? halfH * (width / height) : halfH;
+		if (height > 0) untrack(() => store.setPlanAspect(width / height));
 		cam.left = -halfW;
 		cam.right = halfW;
 		cam.top = halfH;
 		cam.bottom = -halfH;
-		cam.position.set(0, 200, 0);
+		cam.position.set(center[0], 200, center[1]); // site y is world z
 		cam.rotation.set(-Math.PI / 2, 0, 0);
 		cam.updateProjectionMatrix();
 		cam.updateMatrixWorld();

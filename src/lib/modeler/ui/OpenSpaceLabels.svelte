@@ -37,6 +37,13 @@
 		return () => window.removeEventListener('resize', onResize);
 	});
 
+	// Plan view pans and zooms: re-measure on the next frame, once the camera has moved
+	$effect(() => {
+		void store.planView;
+		const raf = requestAnimationFrame(() => viewVersion++);
+		return () => cancelAnimationFrame(raf);
+	});
+
 	// In 3D mode, run a rAF loop so labels track the orbiting camera each frame.
 	$effect(() => {
 		if (store.viewMode !== '3d') return;

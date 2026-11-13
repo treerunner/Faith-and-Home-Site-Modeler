@@ -158,7 +158,8 @@
 <T.AmbientLight intensity={ambientIntensity} color="#f5f0e8" />
 
 {#if store.viewMode === 'plan'}
-	{@const gridSize = isAddress ? CONTEXT_HALF_SIZE * 2 : 120}
+	<!-- Grid mode covers the whole ground plane so panning never reaches its edge -->
+	{@const gridSize = isAddress ? CONTEXT_HALF_SIZE * 2 : 400}
 	<T.GridHelper args={[gridSize, gridSize, COLORS.grid, COLORS.gridSub]} position={[0, 0, 0]} />
 {/if}
 

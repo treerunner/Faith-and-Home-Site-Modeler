@@ -5,6 +5,7 @@ import { putSite } from './api';
 import type { ContextBuildingData, ContextResponse, Suggestion } from './address';
 import { buildingsInParcel, fitFootprint, pointInPolygon, storiesFromTags, suggestSiteType } from './geo';
 import { polygonArea } from './metrics';
+import { contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } from './view';
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
 
@@ -57,7 +58,9 @@ class ModelerStore {
 	showLabels = $state(true);
 	showAnalysis = $state(false);
 	readOnly = $state(false);
-	planViewHeight = $state(100); // meters visible top to bottom in plan view; the wheel zooms
+	planView = $state<PlanView>(DEFAULT_VIEW); // what plan view shows; never saved
+	#planAspect = 0; // canvas width / height, reported by the plan camera
+	#fitPending = false;
 	// Address setup, between picking an address and finishing the parcel. Not saved.
 	setup = $state<{ context: ContextResponse; prefill: ContextBuildingData[] | null } | null>(null);
 	isPersisted = $state(false); // a database row exists for site.id
@@ -92,6 +95,8 @@ class ModelerStore {
 	#reset(site: Site, siteSlug: string, planId: string, readOnly: boolean) {
 		this.site = site;
 		this.setup = null;
+		this.planView = DEFAULT_VIEW;
+		this.fitPlan();
 		this.#savedJson = JSON.stringify(site);
 		this.siteSlug = siteSlug;
 		this.isPersisted = siteSlug !== '';
@@ -764,7 +769,7 @@ class ModelerStore {
 		};
 		this.site.siteType ??= this.suggestedSiteType;
 		this.setup = { context, prefill: null };
-		this.planViewHeight = 220; // parcels around the address need room
+		this.planView = { center: [0, 0], height: 220 }; // parcels around the address need room
 		this.mode = context.parcels.length ? { type: 'choosingParcel' } : { type: 'drawingParcel', points: [] };
 	}
 
@@ -806,7 +811,7 @@ class ModelerStore {
 		this.#pushUndo();
 		this.site.parcel = polygon;
 		this.mode = { type: 'idle' };
-		this.planViewHeight = 100;
+		this.fitPlan();
 		if (!this.setup) return;
 		const onParcel = buildingsInParcel(this.setup.context.buildings, polygon);
 		if (onParcel.length) this.setup = { ...this.setup, prefill: onParcel };
@@ -817,7 +822,7 @@ class ModelerStore {
 	finishSetup() {
 		this.setup = null;
 		this.mode = { type: 'idle' };
-		this.planViewHeight = 100;
+		this.fitPlan();
 	}
 
 	// Adds the parcel's buildings to the current plan as existing structures. They leave the
@@ -858,8 +863,30 @@ class ModelerStore {
 		this.finishSetup();
 	}
 
-	zoomPlan(factor: number) {
-		this.planViewHeight = Math.min(320, Math.max(40, this.planViewHeight * factor));
+	// ── Plan view ────────────────────────────────────────────────────────────
+
+	// Frames the parcel and the plan's content. Waits for the canvas size if it isn't known yet.
+	fitPlan() {
+		if (!this.#planAspect) {
+			this.#fitPending = true;
+			return;
+		}
+		this.#fitPending = false;
+		this.planView = fitView(contentBounds(this.plan, this.site.parcel), this.#planAspect);
+	}
+
+	setPlanAspect(aspect: number) {
+		this.#planAspect = aspect;
+		if (this.#fitPending) this.fitPlan();
+	}
+
+	// Zooms around a site point (the cursor), or the view center
+	zoomPlan(factor: number, at: [number, number] = this.planView.center) {
+		this.planView = zoomAt(this.planView, factor, at);
+	}
+
+	panPlan(dx: number, dy: number, canvasHeight: number) {
+		this.planView = panBy(this.planView, dx, dy, canvasHeight);
 	}
 
 	updateSiteName(name: string) {
