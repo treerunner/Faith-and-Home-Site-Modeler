@@ -60,19 +60,26 @@ export interface PatternMatch {
 	differs: string[];
 }
 
-// Each trait the pattern names and the site has an answer for counts by its weight: toward the
-// fit when the answer is one the pattern allows. Unanswered facts neither help nor hurt.
+// Scored over every fact the site has an answer for, each counted by its weight: full credit
+// when the pattern allows that answer, none when it doesn't, and half when the pattern doesn't
+// mention the trait ("any" fits, but says less than a specific match). Without that half, a
+// vague pattern naming two traits could outrank a specific one agreeing on five.
+// Unanswered facts neither help nor hurt.
+const UNSPECIFIED_CREDIT = 0.5;
+
 export function scorePattern(pattern: Pattern, facts: Facts): PatternMatch {
 	let possible = 0;
 	let earned = 0;
 	const matches: string[] = [];
 	const differs: string[] = [];
-	for (const [key, allowed] of Object.entries(pattern.traits) as [TraitKey, string[]][]) {
-		const fact = facts[key];
-		if (!fact) continue;
-		possible += WEIGHTS[key];
-		if (allowed.includes(fact)) {
-			earned += WEIGHTS[key];
+	for (const [key, fact] of Object.entries(facts) as [TraitKey, string][]) {
+		const weight = WEIGHTS[key];
+		possible += weight;
+		const allowed = pattern.traits[key];
+		if (!allowed) {
+			earned += weight * UNSPECIFIED_CREDIT;
+		} else if (allowed.includes(fact)) {
+			earned += weight;
 			matches.push(traitLabel(key, fact));
 		} else {
 			differs.push(traitLabel(key, fact));

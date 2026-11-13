@@ -42,9 +42,9 @@ describe('siteFacts', () => {
 });
 
 describe('scorePattern', () => {
-	const facts = { buildingTypes: 'box_plus', siteTypes: 'urban', interventions: 'reuse', size: 'small' };
+	const facts = { buildingTypes: 'box_plus', siteTypes: 'urban', interventions: 'reuse' };
 
-	it('fits fully when every known trait agrees', () => {
+	it('fits fully when the pattern allows every known answer', () => {
 		const m = scorePattern(pattern({ buildingTypes: ['box_plus'], siteTypes: ['urban'], interventions: ['reuse', 'both'] }), facts);
 		expect(m.fit).toBe(1);
 		expect(m.matches).toEqual(['Box-Plus', 'urban site', 'adaptive reuse']);
@@ -58,14 +58,27 @@ describe('scorePattern', () => {
 		expect(m.differs).toEqual(['adaptive reuse']);
 	});
 
-	it('skips traits the site has no answer for', () => {
-		const m = scorePattern(pattern({ buildingTypes: ['box_plus'], role: ['gathering'] }), facts);
-		expect(m.fit).toBe(1);
+	it('gives half credit for traits the pattern leaves open', () => {
+		// building type agrees (3); site type (2) and intervention (3) are "any": (3 + 1 + 1.5) / 8
+		const m = scorePattern(pattern({ buildingTypes: ['box_plus'] }), facts);
+		expect(m.fit).toBeCloseTo(5.5 / 8);
 		expect(m.matches).toEqual(['Box-Plus']);
 	});
 
-	it('scores zero when nothing can be compared', () => {
-		expect(scorePattern(pattern({ role: ['gathering'] }), facts).fit).toBe(0);
+	it('ignores traits the site has no answer for', () => {
+		const withRole = scorePattern(pattern({ buildingTypes: ['box_plus'], siteTypes: ['urban'], interventions: ['reuse'], role: ['gathering'] }), facts);
+		expect(withRole.fit).toBe(1);
+	});
+
+	it('ranks a specific match above a vague one', () => {
+		const known = { ...facts, housing: 'none', partnering: 'open' };
+		const specific = scorePattern(pattern({ buildingTypes: ['box_plus'], siteTypes: ['urban'], interventions: ['reuse'], housing: ['some'] }), known);
+		const vague = scorePattern(pattern({ interventions: ['reuse'], housing: ['none'] }), known);
+		expect(specific.fit).toBeGreaterThan(vague.fit);
+	});
+
+	it('scores zero with nothing known', () => {
+		expect(scorePattern(pattern({ role: ['gathering'] }), {}).fit).toBe(0);
 	});
 });
 
