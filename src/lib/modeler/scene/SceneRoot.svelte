@@ -11,6 +11,7 @@
 	import ContextLayer from './ContextLayer.svelte';
 	import ParcelLine from './ParcelLine.svelte';
 	import ParcelMask from './ParcelMask.svelte';
+	import ReuseZoneMesh from './ReuseZoneMesh.svelte';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
 	import { setMainScene } from './cameraRef';
@@ -78,9 +79,19 @@
 
 	const CLOSE_DIST = 4;
 
-	// Open spaces and parcels are both traced point by point and share the vertex markers
+	// Open spaces, parcels and reuse zones are traced point by point and share the vertex markers
 	let drawingMode = $derived(
-		store.mode.type === 'drawingOpenSpace' || store.mode.type === 'drawingParcel' ? store.mode : null,
+		store.mode.type === 'drawingOpenSpace' || store.mode.type === 'drawingParcel' || store.mode.type === 'drawingZone'
+			? store.mode
+			: null,
+	);
+
+	let zoneDraft = $derived(
+		store.mode.type === 'drawingZone'
+			? store.mode.cursorPoint
+				? [...store.mode.points, store.mode.cursorPoint]
+				: store.mode.points
+			: null,
 	);
 
 	let parcelDraft = $derived(
@@ -265,6 +276,19 @@
 	<T.Line bind:ref={cutLineRef} geometry={cutLine}>
 		<T.LineDashedMaterial color={COLORS.parcel} dashSize={1} gapSize={0.6} />
 	</T.Line>
+{/if}
+
+{#each store.plan.structures as s (s.id)}
+	{#each s.reuseZones ?? [] as zone (zone.id)}
+		{@const part = s.parts.find((p) => p.id === zone.partId)}
+		{#if part}
+			<ReuseZoneMesh {zone} {part} structure={s} is3D={store.viewMode === '3d'} />
+		{/if}
+	{/each}
+{/each}
+
+{#if zoneDraft && zoneDraft.length >= 2}
+	<ParcelLine polygon={zoneDraft} fill color={COLORS.reuse} />
 {/if}
 
 {#if ghostPart}

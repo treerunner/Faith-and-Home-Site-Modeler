@@ -10,9 +10,10 @@
 		dashed?: boolean;
 		highlight?: boolean; // selection color
 		fill?: boolean; // light tint inside
+		color?: string; // overrides the parcel or selection color
 	}
 
-	let { polygon, dashed = false, highlight = false, fill = false }: Props = $props();
+	let { polygon, dashed = false, highlight = false, fill = false, color: colorOverride }: Props = $props();
 
 	const Y = 0.03;
 
@@ -27,7 +28,7 @@
 		if (lineRef && dashed) lineRef.computeLineDistances();
 	});
 
-	let color = $derived(highlight ? COLORS.selection : COLORS.parcel);
+	let color = $derived(colorOverride ?? (highlight ? COLORS.selection : COLORS.parcel));
 
 	// A light tint marks selected parcels while choosing, and an outline being drawn
 	let fillGeo = $derived.by(() => {
@@ -40,7 +41,7 @@
 
 {#if fillGeo}
 	<T.Mesh geometry={fillGeo} position={[0, Y - 0.01, 0]}>
-		<T.MeshBasicMaterial color={COLORS.selection} transparent opacity={0.15} toneMapped={false} side={THREE.DoubleSide} depthWrite={false} />
+		<T.MeshBasicMaterial {color} transparent opacity={0.15} toneMapped={false} side={THREE.DoubleSide} depthWrite={false} />
 	</T.Mesh>
 {/if}
 

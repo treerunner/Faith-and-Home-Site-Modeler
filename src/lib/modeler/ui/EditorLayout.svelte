@@ -114,6 +114,11 @@
 			return;
 		}
 
+		if (store.mode.type === 'drawingZone') {
+			if (pos) beginPress(e, () => store.addZoneVertex(pos.x, pos.y));
+			return;
+		}
+
 		const result = hitTest(e.clientX, e.clientY);
 		if (!result) return;
 
@@ -198,6 +203,8 @@
 			store.updateParcelCursor(pos.x, pos.y);
 		} else if (store.mode.type === 'cutting') {
 			store.updateCutCursor(pos.x, pos.y);
+		} else if (store.mode.type === 'drawingZone') {
+			store.updateZoneCursor(pos.x, pos.y);
 		} else if (store.mode.type === 'draggingOpenSpace') {
 			store.updateDragOpenSpace(pos.x, pos.y);
 		} else if (store.mode.type === 'draggingOsVertex') {
@@ -224,7 +231,7 @@
 			if (store.showAnalysis) { store.showAnalysis = false; store.viewMode = viewModeBeforeAnalysis; return; }
 			if (store.mode.type === 'drawingParcel' && store.setup?.context.parcels.length) store.mode = { type: 'choosingParcel' };
 			else if (store.mode.type === 'drawingParcel' || store.mode.type === 'choosingParcel') store.finishSetup();
-			else if (store.mode.type === 'cutting') store.selectStructure(store.mode.structureId);
+			else if (store.mode.type === 'cutting' || store.mode.type === 'drawingZone') store.selectStructure(store.mode.structureId);
 			else if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree') store.cancelPlacing();
 			else if (store.selectedOpenSpaceId) store.selectOpenSpace(null);
 			else if (store.selectedTreeId) store.selectTree(null);
@@ -262,6 +269,18 @@
 			<div class="scale-bar" aria-label="Scale: {bar.feet} feet">
 				<div class="scale-bar__line" style="width: {bar.fraction * 100}cqh"></div>
 				<span class="scale-bar__label">{bar.feet} ft</span>
+			</div>
+		{/if}
+
+		{#if store.mode.type === 'drawingZone'}
+			<div class="drawing-hint">
+				{#if store.mode.missed}
+					That outline missed the building. Click to outline the reuse area. Esc to cancel.
+				{:else if store.mode.points.length < 3}
+					Click to outline the reuse area. Esc to cancel.
+				{:else}
+					Click the first point to close the reuse area.
+				{/if}
 			</div>
 		{/if}
 
