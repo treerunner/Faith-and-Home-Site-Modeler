@@ -28,8 +28,10 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 - UI copy: concise, no em dashes.
 
 ## Patterns
-- Catalog, traits, match weights and `MATCH_THRESHOLD` (0.75) live in `src/lib/patterns/catalog.ts`. The analysis shows one pattern, the best fit, only when it reaches the threshold; otherwise none. The patterns are placeholders (`placeholder: true`) for the team to replace; weights are team decisions. `getPatterns()` is the one place a future Directus fetch goes.
-- Matching is pure (`src/lib/patterns/match.ts`): facts from the model and congregation profile, scored over every known fact (allowed: full weight, not allowed: none, unmentioned by the pattern: half). Tested in `match.spec.ts`.
+- A site sits in one cell of the pattern matrix: building type × site type × development type (4 × 3 × 5 = 60 cells). Development type is per plan (`inferDevelopmentType` in metrics.ts, `Plan.developmentTypeOverride`): Existing conditions, Adaptive reuse, New development, Reuse + new, Downsize / sell.
+- The catalog lives in `src/lib/patterns/catalog.ts`. Each pattern covers a set of cells (`cells`); no cell belongs to two patterns (enforced in `catalog.spec.ts`). Social conditions don't add an axis: they pick a `Variant` within a pattern, the first whose every condition is answered and allowed. The patterns are placeholders (`placeholder: true`) for the team to replace; which cells and variants they cover are team decisions. `getPatterns()` is the one place a future Directus fetch goes.
+- Matching is pure (`src/lib/patterns/match.ts`): `siteCell`, `patternForCell`, `nearestPattern` (fewest differing axes; ties keep development type, then building type, then site type), `selectVariant`, `coverage`. Tested in `match.spec.ts`.
+- The analysis always names the cell ("Urban · Box-Plus · Adaptive reuse"). Covered: the pattern and its variant. Not covered: "No pattern written for this combination yet" plus the closest written pattern and what differs. `/patterns/matrix` shows coverage; pattern pages show their cells (`MatrixGrid.svelte`).
 - The four culture questions in the Social tab (partnering, capacity, change, role) are drafts for team review.
 
 ## Persistence
