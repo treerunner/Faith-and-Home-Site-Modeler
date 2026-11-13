@@ -195,7 +195,8 @@ function parseContext(v: unknown): SiteContext {
 	const sources = optional(o.sources, (v) =>
 		arr(v, `${path}.sources`).map((s, i) => oneOf(s, CONTEXT_SOURCES, `${path}.sources[${i}]`)),
 	);
-	return { buildings: [...buildings, ...legacyFootprints], roads, sources };
+	const halfSize = optional(o.halfSize, (n) => num(n, `${path}.halfSize`));
+	return { buildings: [...buildings, ...legacyFootprints], roads, sources, halfSize };
 }
 
 export const DEFAULT_PLAN_NAME = 'Existing conditions';

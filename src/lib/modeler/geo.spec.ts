@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+	boardHalfFor,
 	buildingsInParcel,
 	clipLineToBoard,
 	contextHeight,
@@ -213,5 +214,24 @@ describe('clipLineToBoard', () => {
 
 	it('drops lines entirely off the board', () => {
 		expect(clipLineToBoard([[60, 60], [80, 90]], 50)).toEqual([]);
+	});
+});
+
+describe('boardHalfFor', () => {
+	const square = (h: number): [number, number][] => [[-h, -h], [h, -h], [h, h], [-h, h]];
+
+	it('keeps the board when the parcel has room', () => {
+		expect(boardHalfFor(square(60), 150)).toBeNull();
+		expect(boardHalfFor(square(120), 150)).toBeNull(); // exactly at the 30 m margin
+	});
+
+	it('grows the board around a parcel near the edge, rounded to 10 m', () => {
+		expect(boardHalfFor(square(125), 150)).toBe(190); // 125 + 60 margin
+		expect(boardHalfFor([[0, 0], [10, 0], [10, -210]], 150)).toBe(270);
+	});
+
+	it('stops at the largest board', () => {
+		expect(boardHalfFor(square(900), 150)).toBe(400);
+		expect(boardHalfFor(square(900), 400)).toBeNull();
 	});
 });

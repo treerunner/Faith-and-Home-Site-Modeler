@@ -169,7 +169,7 @@
 			if (!press.panning && Math.hypot(dx, dy) > PAN_THRESHOLD) press.panning = true;
 			if (press.panning) {
 				// From the view at press time, so the drag never drifts
-				store.planView = panBy(press.view, dx, dy, rendererEl?.clientHeight || 1);
+				store.planView = panBy(press.view, dx, dy, rendererEl?.clientHeight || 1, store.boardHalf);
 				return;
 			}
 		}

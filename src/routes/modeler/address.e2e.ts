@@ -128,3 +128,26 @@ test('where there is no parcel data, trace the lot', async ({ page }) => {
 	await expect(page.getByLabel('Find an address')).toBeVisible();
 	await expect(page.getByText(/© OpenStreetMap contributors/)).toHaveCount(0);
 });
+
+test('a large parcel grows the board to fit it', async ({ page }) => {
+	// A long rural lot reaching 150 m east: past the 120 m edge margin of the default board
+	const bigLot = rect(-20, -20, 170, 40);
+	const halves: (string | null)[] = [];
+	await page.route('**/api/geocode/suggest?**', (r) => r.fulfill({ json: [PLACE] }));
+	await page.route('**/api/context?**', async (r) => {
+		halves.push(new URL(r.request().url()).searchParams.get('half'));
+		if (halves.length > 1) await new Promise((done) => setTimeout(done, 300)); // let the banner show
+		await r.fulfill({ json: { ...CONTEXT, parcels: [{ id: 'big', address: 'FARM RD', polygon: bigLot }] } });
+	});
+	await page.goto('/modeler');
+	await page.getByLabel('Find an address').fill('100 Main');
+	await page.getByRole('option', { name: PLACE.label }).click();
+	await expect(page.getByText('Click your parcel.')).toBeVisible();
+	await clickSite(page, 0, 0, 220);
+
+	await expect(page.getByText('This parcel is large. Loading more of the neighborhood…')).toBeVisible();
+	// The long lot also takes in the house 47 m east
+	await expect(page.getByText('Add the 3 buildings on this parcel to Existing conditions?')).toBeVisible();
+	// First load at the default board; one reload sized to the parcel: 150 m + 60 m margin
+	expect(halves).toEqual([null, '210']);
+});

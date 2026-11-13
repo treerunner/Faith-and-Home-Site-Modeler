@@ -48,5 +48,7 @@ export const fetchSuggestions = (q: string, signal?: AbortSignal) =>
 
 export const fetchGeocode = (q: string) => getJson<Suggestion | null>(`/api/geocode?${new URLSearchParams({ q })}`);
 
-export const fetchContext = (lat: number, lng: number) =>
-	getJson<ContextResponse>(`/api/context?${new URLSearchParams({ lat: String(lat), lng: String(lng) })}`);
+export const fetchContext = (lat: number, lng: number, half?: number) =>
+	getJson<ContextResponse>(
+		`/api/context?${new URLSearchParams({ lat: String(lat), lng: String(lng), ...(half ? { half: String(half) } : {}) })}`,
+	);

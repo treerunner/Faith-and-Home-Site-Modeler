@@ -39,6 +39,10 @@
 		</span>
 		<button class="banner__btn banner__btn--quiet" onclick={cancelDrawing}>{candidates ? 'Back to parcels' : 'Skip'}</button>
 	</div>
+{:else if store.setup?.growing}
+	<div class="banner" role="status">
+		<span class="banner__text">This parcel is large. Loading more of the neighborhood…</span>
+	</div>
 {:else if prefill}
 	<div class="banner" role="dialog" aria-label="Add buildings">
 		<span class="banner__text">

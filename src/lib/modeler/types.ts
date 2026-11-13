@@ -93,6 +93,7 @@ export interface SiteContext {
 	buildings: { polygon: [number, number][]; height: number }[];
 	roads: { line: [number, number][]; kind: string }[]; // kind: OSM highway value
 	sources?: ContextSource[]; // shown as attribution wherever the data appears
+	halfSize?: number; // board half-width in meters; absent means CONTEXT_HALF_SIZE (150)
 }
 
 export type ContextSource = 'overture' | 'pasda-lehigh';

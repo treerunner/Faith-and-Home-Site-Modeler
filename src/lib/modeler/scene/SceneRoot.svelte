@@ -11,7 +11,6 @@
 	import ContextLayer from './ContextLayer.svelte';
 	import ParcelLine from './ParcelLine.svelte';
 	import ParcelMask from './ParcelMask.svelte';
-	import { CONTEXT_HALF_SIZE } from '../geo';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
 	import { setMainScene } from './cameraRef';
@@ -116,7 +115,7 @@
 	let dirLight: THREE.DirectionalLight | undefined = $state();
 	$effect(() => {
 		if (!dirLight) return;
-		const extent = isAddress ? CONTEXT_HALF_SIZE + 10 : 120;
+		const extent = isAddress ? store.boardHalf + 10 : 120;
 		dirLight.shadow.mapSize.set(isAddress ? 4096 : 2048, isAddress ? 4096 : 2048);
 		const cam = dirLight.shadow.camera as THREE.OrthographicCamera;
 		cam.left = -extent; cam.right = extent;
@@ -129,7 +128,7 @@
 	// Pedestal: AABB of all parts + margin, 4 m deep. In address mode, the whole context board.
 	const PAD = 20, MIN_SIDE = 30, DEPTH = 4;
 	let pedestal = $derived.by(() => {
-		if (isAddress) return { cx: 0, cz: 0, w: CONTEXT_HALF_SIZE * 2, d: CONTEXT_HALF_SIZE * 2 };
+		if (isAddress) return { cx: 0, cz: 0, w: store.boardHalf * 2, d: store.boardHalf * 2 };
 		const parts = store.plan.structures.flatMap((s) => s.parts);
 		if (parts.length === 0) return { cx: 0, cz: 0, w: MIN_SIDE, d: MIN_SIDE };
 		const xs = parts.flatMap((p) => [p.x - p.w / 2, p.x + p.w / 2]);
@@ -159,7 +158,7 @@
 
 {#if store.viewMode === 'plan'}
 	<!-- Grid mode covers the whole ground plane so panning never reaches its edge -->
-	{@const gridSize = isAddress ? CONTEXT_HALF_SIZE * 2 : 400}
+	{@const gridSize = store.boardHalf * 2}
 	<T.GridHelper args={[gridSize, gridSize, COLORS.grid, COLORS.gridSub]} position={[0, 0, 0]} />
 {/if}
 
@@ -176,12 +175,12 @@
 	</T.Mesh>
 {/if}
 
-<ContextLayer context={store.site.context} is3D={store.viewMode === '3d'} />
+<ContextLayer context={store.site.context} half={store.boardHalf} is3D={store.viewMode === '3d'} />
 
 {#if store.site.parcel && store.site.parcel.length >= 3}
 	<ParcelLine polygon={store.site.parcel} />
 	{#if isAddress && store.mode.type !== 'choosingParcel'}
-		<ParcelMask parcel={store.site.parcel} is3D={store.viewMode === '3d'} />
+		<ParcelMask parcel={store.site.parcel} half={store.boardHalf} is3D={store.viewMode === '3d'} />
 	{/if}
 {/if}
 

@@ -9,8 +9,9 @@ import { fetchParcels } from './parcels';
 const PARCEL_HALF = 100; // parcels you can pick from: around the address, not the whole board
 const FETCH_MARGIN = 20; // buildings straddling the board edge still have their centroid fetched
 
-export async function loadContext(origin: LatLng): Promise<ContextResponse> {
-	const half = CONTEXT_HALF_SIZE + FETCH_MARGIN;
+// `boardHalf` is half the board's width: the default, or larger to fit a big parcel.
+export async function loadContext(origin: LatLng, boardHalf = CONTEXT_HALF_SIZE): Promise<ContextResponse> {
+	const half = boardHalf + FETCH_MARGIN;
 	const nw = toLatLng(-half, -half, origin);
 	const se = toLatLng(half, half, origin);
 	const [overture, parcelResult] = await Promise.all([
@@ -21,8 +22,8 @@ export async function loadContext(origin: LatLng): Promise<ContextResponse> {
 		}),
 	]);
 	return {
-		buildings: parseBuildings(overture.buildings, origin, CONTEXT_HALF_SIZE),
-		roads: parseRoads(overture.roads, origin, CONTEXT_HALF_SIZE),
+		buildings: parseBuildings(overture.buildings, origin, boardHalf),
+		roads: parseRoads(overture.roads, origin, boardHalf),
 		parcels: parcelResult?.parcels ?? [],
 		sources: ['overture', ...(parcelResult?.source ? [parcelResult.source] : [])],
 		parcelsFailed: parcelResult === null,

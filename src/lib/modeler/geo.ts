@@ -32,8 +32,20 @@ export function toLatLng(x: number, y: number, origin: LatLng): LatLng {
 	return { lat: origin.lat - y / m.lat, lng: origin.lng + x / m.lng };
 }
 
-// Address mode fetches and shows context within this distance of the origin (a 300 m board).
+// Address mode shows context on a square board centered on the origin. Sizes are half the
+// board's width: 150 m by default, grown to fit a large parcel, up to 400 m (an 800 m board).
 export const CONTEXT_HALF_SIZE = 150;
+export const MAX_BOARD_HALF = 400;
+export const GROUND_HALF = 200; // grid mode: the 400 m ground plane
+const BOARD_EDGE_MARGIN = 30; // a parcel closer than this to the edge grows the board
+const BOARD_GROW_MARGIN = 60; // neighborhood kept around a parcel on a grown board
+
+// The board size a parcel needs, or null if the current board already has room around it.
+export function boardHalfFor(parcel: Pt[], current: number): number | null {
+	const extent = Math.max(...parcel.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y))));
+	if (extent <= current - BOARD_EDGE_MARGIN || current >= MAX_BOARD_HALF) return null;
+	return Math.min(MAX_BOARD_HALF, Math.ceil((extent + BOARD_GROW_MARGIN) / 10) * 10);
+}
 
 // ── Polygons ────────────────────────────────────────────────────────────────
 

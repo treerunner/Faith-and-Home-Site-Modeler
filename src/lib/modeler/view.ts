@@ -19,13 +19,15 @@ export interface Bounds {
 }
 
 export const MIN_VIEW_HEIGHT = 20;
-export const MAX_VIEW_HEIGHT = 320;
 export const DEFAULT_VIEW: PlanView = { center: [0, 0], height: 100 };
 const FIT_MARGIN = 1.2; // breathing room around fitted content
-const MAX_PAN = 200; // the ground plane is 400 m across
+const BOARD_ZOOM_OUT = 1.1; // zoom out no further than the whole board plus a little
 
-const clampHeight = (h: number) => Math.min(MAX_VIEW_HEIGHT, Math.max(MIN_VIEW_HEIGHT, h));
-const clampPan = (v: number) => Math.min(MAX_PAN, Math.max(-MAX_PAN, v));
+// Limits come from the board (half its width): the view center stays on it, and the view
+// never shows much more than all of it.
+export const maxViewHeight = (half: number) => 2 * half * BOARD_ZOOM_OUT;
+const clampHeight = (h: number, half: number) => Math.min(maxViewHeight(half), Math.max(MIN_VIEW_HEIGHT, h));
+const clampPan = (v: number, half: number) => Math.min(half, Math.max(-half, v));
 
 // Everything worth framing: the parcel and the plan's structures, open spaces and trees.
 export function contentBounds(plan: Plan, parcel?: Pt[]): Bounds | null {
@@ -50,29 +52,32 @@ export function contentBounds(plan: Plan, parcel?: Pt[]): Bounds | null {
 }
 
 // The view that shows the bounds with a margin, given the canvas width / height.
-export function fitView(bounds: Bounds | null, aspect: number): PlanView {
+export function fitView(bounds: Bounds | null, aspect: number, half: number): PlanView {
 	if (!bounds) return DEFAULT_VIEW;
 	const w = bounds.maxX - bounds.minX;
 	const h = bounds.maxY - bounds.minY;
 	return {
-		center: [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2],
-		height: clampHeight(Math.max(h, w / (aspect || 1)) * FIT_MARGIN),
+		center: [clampPan((bounds.minX + bounds.maxX) / 2, half), clampPan((bounds.minY + bounds.maxY) / 2, half)],
+		height: clampHeight(Math.max(h, w / (aspect || 1)) * FIT_MARGIN, half),
 	};
 }
 
 // Zooms by `factor` (above 1 shows more) while keeping the site point under the cursor still.
-export function zoomAt(view: PlanView, factor: number, [px, py]: Pt): PlanView {
-	const height = clampHeight(view.height * factor);
+export function zoomAt(view: PlanView, factor: number, [px, py]: Pt, half: number): PlanView {
+	const height = clampHeight(view.height * factor, half);
 	const k = height / view.height;
 	return {
-		center: [clampPan(px + (view.center[0] - px) * k), clampPan(py + (view.center[1] - py) * k)],
+		center: [clampPan(px + (view.center[0] - px) * k, half), clampPan(py + (view.center[1] - py) * k, half)],
 		height,
 	};
 }
 
 // Moves the view so the content follows a drag of (dx, dy) screen pixels.
-export function panBy(view: PlanView, dx: number, dy: number, canvasHeight: number): PlanView {
+export function panBy(view: PlanView, dx: number, dy: number, canvasHeight: number, half: number): PlanView {
 	const metersPerPixel = view.height / canvasHeight;
 	// Screen x matches site x; screen down is site +y (north is up)
-	return { ...view, center: [clampPan(view.center[0] - dx * metersPerPixel), clampPan(view.center[1] - dy * metersPerPixel)] };
+	return {
+		...view,
+		center: [clampPan(view.center[0] - dx * metersPerPixel, half), clampPan(view.center[1] - dy * metersPerPixel, half)],
+	};
 }

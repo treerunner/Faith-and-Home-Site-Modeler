@@ -4,17 +4,17 @@
 	import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 	import type { SiteContext } from '../types';
 	import { COLORS } from '../colors';
-	import { CONTEXT_HALF_SIZE } from '../geo';
 
 	// Neighbors as white foam blocks and roads printed on the base board. Both are built as
 	// one merged geometry each: an urban block can hold hundreds of buildings.
 
 	interface Props {
 		context: SiteContext;
+		half: number; // board half-width
 		is3D: boolean;
 	}
 
-	let { context, is3D }: Props = $props();
+	let { context, half, is3D }: Props = $props();
 
 	// Foam, road print and board skip tone mapping: the renderer's filmic curve greys off-white
 	// down, and these must read as white foam and light print against the chipboard.
@@ -46,21 +46,21 @@
 	};
 	const JOINT_SEGMENTS = 10;
 
-	function makeRoads(roads: SiteContext['roads']): THREE.BufferGeometry | null {
+	function makeRoads(roads: SiteContext['roads'], half: number): THREE.BufferGeometry | null {
 		const pos: number[] = [];
 		// Clamped to the board so the print stops at its edge instead of overhanging
-		const c = (v: number) => Math.max(-CONTEXT_HALF_SIZE, Math.min(CONTEXT_HALF_SIZE, v));
+		const c = (v: number) => Math.max(-half, Math.min(half, v));
 		const tri = (ax: number, az: number, bx: number, bz: number, cx: number, cz: number) =>
 			pos.push(c(ax), ROAD_Y, c(az), c(bx), ROAD_Y, c(bz), c(cx), ROAD_Y, c(cz));
 		for (const { line, kind } of roads) {
-			const half = (ROAD_WIDTH[kind] ?? 6) / 2;
+			const halfWidth = (ROAD_WIDTH[kind] ?? 6) / 2;
 			for (let i = 0; i < line.length - 1; i++) {
 				const [x1, z1] = line[i];
 				const [x2, z2] = line[i + 1];
 				const len = Math.hypot(x2 - x1, z2 - z1);
 				if (len === 0) continue;
-				const nx = (-(z2 - z1) / len) * half;
-				const nz = ((x2 - x1) / len) * half;
+				const nx = (-(z2 - z1) / len) * halfWidth;
+				const nz = ((x2 - x1) / len) * halfWidth;
 				tri(x1 + nx, z1 + nz, x2 + nx, z2 + nz, x2 - nx, z2 - nz);
 				tri(x1 + nx, z1 + nz, x2 - nx, z2 - nz, x1 - nx, z1 - nz);
 			}
@@ -69,7 +69,7 @@
 				for (let k = 0; k < JOINT_SEGMENTS; k++) {
 					const a1 = (k / JOINT_SEGMENTS) * Math.PI * 2;
 					const a2 = ((k + 1) / JOINT_SEGMENTS) * Math.PI * 2;
-					tri(x, z, x + Math.cos(a1) * half, z + Math.sin(a1) * half, x + Math.cos(a2) * half, z + Math.sin(a2) * half);
+					tri(x, z, x + Math.cos(a1) * halfWidth, z + Math.sin(a1) * halfWidth, x + Math.cos(a2) * halfWidth, z + Math.sin(a2) * halfWidth);
 				}
 			}
 		}
@@ -82,7 +82,7 @@
 
 	let buildingGeo = $derived(makeBuildings(context.buildings, !is3D));
 	let buildingEdges = $derived(buildingGeo ? new THREE.EdgesGeometry(buildingGeo, 20) : null);
-	let roadGeo = $derived(makeRoads(context.roads));
+	let roadGeo = $derived(makeRoads(context.roads, half));
 </script>
 
 {#if roadGeo}

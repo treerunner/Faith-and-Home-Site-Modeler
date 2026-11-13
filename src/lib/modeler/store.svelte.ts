@@ -2,8 +2,17 @@ import type { CongregationProfile, OpenSpace, PaletteShape, Part, Plan, Site, St
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
-import type { ContextBuildingData, ContextResponse, Suggestion } from './address';
-import { buildingsInParcel, fitFootprint, pointInPolygon, storiesFromTags, suggestSiteType } from './geo';
+import { fetchContext, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
+import {
+	boardHalfFor,
+	buildingsInParcel,
+	CONTEXT_HALF_SIZE,
+	fitFootprint,
+	GROUND_HALF,
+	pointInPolygon,
+	storiesFromTags,
+	suggestSiteType,
+} from './geo';
 import { polygonArea } from './metrics';
 import { contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } from './view';
 import { DEFAULT_PLAN_NAME } from './serialize';
@@ -61,8 +70,9 @@ class ModelerStore {
 	planView = $state<PlanView>(DEFAULT_VIEW); // what plan view shows; never saved
 	#planAspect = 0; // canvas width / height, reported by the plan camera
 	#fitPending = false;
+	#parcelVersion = 0; // bumped on every parcel change, so slow reloads can tell they're stale
 	// Address setup, between picking an address and finishing the parcel. Not saved.
-	setup = $state<{ context: ContextResponse; prefill: ContextBuildingData[] | null } | null>(null);
+	setup = $state<{ context: ContextResponse; prefill: ContextBuildingData[] | null; growing?: boolean; growFailed?: boolean } | null>(null);
 	isPersisted = $state(false); // a database row exists for site.id
 	siteSlug = $state(''); // URL key, assigned by the server on save
 	activePlanId = $state('');
@@ -807,13 +817,49 @@ class ModelerStore {
 		if (this.mode.type === 'drawingParcel') this.mode = { ...this.mode, cursorPoint: [x, y] };
 	}
 
+	// Half the board's width: it bounds pan and zoom, and in address mode the context
+	get boardHalf(): number {
+		return this.site.mode === 'address' ? (this.site.context.halfSize ?? CONTEXT_HALF_SIZE) : GROUND_HALF;
+	}
+
 	#setParcel(polygon: [number, number][]) {
 		this.#pushUndo();
 		this.site.parcel = polygon;
 		this.mode = { type: 'idle' };
 		this.fitPlan();
-		if (!this.setup) return;
-		const onParcel = buildingsInParcel(this.setup.context.buildings, polygon);
+		const version = ++this.#parcelVersion;
+		void this.#growBoardFor(polygon, version).then(() => this.#offerPrefill(polygon, version));
+	}
+
+	// A parcel near the board's edge (a big rural lot) gets a bigger board: the neighborhood is
+	// reloaded once at a size that fits it. If that fails, the current board is kept.
+	async #growBoardFor(parcel: [number, number][], version: number) {
+		const half = boardHalfFor(parcel, this.boardHalf);
+		const origin = this.site.origin;
+		if (!half || !origin) return;
+		if (this.setup) this.setup = { ...this.setup, growing: true };
+		try {
+			const context = await fetchContext(origin.lat, origin.lng, half);
+			if (version !== this.#parcelVersion) return; // the parcel changed while loading
+			this.site.context = {
+				buildings: context.buildings.map((b) => ({ polygon: b.polygon, height: b.height })),
+				roads: context.roads,
+				sources: this.site.context.sources, // parcel credit stays with the original fetch
+				halfSize: half,
+			};
+			if (this.setup) this.setup = { ...this.setup, context: { ...context, parcels: this.setup.context.parcels } };
+			this.fitPlan();
+		} catch (e) {
+			console.error('could not grow the board', e);
+			if (this.setup) this.setup = { ...this.setup, growFailed: true };
+		} finally {
+			if (this.setup) this.setup = { ...this.setup, growing: false };
+		}
+	}
+
+	#offerPrefill(parcel: [number, number][], version: number) {
+		if (!this.setup || version !== this.#parcelVersion) return;
+		const onParcel = buildingsInParcel(this.setup.context.buildings, parcel);
 		if (onParcel.length) this.setup = { ...this.setup, prefill: onParcel };
 		else this.setup = null;
 	}
@@ -860,6 +906,7 @@ class ModelerStore {
 		this.site.origin = undefined;
 		this.site.parcel = undefined;
 		this.site.context = { buildings: [], roads: [] };
+		this.#parcelVersion++;
 		this.finishSetup();
 	}
 
@@ -872,7 +919,7 @@ class ModelerStore {
 			return;
 		}
 		this.#fitPending = false;
-		this.planView = fitView(contentBounds(this.plan, this.site.parcel), this.#planAspect);
+		this.planView = fitView(contentBounds(this.plan, this.site.parcel), this.#planAspect, this.boardHalf);
 	}
 
 	setPlanAspect(aspect: number) {
@@ -882,11 +929,11 @@ class ModelerStore {
 
 	// Zooms around a site point (the cursor), or the view center
 	zoomPlan(factor: number, at: [number, number] = this.planView.center) {
-		this.planView = zoomAt(this.planView, factor, at);
+		this.planView = zoomAt(this.planView, factor, at, this.boardHalf);
 	}
 
 	panPlan(dx: number, dy: number, canvasHeight: number) {
-		this.planView = panBy(this.planView, dx, dy, canvasHeight);
+		this.planView = panBy(this.planView, dx, dy, canvasHeight, this.boardHalf);
 	}
 
 	updateSiteName(name: string) {
