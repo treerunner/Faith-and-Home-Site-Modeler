@@ -129,7 +129,12 @@ export interface SiteContext {
 export interface Terrain {
 	spacing: number;
 	heights: number[];
+	// Terrain Tiles regions whose national sources need credit; absent on terrain fetched from
+	// USGS 3DEP directly (before November 2026)
+	regions?: TerrainRegion[];
 }
+
+export type TerrainRegion = 'world' | 'au' | 'at' | 'ca' | 'eu' | 'mx' | 'nz' | 'no' | 'uk';
 
 export type ContextSource = 'overture' | 'pasda-lehigh';
 

@@ -51,16 +51,17 @@ Outbound requests identify themselves with the User-Agent in `src/lib/server/htt
 | Terms | Public domain; storing results is fine. No key. No service-level agreement |
 | Notes | US only. Interpolates along the street centerline, so points can land in the road |
 
-### USGS 3DEP: elevation
+### AWS Terrain Tiles: elevation
 | | |
 |---|---|
-| Provides | Ground elevation for stacked chipboard terrain layers and plan contours |
-| Source | `https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage` |
-| Access | One request per board: `format=tiff`, `pixelType=F32`, `compression=None`, bilinear, 5 m pixels in degrees (`bboxSR=imageSR=4326`). 70 to 260 KB. Response times vary a lot: under 2 s for an area read recently, up to about 25 s or a 504 for a cold one, so the fetch waits 30 s and retries once. Parsed by our own minimal GeoTIFF reader (`src/lib/server/tiff.ts`), resampled to a 5 m grid saved with the site. No key |
+| Provides | Ground elevation for the terrain surface, contours and building plinths |
+| Source | Mapzen's Terrain Tiles on AWS Open Data: `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` ("Terrarium" PNGs: height = R × 256 + G + B / 256 − 32768) |
+| Snapshot | November 2017; not updated |
+| Access | Zoom 15 (about 3.6 m pixels at 40°N), 1 to 4 tiles per board, fetched in parallel; 0.1 to 0.5 s per board in testing. Decoded by our own minimal PNG reader (`src/lib/server/png.ts`), resampled to a 5 m grid saved with the site. Heights below sea level clamp to it (offshore the tiles carry the sea floor). No key |
 | Called from | `src/lib/server/elevation.ts`, via `/api/terrain` (separate from `/api/context`, so setup never waits on it) |
-| Terms | Public domain (USGS) |
-| Attribution shown | "USGS 3D Elevation Program" when a site has terrain |
-| Coverage notes | US only, 1 m lidar where available. Outside the US the service hangs and returns 504 (London tested), so we only ask within rough boxes around the US and its territories; elsewhere the board stays flat. `getSamples` was tried first: over 20 s for 500 points, and 2,000 points timed out |
+| Built from | US: USGS 3DEP (10 m, 3 m in places). Elsewhere: national sources (Australia, Austria, Canada, EU-DEM, Mexico, New Zealand, Norway, United Kingdom) and global ones (SRTM, GMTED2010, ETOPO1) |
+| Attribution required | Per github.com/tilezen/joerd, docs/attribution.md: "United States 3DEP (formerly NED) and global GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey", "Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration", plus each national source used. We record the regions a board falls in (`terrain.regions`, rough generous boxes) and credit those |
+| Coverage notes | Global. Matched USGS 3DEP within 6 cm on average (40 cm at most) on the fixture board in Allentown |
 
 ### Railway Postgres with PostGIS (our own storage)
 Not outside data, but where everything above ends up. Each site's neighborhood, roads, parcel, terrain and origin are fetched once at setup and saved with the site in `sites.data`. The origin and parcel are also written as PostGIS geography (`sites.origin`, `sites.parcel`) for spatial queries. Nothing is re-fetched when a site loads.
@@ -69,6 +70,7 @@ Not outside data, but where everything above ends up. Each site's neighborhood, 
 
 | Source | Why not |
 |---|---|
+| USGS 3DEP ImageServer (`exportImage`, used Nov 2026 before the Terrain Tiles) | 1 m lidar, but slow and flaky on areas it hadn't read recently: up to 25 s, or a 502/504; `getSamples` was slower still (over 20 s for 500 points). US only. Sites saved with it keep their terrain and its credit |
 | OpenStreetMap Overpass API | All three public servers failed repeatedly in Nov 2026 tests (at capacity, gateway timeouts, 90 s hangs). Too unreliable for live setup |
 | Regional import (Overture or OSM extract into PostGIS) | Would have to be repeated for every new region; the tool should scale beyond the Lehigh Valley |
 | Lehigh County's own GIS server | Behind bot protection (Incapsula); not usable from an app |
@@ -80,7 +82,7 @@ Not outside data, but where everything above ends up. Each site's neighborhood, 
 | MapLibre and map tiles | Address picking happens in the model instead; no raster tiles in the model |
 
 ## Credits
-Built from what each site actually uses (`src/lib/modeler/credits.ts`). At setup, the distinct Overture building sources (`@geometry_source`) are saved with the site, so only those are credited; roads always credit OpenStreetMap and TomTom; parcels are credited only when a county parcel was used; elevation only when the site has terrain. Sites saved before 2026-11-13 get a general Overture building credit.
+Built from what each site actually uses (`src/lib/modeler/credits.ts`). At setup, the distinct Overture building sources (`@geometry_source`) are saved with the site, so only those are credited; roads always credit OpenStreetMap and TomTom; parcels are credited only when a county parcel was used; elevation only when the site has terrain, with national sources by region. Sites saved before 2026-11-13 get a general Overture building credit.
 
 They appear in three places:
 - **Map:** a small "i" button in the canvas corner (address mode) opens the full credits, grouped by Buildings, Roads, Parcels, Elevation.
@@ -90,4 +92,4 @@ They appear in three places:
 ## Open items
 - **More counties:** add parcel sources to the registry in `src/lib/server/parcels.ts` as the tool reaches new places.
 - **Overture release:** currently `2026-10-21.0`; check for a newer one every few months.
-- **Outside the US:** the Census geocoder and USGS 3DEP are US-only; other sources would be needed abroad.
+- **Outside the US:** the Census geocoder is US-only. Terrain is global; check the national credit boxes in `elevation.ts` as the tool reaches new countries.

@@ -11,10 +11,3 @@ export async function fetchJson<T>(url: string, init: RequestInit = {}, timeoutM
 	if (!res.ok) throw new Error(`${url.split('?')[0]} returned ${res.status}`);
 	return (await res.json()) as T;
 }
-
-// The same for binary responses, like a GeoTIFF
-export async function fetchBytes(url: string, timeoutMs = 15000): Promise<ArrayBuffer> {
-	const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(timeoutMs) });
-	if (!res.ok) throw new Error(`${url.split('?')[0]} returned ${res.status}`);
-	return res.arrayBuffer();
-}

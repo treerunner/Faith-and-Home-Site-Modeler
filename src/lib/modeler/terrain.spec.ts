@@ -126,11 +126,12 @@ describe('drape', () => {
 });
 
 describe('on real ground', async () => {
-	const { default: fixture } = await import('../server/fixtures/usgs-3dep.json');
-	const { parseGeoTiff } = await import('../server/tiff');
-	const { terrainFromRaster } = await import('../server/elevation');
-	const bytes = Uint8Array.from(atob(fixture.tiffBase64), (c) => c.charCodeAt(0));
-	const terrain = terrainFromRaster(parseGeoTiff(bytes.buffer), fixture.origin, 150)!;
+	// The Terrain Tiles fixture, resampled as the server does: about 19 m of relief on a 300 m board
+	const { default: fixture } = await import('../server/fixtures/terrarium.json');
+	const { decodeTile, terrainFromTiles } = await import('../server/elevation');
+	const tiles = new Map<string, Float32Array>();
+	for (const t of fixture.tiles) tiles.set(`${t.x},${t.y}`, await decodeTile(Uint8Array.from(atob(t.pngBase64), (c) => c.charCodeAt(0)).buffer));
+	const terrain = terrainFromTiles(tiles, fixture.origin, 150)!;
 
 	it('builds the surface quickly', () => {
 		const t = performance.now();

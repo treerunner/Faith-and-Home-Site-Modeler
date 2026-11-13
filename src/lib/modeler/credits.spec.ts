@@ -45,4 +45,17 @@ describe('credits', () => {
 			'Data: OpenStreetMap contributors, Overture Maps Foundation, TomTom, USGS',
 		);
 	});
+
+	it('credits the Terrain Tiles sources, national ones where the site is', () => {
+		const terrain = { spacing: 5, heights: [100, 101, 102, 103], regions: ['world' as const, 'uk' as const] };
+		const [elevation] = creditGroups(ctx({ terrain }));
+		expect(elevation.heading).toBe('Elevation');
+		expect(elevation.credits).toEqual([
+			'United States 3DEP (formerly NED) and global GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey',
+			'Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration',
+			'United Kingdom terrain data © Environment Agency copyright and/or database right 2015. All rights reserved',
+			'via the Terrain Tiles on AWS Open Data',
+		]);
+		expect(creditLine(ctx({ terrain }))).toBe('Data: USGS, NOAA, Environment Agency');
+	});
 });
