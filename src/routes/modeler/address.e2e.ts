@@ -229,6 +229,16 @@ test('terrain: board layers in 3D, contours in plan, credited', async ({ page })
 	await page.getByRole('button', { name: '3D', exact: true }).click();
 	await page.waitForTimeout(800);
 	await page.screenshot({ path: 'tests/screenshots/terrain-3d.png' });
+
+	// Terrain can be turned off for a flat board, and back on
+	const toggle = page.getByRole('button', { name: 'Terrain', exact: true });
+	await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+	await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+	await page.waitForTimeout(500);
+	await page.screenshot({ path: 'tests/screenshots/terrain-off.png' });
+	await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('terrain: outside coverage the board stays flat; older sites can add it', async ({ page }) => {
@@ -247,8 +257,9 @@ test('terrain: outside coverage the board stays flat; older sites can add it', a
 	await page.getByRole('button', { name: 'Use this parcel' }).click();
 	await page.getByRole('button', { name: 'Skip' }).click();
 
-	// The service failed: setup still finished, on a flat board
+	// The service failed: setup still finished, on a flat board, with nothing to toggle
 	await expect(page.getByText('No elevation data here. The board stays flat.')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Terrain', exact: true })).toHaveCount(0);
 
 	// Saved without terrain, as sites set up before terrain were
 	await page.getByRole('button', { name: 'Save', exact: true }).click();

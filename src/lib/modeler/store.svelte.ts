@@ -2,7 +2,7 @@ import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, Pal
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
-import { terrainModel, terrainSurface, type TerrainSurface } from './terrain';
+import { terrainModel, terrainSurface, type TerrainModel, type TerrainSurface } from './terrain';
 import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
 import {
 	boardHalfFor,
@@ -79,6 +79,7 @@ class ModelerStore {
 	sidebarTab = $state<'spatial' | 'social'>('spatial');
 	viewMode = $state<'plan' | '3d'>('plan');
 	showLabels = $state(true);
+	showTerrain = $state(true); // view state, like labels: not saved
 	showAnalysis = $state(false);
 	readOnly = $state(false);
 	planView = $state<PlanView>(DEFAULT_VIEW); // what plan view shows; never saved
@@ -87,14 +88,21 @@ class ModelerStore {
 	#parcelVersion = 0; // bumped on every parcel change, so slow reloads can tell they're stale
 	#terrainVersion = 0; // bumped on every terrain request and address change, for the same reason
 	terrainState = $state<'idle' | 'loading' | 'failed'>('idle'); // not saved
-	// Layers and contours, derived from the stored heights. Address mode only.
-	terrain = $derived(
+	// The natural surface and its contours, derived from the stored heights. Address mode only.
+	#terrainModel = $derived(
 		this.site.mode === 'address' && this.site.context.terrain ? terrainModel(this.site.context.terrain, this.boardHalf) : null,
 	);
-	#surface = $derived(this.terrain ? terrainSurface(this.terrain) : null);
+	get hasTerrain(): boolean {
+		return this.#terrainModel !== null;
+	}
+	// What the scene shows; turning terrain off gives the flat board back
+	get terrain(): TerrainModel | null {
+		return this.showTerrain ? this.#terrainModel : null;
+	}
+	#surface = $derived(this.#terrainModel ? terrainSurface(this.#terrainModel) : null);
 	// The ground 3D shows; plan view and editing stay flat
 	get ground(): TerrainSurface | null {
-		return this.viewMode === '3d' ? this.#surface : null;
+		return this.viewMode === '3d' && this.showTerrain ? this.#surface : null;
 	}
 	// Address setup, between picking an address and finishing the parcel. Not saved.
 	setup = $state<{
