@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	boardHalfFor,
+	offsetPolygon,
 	partOutline,
 	splitPart,
 	splitPolygon,
@@ -366,5 +367,23 @@ describe('splitPart', () => {
 	it('returns null when the line misses the part', () => {
 		const part: Part = { id: 'r', shape: 'square', x: 0, y: 0, w: 6, d: 6, rotation: 0 };
 		expect(splitPart(part, [50, -10], [50, 10])).toBeNull();
+	});
+});
+
+describe('offsetPolygon', () => {
+	const square: Pt[] = [[0, 0], [10, 0], [10, 10], [0, 10]];
+
+	it('grows a square outward on every side, whichever way it winds', () => {
+		expect(polygonArea(offsetPolygon(square, 1))).toBeCloseTo(144);
+		expect(polygonArea(offsetPolygon([...square].reverse(), 1))).toBeCloseTo(144);
+		expect(offsetPolygon(square, 1)[0]).toEqual([-1, -1]);
+	});
+
+	it('keeps an L-shape enclosing the original', () => {
+		const l: Pt[] = [[0, 0], [20, 0], [20, 10], [10, 10], [10, 20], [0, 20]];
+		const grown = offsetPolygon(l, 0.04);
+		for (const p of l) expect(pointInPolygon(p, grown)).toBe(true);
+		// Area grows by about perimeter x offset
+		expect(polygonArea(grown) - polygonArea(l)).toBeCloseTo(80 * 0.04, 1);
 	});
 });

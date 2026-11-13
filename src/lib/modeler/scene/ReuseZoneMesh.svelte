@@ -3,11 +3,13 @@
 	import * as THREE from 'three';
 	import type { Part, ReuseZone, Structure } from '../types';
 	import { COLORS } from '../colors';
-	import { zoneOutline } from '../geo';
+	import { offsetPolygon, zoneOutline } from '../geo';
 
 	// A reuse zone in the reuse green. In 3D it is the slice of the building on the zone's
-	// floors: drawn over the building's own faces where they coincide (walls, roof), and hidden
-	// inside it elsewhere, like a green layer set into a chipboard model. In plan it is a fill.
+	// floors, set a few centimeters proud of the walls (and roof, when it reaches the top), so it
+	// shows wherever the zone meets the outside and stays hidden inside the building elsewhere:
+	// a green layer set into a chipboard model. Sharing the walls' exact surface made the two
+	// flicker. In plan it is a fill.
 
 	interface Props {
 		zone: ReuseZone;
@@ -19,18 +21,22 @@
 	let { zone, part, structure, is3D }: Props = $props();
 
 	const PLAN_Y = 0.11; // just above the part slab (0.1)
+	const PROUD = 0.04; // m the 3D slice stands out from the building's surfaces
 	const EDGE = '#2f7a5c';
 
 	let outline = $derived(zoneOutline(zone, part));
-	let shape = $derived(new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x, y))));
+	const toShape = (pts: [number, number][]) => new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+	let shape = $derived(toShape(outline));
+	let proudShape = $derived(toShape(offsetPolygon(outline, PROUD)));
 
 	// Floor 1 starts at ground level; floor 0 is the basement, below it
 	let bottom = $derived((zone.floors[0] - 1) * structure.floorHeight);
-	let top = $derived(zone.floors[1] * structure.floorHeight);
+	// Reaching the top floor, the slice covers the roof too, so it rises just above it
+	let top = $derived(zone.floors[1] * structure.floorHeight + (zone.floors[1] >= structure.stories ? PROUD : 0));
 
 	let solid = $derived.by(() => {
 		const depth = top - bottom;
-		const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+		const g = new THREE.ExtrudeGeometry(proudShape, { depth, bevelEnabled: false });
 		g.rotateX(Math.PI / 2); // shape y -> site y (+Z); extrusion runs down
 		g.translate(0, top, 0);
 		return g;
@@ -56,7 +62,7 @@
 
 {#if is3D}
 	<T.Mesh geometry={solid} castShadow>
-		<T.MeshLambertMaterial color={COLORS.reuse} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+		<T.MeshLambertMaterial color={COLORS.reuse} />
 	</T.Mesh>
 	<T.LineSegments geometry={solidEdges}>
 		<T.LineBasicMaterial color={EDGE} />

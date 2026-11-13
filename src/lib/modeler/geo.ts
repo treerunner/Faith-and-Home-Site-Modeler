@@ -499,3 +499,34 @@ export function clipToPart(polygon: Pt[], part: Part): Pt[][] {
 		.filter((ring) => polygonArea(ring) >= MIN_ZONE_AREA)
 		.map((ring) => toPartPoints(ring, part));
 }
+
+// Grows a polygon outward by d meters (mitered corners, capped at sharp angles). Used to set a
+// reuse zone just proud of the building's walls, so the two never share a surface and flicker.
+export function offsetPolygon(polygon: Pt[], d: number): Pt[] {
+	const n = polygon.length;
+	let signed = 0;
+	for (let i = 0; i < n; i++) {
+		const [x1, y1] = polygon[i];
+		const [x2, y2] = polygon[(i + 1) % n];
+		signed += x1 * y2 - x2 * y1;
+	}
+	const turn = signed > 0 ? 1 : -1; // flips the edge normal so it points outward either way
+	const normal = (a: Pt, b: Pt): Pt => {
+		const dx = b[0] - a[0];
+		const dy = b[1] - a[1];
+		const len = Math.hypot(dx, dy) || 1;
+		return [(turn * dy) / len, (-turn * dx) / len];
+	};
+	const MAX_MITER = 3; // times d, so a sliver corner can't throw a spike
+	return polygon.map((p, i) => {
+		const n1 = normal(polygon[(i - 1 + n) % n], p);
+		const n2 = normal(p, polygon[(i + 1) % n]);
+		let [bx, by] = [n1[0] + n2[0], n1[1] + n2[1]];
+		const blen = Math.hypot(bx, by);
+		if (blen < 1e-9) return [p[0] + n1[0] * d, p[1] + n1[1] * d] as Pt; // a reversal: push straight out
+		[bx, by] = [bx / blen, by / blen];
+		const cos = bx * n1[0] + by * n1[1];
+		const miter = Math.min(d / Math.max(cos, 1e-9), d * MAX_MITER);
+		return [p[0] + bx * miter, p[1] + by * miter] as Pt;
+	});
+}
