@@ -1,4 +1,4 @@
-import type { BuildingType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, Site, Structure, Tree } from './types';
+import type { BuildingType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, ReuseZone, Site, Structure, Tree, Use } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
@@ -6,8 +6,12 @@ import { fetchContext, type ContextBuildingData, type ContextResponse, type Sugg
 import {
 	boardHalfFor,
 	buildingsInParcel,
+	clipToPart,
 	mergeParcels,
 	splitPart,
+	wholePartZone,
+	zoneOutline,
+	zonesForPolygon,
 	CONTEXT_HALF_SIZE,
 	fitFootprint,
 	GROUND_HALF,
@@ -28,6 +32,13 @@ const PART_DEFAULTS: Record<PaletteShape, { w: number; d: number }> = {
 };
 
 const MAX_UNDO = 50;
+
+// A zone's floors kept within the building: 1 to stories, or from 0 with a basement
+function clampFloors([from, to]: [number, number], s: Structure): [number, number] {
+	const lowest = s.basement ? 0 : 1;
+	const f = Math.min(Math.max(from, lowest), s.stories);
+	return [f, Math.min(Math.max(to, f), s.stories)];
+}
 
 // Deep copy of reactive state. Not $state.snapshot(this.x) alone: server builds (which
 // Vitest uses) compile that to the plain value, so "copies" would share arrays.
@@ -161,7 +172,8 @@ class ModelerStore {
 		const current = copy(this.plan);
 		const structures = current.structures
 			.filter((s) => s.status !== 'new')
-			.map((s) => ({ ...s, status: 'existing' as const }));
+			// A fresh proposal starts from the buildings as they stand: nothing reused yet
+			.map((s) => ({ ...s, status: 'existing' as const, reuseZones: undefined }));
 		this.#addPlan(
 			makePlan('New plan', { structures, openSpaces: current.openSpaces, trees: current.trees }),
 		);
@@ -292,15 +304,88 @@ class ModelerStore {
 		const snapshot = copy(srcStructure);
 		const partIndex = snapshot.parts.findIndex((p) => p.id === partId);
 		const newParts = snapshot.parts.map((p) => ({ ...p, id: crypto.randomUUID() }));
+		const newPartId = new Map(snapshot.parts.map((p, i) => [p.id, newParts[i].id]));
 		const newStructure: Structure = {
 			...snapshot,
 			id: crypto.randomUUID(),
 			groupId: undefined, // copies don't inherit group membership
 			parts: newParts,
+			reuseZones: snapshot.reuseZones?.map((z) => ({ ...z, id: crypto.randomUUID(), partId: newPartId.get(z.partId)! })),
 		};
 		this.plan.structures.push(newStructure);
 		this.activeStructureId = newStructure.id;
 		return newParts[partIndex >= 0 ? partIndex : 0].id;
+	}
+
+	// ── Reuse zones ──────────────────────────────────────────────────────────
+
+	// Reuse is proposed in existing buildings; housing by default (this is a housing tool)
+	#newZones(structure: Structure, areas: { partId: string; points: [number, number][] }[], use: Use = 'housing') {
+		structure.reuseZones = [
+			...(structure.reuseZones ?? []),
+			...areas.map((a) => ({ id: crypto.randomUUID(), ...a, floors: [1, structure.stories] as [number, number], use })),
+		];
+	}
+
+	addWholeBuildingReuse(structureId: string) {
+		const s = this.plan.structures.find((s) => s.id === structureId);
+		if (!s || s.status !== 'existing') return;
+		this.#pushUndo();
+		this.#newZones(s, s.parts.map((p) => ({ partId: p.id, points: wholePartZone(p) })));
+	}
+
+	startDrawingZone(structureId: string) {
+		this.mode = { type: 'drawingZone', structureId, points: [] };
+	}
+
+	addZoneVertex(x: number, y: number) {
+		if (this.mode.type !== 'drawingZone') return;
+		const { structureId, points } = this.mode;
+		if (points.length >= 3 && Math.hypot(x - points[0][0], y - points[0][1]) < 2) {
+			this.#finishZone(structureId, points);
+			return;
+		}
+		this.mode = { type: 'drawingZone', structureId, points: [...points, [x, y]], cursorPoint: [x, y] };
+	}
+
+	updateZoneCursor(x: number, y: number) {
+		if (this.mode.type === 'drawingZone') this.mode = { ...this.mode, cursorPoint: [x, y] };
+	}
+
+	#finishZone(structureId: string, outline: [number, number][]) {
+		const s = this.plan.structures.find((s) => s.id === structureId);
+		const areas = s ? zonesForPolygon(outline, s.parts) : [];
+		if (!s || areas.length === 0) {
+			this.mode = { type: 'drawingZone', structureId, points: [], missed: true };
+			return;
+		}
+		this.#pushUndo();
+		this.#newZones(s, areas);
+		this.selectStructure(s.id);
+	}
+
+	#findZone(zoneId: string): { s: Structure; z: ReuseZone } | undefined {
+		for (const s of this.plan.structures) {
+			const z = s.reuseZones?.find((z) => z.id === zoneId);
+			if (z) return { s, z };
+		}
+	}
+
+	updateZone(zoneId: string, patch: Partial<Pick<ReuseZone, 'floors' | 'use' | 'dwellings'>>) {
+		const found = this.#findZone(zoneId);
+		if (!found) return;
+		this.#pushUndo();
+		Object.assign(found.z, patch);
+		found.z.floors = clampFloors(found.z.floors, found.s);
+		if (found.z.use !== 'housing') found.z.dwellings = undefined;
+	}
+
+	deleteZone(zoneId: string) {
+		const found = this.#findZone(zoneId);
+		if (!found) return;
+		this.#pushUndo();
+		const zones = found.s.reuseZones!.filter((z) => z.id !== zoneId);
+		found.s.reuseZones = zones.length ? zones : undefined;
 	}
 
 	// ── Cutting ──────────────────────────────────────────────────────────────
@@ -335,6 +420,24 @@ class ModelerStore {
 		if (!cuts.some((c) => c.pieces)) return null;
 		this.#pushUndo();
 
+		// Zones on cut parts, in site coordinates, to re-clip against the pieces below
+		const cutPartIds = new Set(cuts.filter((c) => c.pieces).map((c) => c.part.id));
+		const movingZones = (structure.reuseZones ?? [])
+			.filter((z) => cutPartIds.has(z.partId))
+			.map((z) => ({ zone: copy(z), outline: zoneOutline(z, structure.parts.find((p) => p.id === z.partId)!) }));
+		const zonesFor = (parts: Part[], keep: ReuseZone[] = []): ReuseZone[] | undefined => {
+			const zones = [
+				...keep,
+				...parts.flatMap((part) =>
+					movingZones.flatMap(({ zone, outline }) =>
+						clipToPart(outline, part).map((points) => ({ ...zone, id: crypto.randomUUID(), partId: part.id, points })),
+					),
+				),
+			];
+			return zones.length ? zones : undefined;
+		};
+		const keptZones = (structure.reuseZones ?? []).filter((z) => !cutPartIds.has(z.partId));
+
 		const kept = cuts.filter((c) => !c.pieces).map((c) => c.part);
 		const pieces: Part[] = cuts
 			.flatMap((c) => c.pieces ?? [])
@@ -348,6 +451,7 @@ class ModelerStore {
 
 		structure.parts = [...kept, largest];
 		structure.groupId = groupId;
+		structure.reuseZones = zonesFor([largest], keptZones);
 		const template = copy(structure);
 		structure.roof = roofFor(structure.parts);
 		rest.forEach((part, i) => {
@@ -358,6 +462,7 @@ class ModelerStore {
 				parts: [part],
 				roof: roofFor([part]),
 				dwellings: undefined, // stays with the original piece
+				reuseZones: zonesFor([part]),
 			});
 		});
 		return largest.id;
@@ -368,9 +473,14 @@ class ModelerStore {
 		const structure = this.plan.structures.find((s) => s.id === id);
 		if (!structure || structure.parts.length <= 1) return;
 		const snap = copy(structure);
+		const zonesOn = (part: Part) => {
+			const zones = snap.reuseZones?.filter((z) => z.partId === part.id);
+			return zones?.length ? zones : undefined;
+		};
 		structure.parts = [snap.parts[0]];
+		structure.reuseZones = zonesOn(snap.parts[0]);
 		for (const part of snap.parts.slice(1)) {
-			this.plan.structures.push({ ...snap, id: crypto.randomUUID(), parts: [part] });
+			this.plan.structures.push({ ...snap, id: crypto.randomUUID(), parts: [part], reuseZones: zonesOn(part) });
 		}
 	}
 
@@ -448,6 +558,9 @@ class ModelerStore {
 		Object.assign(s, patch);
 		// Prefilled heights are marked until someone confirms them by editing
 		if (patch.stories !== undefined || patch.floorHeight !== undefined) s.heightSource = undefined;
+		// Reuse happens in existing buildings only, and within their floors
+		if (s.status !== 'existing') s.reuseZones = undefined;
+		if (s.reuseZones) s.reuseZones = s.reuseZones.map((z) => ({ ...z, floors: clampFloors(z.floors, s) }));
 	}
 
 	deleteStructure(id: string) {

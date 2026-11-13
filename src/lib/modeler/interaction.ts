@@ -52,6 +52,13 @@ export type InteractionMode =
 			cursor?: [number, number];
 			missed?: boolean; // the last line didn't cross the building
 	  }
+	| {
+			type: 'drawingZone';
+			structureId: string;
+			points: [number, number][];
+			cursorPoint?: [number, number];
+			missed?: boolean; // the last outline didn't overlap the building
+	  }
 	| { type: 'placingTree' }
 	| { type: 'selectedTree'; treeId: string }
 	| { type: 'draggingTree'; treeId: string; offsetX: number; offsetY: number };
