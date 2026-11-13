@@ -18,10 +18,16 @@ export function drapeGeometry(geo: THREE.BufferGeometry, model: TerrainModel): T
 	return bandsGeometry(drapeTriangles(model, tris));
 }
 
-// Pieces of layer tops as one triangle geometry, each fanned from its first point
+// Twice the signed area in site coordinates (x east, y south)
+const signedArea = (poly: Pt[]) => poly.reduce((a, [x1, y1], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return a + x1 * y2 - x2 * y1; }, 0);
+
+// Pieces of layer tops as one triangle geometry, each fanned from its first point. Wound to face
+// up: a face wound the other way faces down, and one-sided materials skip it from above.
 export function bandsGeometry(bands: { y: number; polygon: Pt[] }[], lift = 0): THREE.BufferGeometry {
 	const out: number[] = [];
-	for (const { y, polygon } of bands) {
+	for (const band of bands) {
+		const { y } = band;
+		const polygon = signedArea(band.polygon) > 0 ? [...band.polygon].reverse() : band.polygon;
 		const [x0, z0] = polygon[0];
 		for (let i = 1; i + 1 < polygon.length; i++) {
 			out.push(x0, y + lift, z0, polygon[i][0], y + lift, polygon[i][1], polygon[i + 1][0], y + lift, polygon[i + 1][1]);
