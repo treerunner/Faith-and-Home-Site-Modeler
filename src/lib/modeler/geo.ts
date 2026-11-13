@@ -2,6 +2,7 @@
 // real building footprints to parts, and reading heights from OpenStreetMap tags.
 // Site coordinates: x is east, y is south (north is up in plan view, which is -y).
 
+import polygonClipping from 'polygon-clipping';
 import { polygonArea } from './metrics';
 import type { Part, Site } from './types';
 
@@ -313,4 +314,15 @@ export function clipLineToBoard(line: Pt[], half: number): Pt[][] {
 // Buildings whose centroid falls inside the parcel.
 export function buildingsInParcel<B extends { polygon: Pt[] }>(buildings: B[], parcel: Pt[]): B[] {
 	return buildings.filter((b) => pointInPolygon(polygonCentroid(b.polygon), parcel));
+}
+
+// Joins neighboring parcels into one outline, or null if they don't form a single piece
+// (lots that don't touch). County parcels share edges exactly, so no tolerance is needed.
+export function mergeParcels(parcels: Pt[][]): Pt[] | null {
+	if (parcels.length === 0) return null;
+	if (parcels.length === 1) return parcels[0];
+	const [first, ...rest] = parcels.map((p) => [[...p, p[0]]] as polygonClipping.Polygon);
+	const merged = polygonClipping.union(first, ...rest);
+	if (merged.length !== 1) return null;
+	return openRing(merged[0][0] as Pt[]); // outer ring; an enclosed hole would be a lot left out
 }

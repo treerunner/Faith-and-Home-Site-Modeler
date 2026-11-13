@@ -184,17 +184,24 @@
 	{/if}
 {/if}
 
-<!-- Choosing a parcel: every candidate dashed, the one under the cursor highlighted -->
+<!-- Choosing parcels: selected ones tinted, the one under the cursor outlined, others dashed -->
 {#if store.mode.type === 'choosingParcel' && store.setup}
 	{@const hoverId = store.mode.hoverId}
+	{@const selected = store.setup.selected}
 	{#each store.setup.context.parcels as parcel (parcel.id)}
-		<ParcelLine polygon={parcel.polygon} dashed={parcel.id !== hoverId} highlight={parcel.id === hoverId} />
+		{@const isSelected = selected.includes(parcel.id)}
+		<ParcelLine
+			polygon={parcel.polygon}
+			dashed={!isSelected && parcel.id !== hoverId}
+			highlight={isSelected || parcel.id === hoverId}
+			fill={isSelected}
+		/>
 	{/each}
 {/if}
 
 <!-- Drawing a parcel: the outline so far, closing to the cursor -->
 {#if parcelDraft && parcelDraft.length >= 2}
-	<ParcelLine polygon={parcelDraft} highlight />
+	<ParcelLine polygon={parcelDraft} highlight fill />
 {/if}
 
 {#each store.plan.openSpaces as os (os.id)}

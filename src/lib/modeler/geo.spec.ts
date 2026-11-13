@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	boardHalfFor,
+	mergeParcels,
 	buildingsInParcel,
 	clipLineToBoard,
 	contextHeight,
@@ -233,5 +234,29 @@ describe('boardHalfFor', () => {
 	it('stops at the largest board', () => {
 		expect(boardHalfFor(square(900), 150)).toBe(400);
 		expect(boardHalfFor(square(900), 400)).toBeNull();
+	});
+});
+
+describe('mergeParcels', () => {
+	const lot = (x: number, y: number, w: number, d: number): Pt[] => [[x, y], [x + w, y], [x + w, y + d], [x, y + d]];
+
+	it('joins lots that share an edge into one outline', () => {
+		const merged = mergeParcels([lot(0, 0, 20, 30), lot(20, 0, 15, 30)])!;
+		expect(polygonArea(merged)).toBeCloseTo(35 * 30);
+		expect(merged).toHaveLength(4); // the shared edge disappears
+	});
+
+	it('joins an L of three lots', () => {
+		const merged = mergeParcels([lot(0, 0, 20, 20), lot(20, 0, 20, 20), lot(0, 20, 20, 20)])!;
+		expect(polygonArea(merged)).toBeCloseTo(1200);
+	});
+
+	it('refuses lots that do not touch', () => {
+		expect(mergeParcels([lot(0, 0, 20, 20), lot(30, 0, 20, 20)])).toBeNull();
+	});
+
+	it('passes a single lot through', () => {
+		expect(mergeParcels([lot(0, 0, 5, 5)])).toEqual(lot(0, 0, 5, 5));
+		expect(mergeParcels([])).toBeNull();
 	});
 });

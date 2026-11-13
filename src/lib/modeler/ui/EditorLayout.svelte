@@ -99,7 +99,7 @@
 		if (store.mode.type === 'choosingParcel') {
 			beginPress(e, () => {
 				const id = pos && store.parcelAt(pos.x, pos.y);
-				if (id) store.chooseParcel(id);
+				if (id) store.toggleParcel(id);
 			});
 			return;
 		}

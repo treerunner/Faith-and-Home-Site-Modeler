@@ -153,6 +153,12 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 
 **M6. Address mode.** (Done) Address search with suggestions, neighbors as foam and roads printed on the board, choose or draw the parcel, prefill its buildings into the current plan with marked heights, site type suggested from the neighborhood, PostGIS origin and parcel. See data notes.
 
+**After M6: refinements from testing** (agreed order, Nov 2026)
+1. (Done) The parcel under the address is preselected to confirm, and neighboring lots can be added. Churches often own several touching parcels (parking, rectory); they merge into one property.
+2. Split tool: cut a structure along a drawn line into parts, with per-part heights (`Part.storiesOverride`, unused so far). Map data has one outline for a building made of several additions. Pair with building-type inference (Box, Box-Plus, Object, Cluster), planned in M4 but not yet built; it is what "Find Your Pattern" rests on.
+3. Reuse zones: a footprint plus a floor range plus status and use inside a structure ("housing, 2nd floor, west side"), shown as a tinted slice. Its own milestone; how zones relate to the use sliders is a team decision.
+4. Terrain (M6.5, below).
+
 **M6.5. Terrain.** Elevation from USGS 3DEP (`getSamples`, 1 m lidar, public domain, JSON). Store an elevation grid on the site (about 5 m spacing), trace contours with a pure marching-squares function, render stacked chipboard layers in 3D, and set structures and foam on the terrain at render time (derived, not stored). Plan view prints contours; editing stays flat. Verified near Lehigh: about 90 m of relief across 400 m.
 
 **M7. Workshop features.** Side-by-side plans of one site (existing vs. proposal), numbered annotations in the pattern-book style, presenter mode for large screens.

@@ -22,8 +22,9 @@ const CONTEXT: ContextResponse = {
 		{ line: [[30, -150], [30, 150]], kind: 'tertiary' },
 	],
 	parcels: [
-		{ id: '640700000001', address: '100 MAIN ST', polygon: rect(-20, -20, 45, 40) },
-		{ id: '640700000002', address: '120 MAIN ST', polygon: rect(32, -25, 30, 30) },
+		{ id: '640700000001', address: '100 MAIN ST', polygon: rect(-20, -20, 45, 40) }, // under the address
+		{ id: '640700000002', address: '120 MAIN ST', polygon: rect(32, -25, 30, 30) }, // across a gap
+		{ id: '640700000003', address: '100 REAR MAIN ST', polygon: rect(-20, 20, 45, 25) }, // shares the south edge
 	],
 	sources: ['overture', 'pasda-lehigh'],
 	parcelsFailed: false,
@@ -64,14 +65,20 @@ test('start from an address: choose the parcel and add its buildings', async ({ 
 	await page.screenshot({ path: 'tests/screenshots/m6-address-search.png' });
 	await option.click();
 
-	// The neighborhood loads and parcels are offered
-	await expect(page.getByText('Click your parcel.')).toBeVisible();
+	// The neighborhood loads and the parcel under the address is preselected
+	await expect(page.getByText('Is this your parcel? Click neighboring lots to add them.')).toBeVisible();
 	await expect(page.getByLabel('Address').getByText(PLACE.label)).toBeVisible();
 	await expect(page.getByText('© OpenStreetMap contributors, Overture Maps Foundation · Parcels: Lehigh County via PASDA')).toBeVisible();
-	await page.screenshot({ path: 'tests/screenshots/m6-choose-parcel.png' });
 
-	// Click inside the first parcel: its two buildings are offered, by name
-	await clickSite(page, 0, 0, 220);
+	// A lot that doesn't touch is refused; the touching rear lot joins the property
+	await clickSite(page, 47, -10, 220);
+	await expect(page.getByText('That lot does not touch your parcel.')).toBeVisible();
+	await clickSite(page, 0, 32, 220);
+	await expect(page.getByText('2 lots selected. Click a lot to add or remove it.')).toBeVisible();
+	await page.screenshot({ path: 'tests/screenshots/m6-choose-parcel.png' });
+	await page.getByRole('button', { name: 'Use these lots' }).click();
+
+	// The merged property's two buildings are offered, by name
 	await expect(page.getByText('Add the 2 buildings on this parcel to Existing conditions?')).toBeVisible();
 	await expect(page.getByText('Grace Church and Parish hall')).toBeVisible();
 	await page.getByRole('button', { name: 'Add buildings' }).click();
@@ -142,8 +149,7 @@ test('a large parcel grows the board to fit it', async ({ page }) => {
 	await page.goto('/modeler');
 	await page.getByLabel('Find an address').fill('100 Main');
 	await page.getByRole('option', { name: PLACE.label }).click();
-	await expect(page.getByText('Click your parcel.')).toBeVisible();
-	await clickSite(page, 0, 0, 220);
+	await page.getByRole('button', { name: 'Use this parcel' }).click();
 
 	await expect(page.getByText('This parcel is large. Loading more of the neighborhood…')).toBeVisible();
 	// The long lot also takes in the house 47 m east

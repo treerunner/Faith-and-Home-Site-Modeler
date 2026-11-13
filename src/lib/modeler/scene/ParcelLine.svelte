@@ -8,10 +8,11 @@
 	interface Props {
 		polygon: [number, number][];
 		dashed?: boolean;
-		highlight?: boolean;
+		highlight?: boolean; // selection color
+		fill?: boolean; // light tint inside
 	}
 
-	let { polygon, dashed = false, highlight = false }: Props = $props();
+	let { polygon, dashed = false, highlight = false, fill = false }: Props = $props();
 
 	const Y = 0.03;
 
@@ -28,9 +29,9 @@
 
 	let color = $derived(highlight ? COLORS.selection : COLORS.parcel);
 
-	// A light tint marks the parcel under the cursor while choosing
+	// A light tint marks selected parcels while choosing, and an outline being drawn
 	let fillGeo = $derived.by(() => {
-		if (!highlight || polygon.length < 3) return null;
+		if (!fill || polygon.length < 3) return null;
 		const geo = new THREE.ShapeGeometry(new THREE.Shape(polygon.map(([x, y]) => new THREE.Vector2(x, y))));
 		geo.rotateX(Math.PI / 2); // shape y -> site y (+Z)
 		return geo;

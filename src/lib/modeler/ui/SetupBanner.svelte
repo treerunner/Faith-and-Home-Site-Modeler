@@ -21,8 +21,21 @@
 </script>
 
 {#if store.mode.type === 'choosingParcel'}
+	{@const count = store.setup?.selected.length ?? 0}
 	<div class="banner" role="status">
-		<span class="banner__text">Click your parcel.</span>
+		<span class="banner__text">
+			{#if count === 0}
+				Click your parcel.
+			{:else if count === 1}
+				Is this your parcel? Click neighboring lots to add them.
+			{:else}
+				{count} lots selected. Click a lot to add or remove it.
+			{/if}
+			{#if store.setup?.notice}<span class="banner__detail banner__detail--notice">{store.setup.notice}</span>{/if}
+		</span>
+		{#if count > 0}
+			<button class="banner__btn banner__btn--primary" onclick={() => store.confirmParcels()}>{count === 1 ? 'Use this parcel' : 'Use these lots'}</button>
+		{/if}
 		<button class="banner__btn" onclick={() => store.startDrawingParcel()}>Draw it instead</button>
 		<button class="banner__btn banner__btn--quiet" onclick={() => store.finishSetup()}>Skip</button>
 	</div>
@@ -83,6 +96,8 @@
 		font-size: 0.66rem;
 		color: var(--fh-stone);
 	}
+
+	.banner__detail--notice { color: #9a5a10; }
 
 	.banner__btn {
 		flex-shrink: 0;

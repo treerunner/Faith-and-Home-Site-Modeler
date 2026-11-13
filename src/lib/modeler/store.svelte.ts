@@ -6,6 +6,7 @@ import { fetchContext, type ContextBuildingData, type ContextResponse, type Sugg
 import {
 	boardHalfFor,
 	buildingsInParcel,
+	mergeParcels,
 	CONTEXT_HALF_SIZE,
 	fitFootprint,
 	GROUND_HALF,
@@ -72,7 +73,14 @@ class ModelerStore {
 	#fitPending = false;
 	#parcelVersion = 0; // bumped on every parcel change, so slow reloads can tell they're stale
 	// Address setup, between picking an address and finishing the parcel. Not saved.
-	setup = $state<{ context: ContextResponse; prefill: ContextBuildingData[] | null; growing?: boolean; growFailed?: boolean } | null>(null);
+	setup = $state<{
+		context: ContextResponse;
+		selected: string[]; // parcel ids chosen so far; merged into one parcel on confirm
+		notice?: string;
+		prefill: ContextBuildingData[] | null;
+		growing?: boolean;
+		growFailed?: boolean;
+	} | null>(null);
 	isPersisted = $state(false); // a database row exists for site.id
 	siteSlug = $state(''); // URL key, assigned by the server on save
 	activePlanId = $state('');
@@ -778,7 +786,10 @@ class ModelerStore {
 			sources: context.sources,
 		};
 		this.site.siteType ??= this.suggestedSiteType;
-		this.setup = { context, prefill: null };
+		this.setup = { context, selected: [], prefill: null };
+		// The parcel under the address is the likely one: preselect it to confirm or change
+		const underAddress = this.parcelAt(0, 0);
+		if (underAddress) this.setup.selected = [underAddress];
 		this.planView = { center: [0, 0], height: 220 }; // parcels around the address need room
 		this.mode = context.parcels.length ? { type: 'choosingParcel' } : { type: 'drawingParcel', points: [] };
 	}
@@ -794,9 +805,32 @@ class ModelerStore {
 		if (this.mode.type === 'choosingParcel' && this.mode.hoverId !== id) this.mode = { type: 'choosingParcel', hoverId: id };
 	}
 
-	chooseParcel(id: string) {
-		const parcel = this.setup?.context.parcels.find((p) => p.id === id);
-		if (parcel) this.#setParcel(parcel.polygon);
+	// Adds or removes a lot. Churches often own neighboring lots (a parking lot, a rectory),
+	// so a property can be several parcels, as long as they touch.
+	toggleParcel(id: string) {
+		if (!this.setup) return;
+		const { selected } = this.setup;
+		if (selected.includes(id)) {
+			this.setup = { ...this.setup, selected: selected.filter((s) => s !== id), notice: undefined };
+			return;
+		}
+		const next = [...selected, id];
+		const touching = mergeParcels(this.#parcelPolygons(next)) !== null;
+		this.setup = touching
+			? { ...this.setup, selected: next, notice: undefined }
+			: { ...this.setup, notice: 'That lot does not touch your parcel.' };
+	}
+
+	confirmParcels() {
+		const merged = this.setup && mergeParcels(this.#parcelPolygons(this.setup.selected));
+		if (merged) this.#setParcel(merged);
+	}
+
+	#parcelPolygons(ids: string[]): [number, number][][] {
+		const parcels = this.setup?.context.parcels ?? [];
+		return ids
+			.map((id) => parcels.find((p) => p.id === id)?.polygon)
+			.filter((p): p is [number, number][] => p !== undefined);
 	}
 
 	startDrawingParcel() {
