@@ -10,6 +10,7 @@
 	import TreeMesh from './TreeMesh.svelte';
 	import ContextLayer from './ContextLayer.svelte';
 	import ParcelLine from './ParcelLine.svelte';
+	import ParcelMask from './ParcelMask.svelte';
 	import { CONTEXT_HALF_SIZE } from '../geo';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
@@ -178,6 +179,9 @@
 
 {#if store.site.parcel && store.site.parcel.length >= 3}
 	<ParcelLine polygon={store.site.parcel} />
+	{#if isAddress && store.mode.type !== 'choosingParcel'}
+		<ParcelMask parcel={store.site.parcel} is3D={store.viewMode === '3d'} />
+	{/if}
 {/if}
 
 <!-- Choosing a parcel: every candidate dashed, the one under the cursor highlighted -->
