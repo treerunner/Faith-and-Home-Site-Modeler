@@ -10,7 +10,6 @@
 
 	const STATUS_OPTIONS: { value: Status; label: string }[] = [
 		{ value: 'existing', label: 'Existing' },
-		{ value: 'adaptive_reuse', label: 'Reuse' },
 		{ value: 'new', label: 'New' },
 		{ value: 'removed', label: 'Removed' },
 	];

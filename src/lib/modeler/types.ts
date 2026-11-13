@@ -1,4 +1,5 @@
-export type Status = 'existing' | 'adaptive_reuse' | 'new' | 'removed';
+// What physically stands. Adaptive reuse is not a status: it is a ReuseZone inside an existing building.
+export type Status = 'existing' | 'new' | 'removed';
 export type Use =
 	| 'worship'
 	| 'fellowship'
@@ -29,6 +30,16 @@ export interface Part {
 	points?: [number, number][]; // poly only: outline normalized to the w×d box, each coordinate in -0.5..0.5
 }
 
+// Part of an existing building proposed for reuse: an area on some floors, with a new use.
+export interface ReuseZone {
+	id: string;
+	partId: string; // the part it sits in
+	points: [number, number][]; // normalized to that part's w×d box, like poly outlines, so it follows the part
+	floors: [number, number]; // inclusive; 1 is the ground floor, 0 the basement
+	use: Use;
+	dwellings?: number; // housing only; estimated from area until edited
+}
+
 export interface Structure {
 	id: string;
 	label: string;
@@ -44,6 +55,7 @@ export interface Structure {
 	provenance: 'user' | 'osm' | 'overture';
 	heightSource?: 'data' | 'default'; // where stories came from for prefilled buildings; cleared once edited
 	groupId?: string; // shared with other structures that move together
+	reuseZones?: ReuseZone[]; // existing structures only
 }
 
 export interface OpenSpace {

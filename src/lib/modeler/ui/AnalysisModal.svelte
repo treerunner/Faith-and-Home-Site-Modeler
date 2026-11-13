@@ -28,6 +28,7 @@
 		generateActionSteps,
 		buildingType,
 		BUILDING_TYPE_LABELS,
+		reuseZoneCount,
 	} from '../metrics';
 	import type { Use } from '../types';
 
@@ -38,7 +39,7 @@
 	};
 
 	const STATUS_LABELS = {
-		existing: 'Existing', adaptive_reuse: 'Reuse', new: 'New', removed: 'Removed',
+		existing: 'Existing', new: 'New', removed: 'Removed',
 	};
 
 	const TENURE_LABELS = {
@@ -67,8 +68,10 @@
 		plan.structures.length ? Math.max(...plan.structures.map((s) => s.stories)) : 0
 	);
 
+	let reuseZones = $derived(reuseZoneCount(plan));
+
 	let statusCounts = $derived.by(() => {
-		const counts = { existing: 0, adaptive_reuse: 0, new: 0, removed: 0 };
+		const counts = { existing: 0, new: 0, removed: 0 };
 		for (const s of plan.structures) counts[s.status]++;
 		return counts;
 	});
@@ -180,8 +183,8 @@
 									<span class="met-sub">
 										{[
 											statusCounts.existing && `${statusCounts.existing} existing`,
-											statusCounts.adaptive_reuse && `${statusCounts.adaptive_reuse} reuse`,
 											statusCounts.new && `${statusCounts.new} new`,
+											reuseZones && `${reuseZones} reuse zone${reuseZones === 1 ? '' : 's'}`,
 										].filter(Boolean).join(', ')}
 									</span>
 								{/if}

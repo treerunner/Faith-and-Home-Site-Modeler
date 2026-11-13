@@ -1,5 +1,6 @@
-import type { BuildingType, OpenSpace, Part, Plan, Site, Structure, Use } from './types';
-import { partOutline, polygonDistance } from './geo';
+import type { BuildingType, OpenSpace, Part, Plan, ReuseZone, Site, Structure, Use } from './types';
+import { partOutline, polygonDistance, zoneOutline } from './geo';
+import { AVG_UNIT_SQFT, sqmToSqft } from './units';
 
 export function partFootprint(part: Part): number {
 	if (part.shape === 'poly' && part.points) return polygonArea(part.points) * part.w * part.d;
@@ -69,33 +70,62 @@ export function lotCoverage(plan: Plan, site: Site): number | null {
 	return (siteFootprint(plan) / parcel) * 100;
 }
 
-export function dwellingsEstimate(plan: Plan): number {
-	return plan.structures.reduce((sum, s) => sum + (s.dwellings ?? 0), 0);
+// ── Reuse zones ──────────────────────────────────────────────────────────────
+
+// Floor area of a reuse zone: its outline on every floor in its range
+export function zoneFloorArea(zone: ReuseZone, structure: Structure): number {
+	const part = structure.parts.find((p) => p.id === zone.partId);
+	if (!part) return 0;
+	return polygonArea(zoneOutline(zone, part)) * (zone.floors[1] - zone.floors[0] + 1);
 }
 
+// Housing units in a zone: the entered count, or an estimate from its area
+export function zoneDwellings(zone: ReuseZone, structure: Structure): number {
+	if (zone.use !== 'housing') return 0;
+	return zone.dwellings ?? Math.floor(sqmToSqft(zoneFloorArea(zone, structure)) / AVG_UNIT_SQFT);
+}
+
+const zonesOf = (plan: Plan) => plan.structures.flatMap((s) => (s.reuseZones ?? []).map((z) => ({ z, s })));
+
+export function reuseZoneCount(plan: Plan): number {
+	return zonesOf(plan).length;
+}
+
+export function dwellingsEstimate(plan: Plan): number {
+	const structures = plan.structures.reduce((sum, s) => sum + (s.dwellings ?? 0), 0);
+	return structures + zonesOf(plan).reduce((sum, { z, s }) => sum + zoneDwellings(z, s), 0);
+}
+
+// Units by how they come about: in buildings as they stand, in reuse zones, in new buildings
 export function dwellingsByStatus(plan: Plan): { adaptive_reuse: number; new: number; existing: number } {
 	const result = { adaptive_reuse: 0, new: 0, existing: 0 };
 	for (const s of plan.structures) {
 		if (!s.uses.includes('housing') || !s.dwellings) continue;
-		if (s.status === 'adaptive_reuse') result.adaptive_reuse += s.dwellings;
-		else if (s.status === 'new') result.new += s.dwellings;
+		if (s.status === 'new') result.new += s.dwellings;
 		else if (s.status === 'existing') result.existing += s.dwellings;
 	}
+	for (const { z, s } of zonesOf(plan)) result.adaptive_reuse += zoneDwellings(z, s);
 	return result;
 }
 
-// GFA × normalized use weight, summed across all structures
+// Floor area by use. Reuse zones count toward their own use; the structure's use sliders
+// (its current program) share out the rest of its floor area, so nothing is counted twice.
 export function useFloorAreaByUse(plan: Plan): Partial<Record<Use, number>> {
 	const result: Partial<Record<Use, number>> = {};
+	const add = (u: Use, area: number) => (result[u] = (result[u] ?? 0) + area);
 	for (const s of plan.structures) {
+		const zones = s.reuseZones ?? [];
+		let zoned = 0;
+		for (const z of zones) {
+			const area = zoneFloorArea(z, s);
+			zoned += area;
+			add(z.use, area);
+		}
 		if (s.uses.length === 0) continue;
-		const gfa = structureFootprint(s) * s.stories;
+		const remaining = Math.max(0, structureFootprint(s) * s.stories - zoned);
 		const totalWeight = s.uses.reduce((sum, u) => sum + (s.useWeights?.[u] ?? 50), 0);
 		if (totalWeight === 0) continue;
-		for (const u of s.uses) {
-			const share = (s.useWeights?.[u] ?? 50) / totalWeight;
-			result[u] = (result[u] ?? 0) + gfa * share;
-		}
+		for (const u of s.uses) add(u, remaining * ((s.useWeights?.[u] ?? 50) / totalWeight));
 	}
 	return result;
 }
@@ -148,7 +178,7 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 		});
 	}
 
-	if (plan.structures.length > 0 && plan.structures.every((s) => s.status === 'existing')) {
+	if (plan.structures.length > 0 && plan.structures.every((s) => s.status === 'existing') && reuseZoneCount(plan) === 0) {
 		steps.push({
 			category: 'pattern',
 			message: 'No new construction or adaptive reuse proposed — consider opportunities for change.',

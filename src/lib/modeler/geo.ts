@@ -5,7 +5,7 @@
 import polygonClipping from 'polygon-clipping';
 import { polygonArea } from './metrics';
 import { getPartCorners } from './snap';
-import type { Part, Site } from './types';
+import type { Part, ReuseZone, Site } from './types';
 
 export interface LatLng {
 	lat: number;
@@ -172,14 +172,8 @@ export function fitFootprint(polygon: Pt[]): FittedPart {
 	if (r.w === 0 || r.d === 0 || polygonArea(ring) / (r.w * r.d) >= RECT_FILL) {
 		return { shape: 'rect', ...base };
 	}
-	const θ = (r.rotation * Math.PI) / 180;
-	const c = Math.cos(θ);
-	const s = Math.sin(θ);
-	const points = ring.map(([x, y]): Pt => {
-		const dx = x - r.x;
-		const dy = y - r.y;
-		return [round((dx * c + dy * s) / r.w, 0.0001), round((-dx * s + dy * c) / r.d, 0.0001)];
-	});
+	const frame = { id: '', shape: 'poly', ...r } as Part;
+	const points = toPartPoints(ring, frame).map(([u, v]): Pt => [round(u, 0.0001), round(v, 0.0001)]);
 	return { shape: 'poly', ...base, points };
 }
 
@@ -345,12 +339,32 @@ export function partOutline(part: Part): Pt[] {
 			return [(Math.cos(a) * part.w) / 2, (Math.sin(a) * part.d) / 2];
 		});
 	} else {
-		local = (part.points ?? []).map(([u, v]): Pt => [u * part.w, v * part.d]);
+		return fromPartPoints(part.points ?? [], part);
 	}
+	return local.map(([x, y]) => toSite(x, y, part));
+}
+
+// Part-local meters to site coordinates (rotated about the part's center)
+function toSite(x: number, y: number, part: Part): Pt {
+	const θ = (part.rotation * Math.PI) / 180;
+	return [part.x + x * Math.cos(θ) - y * Math.sin(θ), part.y + x * Math.sin(θ) + y * Math.cos(θ)];
+}
+
+// Points normalized to a part's w×d box (as poly outlines and reuse zones are stored) to site coordinates.
+export function fromPartPoints(points: Pt[], part: Part): Pt[] {
+	return points.map(([u, v]) => toSite(u * part.w, v * part.d, part));
+}
+
+// Site coordinates to points normalized to a part's w×d box: the inverse of fromPartPoints.
+export function toPartPoints(polygon: Pt[], part: Part): Pt[] {
 	const θ = (part.rotation * Math.PI) / 180;
 	const c = Math.cos(θ);
 	const s = Math.sin(θ);
-	return local.map(([x, y]): Pt => [part.x + x * c - y * s, part.y + x * s + y * c]);
+	return polygon.map(([x, y]): Pt => {
+		const dx = x - part.x;
+		const dy = y - part.y;
+		return [(dx * c + dy * s) / part.w, (-dx * s + dy * c) / part.d];
+	});
 }
 
 const CUT_REACH = 1; // m: a cut still separates up to this far past each click (to reach a corner)
@@ -456,4 +470,32 @@ function segmentPointDistance([ax, ay]: Pt, [bx, by]: Pt, [px, py]: Pt): number 
 function segmentsCross(p1: Pt, p2: Pt, q1: Pt, q2: Pt): boolean {
 	const orient = (a: Pt, b: Pt, c: Pt) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
 	return orient(p1, p2, q1) * orient(p1, p2, q2) < 0 && orient(q1, q2, p1) * orient(q1, q2, p2) < 0;
+}
+
+// ── Reuse zones ─────────────────────────────────────────────────────────────
+
+const MIN_ZONE_AREA = 1; // m²
+
+export function zoneOutline(zone: Pick<ReuseZone, 'points'>, part: Part): Pt[] {
+	return fromPartPoints(zone.points, part);
+}
+
+// The whole part as zone points (whole-building reuse)
+export function wholePartZone(part: Part): Pt[] {
+	return toPartPoints(partOutline(part), part);
+}
+
+// A drawn outline clipped to each part it overlaps: one set of zone points per part.
+export function zonesForPolygon(drawn: Pt[], parts: Part[]): { partId: string; points: Pt[] }[] {
+	return parts.flatMap((part) => clipToPart(drawn, part).map((points) => ({ partId: part.id, points })));
+}
+
+// The pieces of a site-space polygon that fall inside a part, as that part's zone points.
+export function clipToPart(polygon: Pt[], part: Part): Pt[][] {
+	const outline = partOutline(part);
+	return polygonClipping
+		.intersection([[...polygon, polygon[0]]], [[...outline, outline[0]]])
+		.map((p) => openRing(p[0] as Pt[]))
+		.filter((ring) => polygonArea(ring) >= MIN_ZONE_AREA)
+		.map((ring) => toPartPoints(ring, part));
 }

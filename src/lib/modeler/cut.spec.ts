@@ -8,7 +8,7 @@ function placeBuilding() {
 	const s = store.plan.structures.at(-1)!;
 	s.parts[0].w = 30;
 	s.parts[0].d = 10;
-	store.updateStructure(s.id, { label: 'Redeemer', status: 'adaptive_reuse', uses: ['worship'], stories: 2, roof: 'gable', dwellings: 4 });
+	store.updateStructure(s.id, { label: 'Redeemer', status: 'new', uses: ['worship'], stories: 2, roof: 'gable', dwellings: 4 });
 	return s.id;
 }
 
@@ -31,7 +31,7 @@ describe('cutting a structure', () => {
 		// Same building: one group, same properties; dwellings counted once
 		expect(original.groupId).toBeDefined();
 		expect(piece.groupId).toBe(original.groupId);
-		expect(piece).toMatchObject({ status: 'adaptive_reuse', uses: ['worship'], stories: 2, roof: 'gable' });
+		expect(piece).toMatchObject({ status: 'new', uses: ['worship'], stories: 2, roof: 'gable' });
 		expect(original.dwellings).toBe(4);
 		expect(piece.dwellings).toBeUndefined();
 	});

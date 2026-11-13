@@ -1,5 +1,6 @@
-import type { Annotation, ContextSource, OpenSpace, Part, Plan, Site, SiteContext, Structure, Tree, Use } from './types';
+import type { Annotation, ContextSource, OpenSpace, Part, Plan, ReuseZone, Site, SiteContext, Structure, Tree, Use } from './types';
 import { slugify } from './slug';
+import { wholePartZone } from './geo';
 
 // Validates a Site read from the database or posted to the API, and fills
 // defaults for fields added after older sites were saved. Throws on bad input.
@@ -8,7 +9,7 @@ import { slugify } from './slug';
 export class SiteFormatError extends Error {}
 
 const SHAPES: Part['shape'][] = ['rect', 'square', 'tri', 'circle', 'poly'];
-const STATUSES: Structure['status'][] = ['existing', 'adaptive_reuse', 'new', 'removed'];
+const STATUSES: Structure['status'][] = ['existing', 'new', 'removed'];
 const USES: Use[] = [
 	'worship', 'fellowship', 'education', 'office', 'housing',
 	'community', 'daycare', 'social_services', 'kitchen', 'other',
@@ -95,17 +96,39 @@ function parseStructure(v: unknown, path: string): Structure {
 			useWeights[oneOf(k, USES, `${path}.useWeights`)] = num(val, `${path}.useWeights.${k}`);
 		}
 	}
+	// Before reuse zones, reuse was a status covering the whole building
+	const legacyReuse = o.status === 'adaptive_reuse';
+	const uses = arr(o.uses ?? [], `${path}.uses`).map((u, i) => oneOf(u, USES, `${path}.uses[${i}]`));
+	const stories = num(o.stories ?? 1, `${path}.stories`);
+	const parts = arr(o.parts, `${path}.parts`).map((p, i) => parsePart(p, `${path}.parts[${i}]`));
+	const dwellings = optional(o.dwellings, (n) => num(n, `${path}.dwellings`));
+	const partIds = new Set(parts.map((p) => p.id));
+	let reuseZones = optional(o.reuseZones, (v) =>
+		arr(v, `${path}.reuseZones`).map((z, i) => parseZone(z, `${path}.reuseZones[${i}]`, partIds)),
+	);
+	if (legacyReuse) {
+		const mainUse = [...uses].sort((a, b) => (useWeights?.[b] ?? 50) - (useWeights?.[a] ?? 50))[0] ?? 'other';
+		reuseZones = parts.map((part, i) => ({
+			id: `${String(o.id)}-reuse-${i}`,
+			partId: part.id,
+			points: wholePartZone(part),
+			floors: [1, stories] as [number, number],
+			use: mainUse,
+			dwellings: i === 0 ? dwellings : undefined,
+		}));
+	}
 	return {
 		id: str(o.id, `${path}.id`),
 		label: str(o.label ?? '', `${path}.label`),
-		status: oneOf(o.status, STATUSES, `${path}.status`),
-		uses: arr(o.uses ?? [], `${path}.uses`).map((u, i) => oneOf(u, USES, `${path}.uses[${i}]`)),
-		stories: num(o.stories ?? 1, `${path}.stories`),
+		status: legacyReuse ? 'existing' : oneOf(o.status, STATUSES, `${path}.status`),
+		uses,
+		stories,
 		floorHeight: num(o.floorHeight ?? 3.5, `${path}.floorHeight`),
 		roof: oneOf(o.roof ?? 'flat', ROOFS, `${path}.roof`),
-		parts: arr(o.parts, `${path}.parts`).map((p, i) => parsePart(p, `${path}.parts[${i}]`)),
+		parts,
 		useWeights,
-		dwellings: optional(o.dwellings, (n) => num(n, `${path}.dwellings`)),
+		// A converted reuse building's units move to its zone
+		dwellings: legacyReuse ? undefined : dwellings,
 		basement: optional(o.basement, (b) => {
 			if (typeof b !== 'boolean') fail(`${path}.basement`, 'expected boolean');
 			return b;
@@ -113,6 +136,27 @@ function parseStructure(v: unknown, path: string): Structure {
 		provenance: oneOf(o.provenance ?? 'user', PROVENANCES, `${path}.provenance`),
 		heightSource: optional(o.heightSource, (h) => oneOf(h, ['data', 'default'] as const, `${path}.heightSource`)),
 		groupId: optional(o.groupId, (g) => str(g, `${path}.groupId`)),
+		reuseZones: reuseZones?.length ? reuseZones : undefined,
+	};
+}
+
+function parseZone(v: unknown, path: string, partIds: Set<string>): ReuseZone {
+	const o = obj(v, path);
+	const partId = str(o.partId, `${path}.partId`);
+	if (!partIds.has(partId)) fail(`${path}.partId`, 'not a part of this structure');
+	const floors = arr(o.floors, `${path}.floors`);
+	if (floors.length !== 2) fail(`${path}.floors`, 'expected [from, to]');
+	const [from, to] = [num(floors[0], `${path}.floors[0]`), num(floors[1], `${path}.floors[1]`)];
+	if (from < 0 || to < from) fail(`${path}.floors`, 'expected 0 <= from <= to');
+	const points = polygon(o.points, `${path}.points`);
+	if (points.length < 3) fail(`${path}.points`, 'expected at least 3 points');
+	return {
+		id: str(o.id, `${path}.id`),
+		partId,
+		points,
+		floors: [from, to],
+		use: oneOf(o.use, USES, `${path}.use`),
+		dwellings: optional(o.dwellings, (n) => num(n, `${path}.dwellings`)),
 	};
 }
 

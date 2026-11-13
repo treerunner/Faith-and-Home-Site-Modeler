@@ -7,7 +7,7 @@ function makePlan(overrides: Partial<Plan> = {}): Plan {
 		id: 'plan1', name: 'Housing on the lot', slug: 'housing-on-the-lot', oldSlugs: ['housing'],
 		structures: [
 			{
-				id: 's1', label: 'Sanctuary', status: 'adaptive_reuse', uses: ['worship', 'housing'],
+				id: 's1', label: 'Sanctuary', status: 'existing', uses: ['worship', 'housing'],
 				stories: 2, floorHeight: 9, roof: 'gable', provenance: 'user', basement: true,
 				useWeights: { worship: 2, housing: 1 }, dwellings: 6, groupId: 'g1',
 				parts: [{ id: 'p1', shape: 'rect', x: 1, y: 2, w: 10, d: 6, rotation: 15, ridgeAxis: 'w' }],
@@ -101,6 +101,42 @@ describe('normalizeSite', () => {
 		const rect = { id: 'p3', shape: 'rect' as const, x: 0, y: 0, w: 1, d: 1, rotation: 0, points: [[0, 0], [1, 0], [1, 1]] as [number, number][] };
 		const plan = makePlan({ structures: [{ ...makePlan().structures[0], parts: [rect] }] });
 		expect(normalizeSite(makeSite({ plans: [plan] })).plans[0].structures[0].parts[0].points).toBeUndefined();
+	});
+
+	it('turns a structure saved with the old Reuse status into Existing with a whole-building zone', () => {
+		const legacy = {
+			id: 'old',
+			plans: [{
+				id: 'p', name: 'P',
+				structures: [{
+					id: 's1', status: 'adaptive_reuse', uses: ['worship', 'housing'], useWeights: { worship: 20, housing: 80 },
+					stories: 3, dwellings: 6,
+					parts: [{ id: 'a', shape: 'rect', x: 5, y: 5, w: 20, d: 10, rotation: 30 }],
+				}],
+			}],
+		};
+		const s = normalizeSite(legacy).plans[0].structures[0];
+		expect(s.status).toBe('existing');
+		expect(s.dwellings).toBeUndefined();
+		expect(s.reuseZones).toHaveLength(1);
+		const zone = s.reuseZones![0];
+		expect(zone).toMatchObject({ partId: 'a', floors: [1, 3], use: 'housing', dwellings: 6 });
+		// The zone covers the whole part: its corners in the part's normalized frame
+		for (const [u, v] of zone.points) {
+			expect(Math.abs(u)).toBeCloseTo(0.5);
+			expect(Math.abs(v)).toBeCloseTo(0.5);
+		}
+	});
+
+	it('validates reuse zones', () => {
+		const base = makePlan().structures[0];
+		const zone = { id: 'z', partId: 'p1', points: [[-0.5, -0.5], [0, -0.5], [0, 0.5]], floors: [2, 2], use: 'housing' };
+		const ok = makeSite({ plans: [makePlan({ structures: [{ ...base, reuseZones: [zone as never] }] })] });
+		expect(normalizeSite(ok).plans[0].structures[0].reuseZones![0]).toMatchObject({ floors: [2, 2], use: 'housing' });
+		const wrongPart = makeSite({ plans: [makePlan({ structures: [{ ...base, reuseZones: [{ ...zone, partId: 'nope' } as never] }] })] });
+		expect(() => normalizeSite(wrongPart)).toThrow('reuseZones[0].partId');
+		const badFloors = makeSite({ plans: [makePlan({ structures: [{ ...base, reuseZones: [{ ...zone, floors: [3, 2] } as never] }] })] });
+		expect(() => normalizeSite(badFloors)).toThrow('reuseZones[0].floors');
 	});
 
 	it('drops unknown fields', () => {

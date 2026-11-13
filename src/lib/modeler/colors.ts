@@ -49,7 +49,6 @@ export const USE_COLORS: Record<Use, string> = {
 export function statusColor(status: Status): string {
 	const map: Record<Status, string> = {
 		existing: COLORS.existing,
-		adaptive_reuse: COLORS.reuse,
 		new: COLORS.new,
 		removed: COLORS.removed,
 	};
