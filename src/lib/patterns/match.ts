@@ -1,47 +1,122 @@
-import { BUILDING_TYPE_LABELS, buildingType, dwellingsEstimate, reuseZoneCount } from '../modeler/metrics';
-import type { Plan, Site } from '../modeler/types';
-import { MATCH_THRESHOLD, WEIGHTS, type HousingScale, type Intervention, type Pattern, type TraitKey } from './catalog';
+import { BUILDING_TYPE_LABELS, buildingType, DEVELOPMENT_TYPE_LABELS, developmentType } from '../modeler/metrics';
+import type { BuildingType, CongregationProfile, DevelopmentType, Plan, Site } from '../modeler/types';
+import {
+	BUILDING_TYPES,
+	DEVELOPMENT_TYPES,
+	SITE_TYPES,
+	type Pattern,
+	type SiteType,
+	type SocialConditions,
+	type Variant,
+} from './catalog';
 
-// Matches a site and its congregation to patterns: what the model knows (building type, site
-// type, reuse and new construction, housing) plus the Social answers. Pure.
+// The pattern matrix as a formula: the model places a site in one cell, a pattern covers a
+// set of cells, and social answers pick a variant within the pattern. Pure.
 
-export type Facts = Partial<Record<TraitKey, string>>;
-
-const SIGNIFICANT_HOUSING = 10; // units
-
-export function siteFacts(site: Site, plan: Plan): Facts {
-	const facts: Facts = {};
-	const built = plan.structures.some((s) => s.status !== 'removed');
-	const type = buildingType(plan, site);
-	if (type) facts.buildingTypes = type;
-	if (site.siteType) facts.siteTypes = site.siteType;
-	if (built) {
-		const reuse = reuseZoneCount(plan) > 0;
-		const added = plan.structures.some((s) => s.status === 'new');
-		const intervention: Intervention = reuse && added ? 'both' : reuse ? 'reuse' : added ? 'new' : 'none';
-		facts.interventions = intervention;
-		const units = dwellingsEstimate(plan);
-		const housing: HousingScale = units >= SIGNIFICANT_HOUSING ? 'significant' : units > 0 ? 'some' : 'none';
-		facts.housing = housing;
-	}
-	const p = site.congregationProfile ?? {};
-	for (const key of ['size', 'tenure', 'ownership', 'partnering', 'capacity', 'change', 'role'] as const) {
-		if (p[key]) facts[key] = p[key];
-	}
-	return facts;
+export interface Cell {
+	buildingType?: BuildingType;
+	siteType?: SiteType;
+	developmentType?: DevelopmentType;
 }
 
-// How a trait value reads in a reason: "Box-Plus", "adaptive reuse", "open to partners"
-const VALUE_LABELS: Record<TraitKey, Record<string, string>> = {
-	buildingTypes: BUILDING_TYPE_LABELS,
-	siteTypes: { urban: 'urban site', suburban: 'suburban site', rural: 'rural site' },
-	interventions: {
-		reuse: 'adaptive reuse',
-		new: 'new construction',
-		both: 'adaptive reuse and new construction',
-		none: 'no change to buildings',
-	},
-	housing: { none: 'no housing', some: 'some housing', significant: `${SIGNIFICANT_HOUSING}+ housing units` },
+export type CompleteCell = Required<Cell>;
+export type Axis = keyof Cell;
+
+export const AXIS_LABELS: Record<Axis, string> = {
+	buildingType: 'building type',
+	siteType: 'site type',
+	developmentType: 'development type',
+};
+
+export const SITE_TYPE_LABELS: Record<SiteType, string> = { urban: 'Urban', suburban: 'Suburban', rural: 'Rural' };
+
+// Each axis prefers the plan's override, then what the model shows
+export function siteCell(site: Site, plan: Plan): Cell {
+	return {
+		buildingType: buildingType(plan, site) ?? undefined,
+		siteType: site.siteType,
+		developmentType: developmentType(plan) ?? undefined,
+	};
+}
+
+export const isComplete = (cell: Cell): cell is CompleteCell =>
+	Boolean(cell.buildingType && cell.siteType && cell.developmentType);
+
+// "Urban · Box-Plus · Adaptive reuse"
+export function cellLabel(cell: CompleteCell): string {
+	return [SITE_TYPE_LABELS[cell.siteType], BUILDING_TYPE_LABELS[cell.buildingType], DEVELOPMENT_TYPE_LABELS[cell.developmentType]].join(' · ');
+}
+
+export function covers(pattern: Pattern, cell: CompleteCell): boolean {
+	const c = pattern.cells;
+	return c.buildingTypes.includes(cell.buildingType) && c.siteTypes.includes(cell.siteType) && c.developmentTypes.includes(cell.developmentType);
+}
+
+// The pattern written for this cell. The catalog keeps each cell to at most one pattern.
+export function patternForCell(patterns: Pattern[], cell: CompleteCell): Pattern | null {
+	return patterns.find((p) => covers(p, cell)) ?? null;
+}
+
+// Axes on which a pattern can't cover the cell
+function differingAxes(pattern: Pattern, cell: CompleteCell): Axis[] {
+	const axes: Axis[] = [];
+	if (!pattern.cells.developmentTypes.includes(cell.developmentType)) axes.push('developmentType');
+	if (!pattern.cells.buildingTypes.includes(cell.buildingType)) axes.push('buildingType');
+	if (!pattern.cells.siteTypes.includes(cell.siteType)) axes.push('siteType');
+	return axes;
+}
+
+// Lexicographic order; equal keys keep the earlier pattern
+function lessThan(a: number[], b: number[]): boolean {
+	const i = a.findIndex((v, j) => v !== b[j]);
+	return i >= 0 && a[i] < b[i];
+}
+
+// The written pattern closest to a cell no pattern covers: fewest differing axes; ties keep the
+// development type first (it is what the plan does), then the building type, then the site type,
+// then catalog order.
+export function nearestPattern(patterns: Pattern[], cell: CompleteCell): { pattern: Pattern; differs: Axis[] } | null {
+	const rank = (differs: Axis[]) => [
+		differs.length,
+		differs.includes('developmentType') ? 1 : 0,
+		differs.includes('buildingType') ? 1 : 0,
+		differs.includes('siteType') ? 1 : 0,
+	];
+	let best: { pattern: Pattern; differs: Axis[]; key: number[] } | null = null;
+	for (const pattern of patterns) {
+		const differs = differingAxes(pattern, cell);
+		const key = rank(differs);
+		if (!best || lessThan(key, best.key)) best = { pattern, differs, key };
+	}
+	return best ? { pattern: best.pattern, differs: best.differs } : null;
+}
+
+// The first variant, in editorial order, whose every condition is answered and allowed
+export function selectVariant(pattern: Pattern, profile: CongregationProfile = {}): Variant | null {
+	return (
+		pattern.variants?.find((v) =>
+			(Object.entries(v.when) as [keyof SocialConditions, string[]][]).every(([key, allowed]) => {
+				const answer = profile[key];
+				return answer !== undefined && allowed.includes(answer);
+			}),
+		) ?? null
+	);
+}
+
+// Every cell of the matrix with the pattern written for it, for the coverage view
+export function coverage(patterns: Pattern[]): { cell: CompleteCell; pattern: Pattern | null }[] {
+	return SITE_TYPES.flatMap((siteType) =>
+		DEVELOPMENT_TYPES.flatMap((developmentType) =>
+			BUILDING_TYPES.map((buildingType) => {
+				const cell = { buildingType, siteType, developmentType };
+				return { cell, pattern: patternForCell(patterns, cell) };
+			}),
+		),
+	);
+}
+
+// Social answers in plain words, for variant conditions: "open to partners; some staff or dedicated staff"
+const ANSWER_LABELS: { [K in keyof SocialConditions]-?: Record<string, string> } = {
 	size: { small: 'small congregation', medium: 'medium congregation', large: 'large congregation' },
 	tenure: { new: 'new to the building', recent: 'recent tenure', established: 'established tenure', historic: 'historic tenure' },
 	ownership: { owned: 'owns the property', leased: 'leases its space' },
@@ -51,52 +126,8 @@ const VALUE_LABELS: Record<TraitKey, Record<string, string>> = {
 	role: { gathering: 'gathering place', service: 'service provider', housing_partner: 'housing partner' },
 };
 
-export const traitLabel = (key: TraitKey, value: string) => VALUE_LABELS[key][value] ?? value;
-
-export interface PatternMatch {
-	pattern: Pattern;
-	fit: number; // 0..1 of the weight that could count
-	matches: string[];
-	differs: string[];
-}
-
-// Scored over every fact the site has an answer for, each counted by its weight: full credit
-// when the pattern allows that answer, none when it doesn't, and half when the pattern doesn't
-// mention the trait ("any" fits, but says less than a specific match). Without that half, a
-// vague pattern naming two traits could outrank a specific one agreeing on five.
-// Unanswered facts neither help nor hurt.
-const UNSPECIFIED_CREDIT = 0.5;
-
-export function scorePattern(pattern: Pattern, facts: Facts): PatternMatch {
-	let possible = 0;
-	let earned = 0;
-	const matches: string[] = [];
-	const differs: string[] = [];
-	for (const [key, fact] of Object.entries(facts) as [TraitKey, string][]) {
-		const weight = WEIGHTS[key];
-		possible += weight;
-		const allowed: readonly string[] | undefined = pattern.traits[key];
-		if (!allowed) {
-			earned += weight * UNSPECIFIED_CREDIT;
-		} else if (allowed.includes(fact)) {
-			earned += weight;
-			matches.push(traitLabel(key, fact));
-		} else {
-			differs.push(traitLabel(key, fact));
-		}
-	}
-	return { pattern, fit: possible ? earned / possible : 0, matches, differs };
-}
-
-// Best fit first; ties go to the pattern that agrees on more, then by name.
-export function rankPatterns(patterns: Pattern[], facts: Facts): PatternMatch[] {
-	return patterns
-		.map((p) => scorePattern(p, facts))
-		.sort((a, b) => b.fit - a.fit || b.matches.length - a.matches.length || a.pattern.name.localeCompare(b.pattern.name));
-}
-
-// The one pattern to show: the best fit, if it is close enough to trust.
-export function closestPattern(patterns: Pattern[], facts: Facts, threshold = MATCH_THRESHOLD): PatternMatch | null {
-	const [best] = rankPatterns(patterns, facts);
-	return best && best.fit >= threshold ? best : null;
+export function conditionText(when: SocialConditions): string {
+	return (Object.entries(when) as [keyof SocialConditions, string[]][])
+		.map(([key, allowed]) => allowed.map((a) => ANSWER_LABELS[key][a] ?? a).join(' or '))
+		.join('; ');
 }

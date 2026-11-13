@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { closestPattern, rankPatterns, scorePattern, siteFacts } from './match';
-import type { Pattern } from './catalog';
+import { cellLabel, conditionText, coverage, isComplete, nearestPattern, patternForCell, selectVariant, siteCell, type CompleteCell } from './match';
+import { getPatterns, type Cells, type Pattern, type Variant } from './catalog';
 import type { Part, Plan, ReuseZone, Site, Structure } from '../modeler/types';
 
 let n = 0;
@@ -8,115 +8,116 @@ const part = (x: number, y: number, w: number, d: number): Part => ({ id: `p${n+
 const structure = (parts: Part[], overrides: Partial<Structure> = {}): Structure => ({
 	id: `s${n++}`, label: 'S', status: 'existing', uses: [], stories: 2, floorHeight: 3.5, roof: 'flat', parts, provenance: 'user', ...overrides,
 });
-const plan = (structures: Structure[]): Plan => ({ id: 'p', name: 'P', slug: 'p', structures, openSpaces: [], trees: [], annotations: [] });
+const plan = (structures: Structure[], overrides: Partial<Plan> = {}): Plan => ({ id: 'p', name: 'P', slug: 'p', structures, openSpaces: [], trees: [], annotations: [], ...overrides });
 const site = (overrides: Partial<Site> = {}): Site => ({ id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, plans: [], ...overrides });
 
-// A nave with a touching wing (Box-Plus); the wing's whole footprint reused as housing on 2 floors
+// A nave with a touching wing (Box-Plus); the wing's whole footprint reused as housing
 function boxPlusWithHousingReuse(): Plan {
 	const nave = structure([part(0, 0, 30, 12)]);
 	const wingPart = part(21, 0, 12, 20);
 	const zone: ReuseZone = { id: 'z', partId: wingPart.id, points: [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]], floors: [1, 2], use: 'housing' };
-	const wing = structure([wingPart], { reuseZones: [zone] });
-	return plan([nave, wing]);
+	return plan([nave, structure([wingPart], { reuseZones: [zone] })]);
 }
 
-const pattern = (traits: Pattern['traits'], name = 'P'): Pattern => ({ slug: name.toLowerCase(), name, summary: '', sections: [], placeholder: true, traits });
+const pattern = (slug: string, cells: Partial<Cells>, variants?: Variant[]): Pattern => ({
+	slug, name: slug, summary: '', sections: [], placeholder: true,
+	cells: { buildingTypes: ['box'], siteTypes: ['urban'], developmentTypes: ['reuse'], ...cells },
+	variants,
+});
 
-describe('siteFacts', () => {
-	it('reads building type, intervention, housing and the profile', () => {
-		const facts = siteFacts(site({ siteType: 'urban', congregationProfile: { size: 'small', partnering: 'open' } }), boxPlusWithHousingReuse());
-		// 12 x 20 m x 2 floors = 480 m² = 5,167 sq ft: 5 units at 900 sq ft
-		expect(facts).toEqual({ buildingTypes: 'box_plus', siteTypes: 'urban', interventions: 'reuse', housing: 'some', size: 'small', partnering: 'open' });
+const cell = (c: Partial<CompleteCell> = {}): CompleteCell => ({ buildingType: 'box', siteType: 'urban', developmentType: 'reuse', ...c });
+
+describe('siteCell', () => {
+	it('reads building type, site type and development type from the model', () => {
+		const c = siteCell(site({ siteType: 'urban' }), boxPlusWithHousingReuse());
+		expect(c).toEqual({ buildingType: 'box_plus', siteType: 'urban', developmentType: 'reuse' });
+		expect(isComplete(c)).toBe(true);
+		expect(cellLabel(c as CompleteCell)).toBe('Urban · Box-Plus · Adaptive reuse');
 	});
 
-	it('tells reuse, new construction, both and none apart', () => {
+	it('prefers the plan overrides', () => {
 		const p = boxPlusWithHousingReuse();
-		p.structures.push(structure([part(0, 60, 10, 10)], { status: 'new', uses: ['housing'], dwellings: 12 }));
-		expect(siteFacts(site(), p)).toMatchObject({ interventions: 'both', housing: 'significant' });
-		expect(siteFacts(site(), plan([structure([part(0, 0, 10, 10)])]))).toMatchObject({ interventions: 'none', housing: 'none' });
+		p.buildingTypeOverride = 'object';
+		p.developmentTypeOverride = 'downsize_sell';
+		expect(siteCell(site({ siteType: 'rural' }), p)).toEqual({ buildingType: 'object', siteType: 'rural', developmentType: 'downsize_sell' });
 	});
 
-	it('knows nothing spatial about an empty plan', () => {
-		expect(siteFacts(site(), plan([]))).toEqual({});
-	});
-});
-
-describe('scorePattern', () => {
-	const facts = { buildingTypes: 'box_plus', siteTypes: 'urban', interventions: 'reuse' };
-
-	it('fits fully when the pattern allows every known answer', () => {
-		const m = scorePattern(pattern({ buildingTypes: ['box_plus'], siteTypes: ['urban'], interventions: ['reuse', 'both'] }), facts);
-		expect(m.fit).toBe(1);
-		expect(m.matches).toEqual(['Box-Plus', 'urban site', 'adaptive reuse']);
-		expect(m.differs).toEqual([]);
-	});
-
-	it('weighs a mismatch by the trait weight', () => {
-		// building type (3) and site type (2) agree; intervention (3) differs: 5 / 8
-		const m = scorePattern(pattern({ buildingTypes: ['box_plus'], siteTypes: ['urban'], interventions: ['new'] }), facts);
-		expect(m.fit).toBeCloseTo(5 / 8);
-		expect(m.differs).toEqual(['adaptive reuse']);
-	});
-
-	it('gives half credit for traits the pattern leaves open', () => {
-		// building type agrees (3); site type (2) and intervention (3) are "any": (3 + 1 + 1.5) / 8
-		const m = scorePattern(pattern({ buildingTypes: ['box_plus'] }), facts);
-		expect(m.fit).toBeCloseTo(5.5 / 8);
-		expect(m.matches).toEqual(['Box-Plus']);
-	});
-
-	it('ignores traits the site has no answer for', () => {
-		const withRole = scorePattern(pattern({ buildingTypes: ['box_plus'], siteTypes: ['urban'], interventions: ['reuse'], role: ['gathering'] }), facts);
-		expect(withRole.fit).toBe(1);
-	});
-
-	it('ranks a specific match above a vague one', () => {
-		const known = { ...facts, housing: 'none', partnering: 'open' };
-		const specific = scorePattern(pattern({ buildingTypes: ['box_plus'], siteTypes: ['urban'], interventions: ['reuse'], housing: ['some'] }), known);
-		const vague = scorePattern(pattern({ interventions: ['reuse'], housing: ['none'] }), known);
-		expect(specific.fit).toBeGreaterThan(vague.fit);
-	});
-
-	it('scores zero with nothing known', () => {
-		expect(scorePattern(pattern({ role: ['gathering'] }), {}).fit).toBe(0);
+	it('is incomplete without a site type or buildings', () => {
+		expect(isComplete(siteCell(site(), boxPlusWithHousingReuse()))).toBe(false);
+		const empty = siteCell(site({ siteType: 'urban' }), plan([]));
+		expect(empty.buildingType).toBeUndefined();
+		expect(isComplete(empty)).toBe(false);
 	});
 });
 
-describe('rankPatterns', () => {
-	it('puts the best fit first and breaks ties by agreement', () => {
-		const facts = { buildingTypes: 'cluster', siteTypes: 'rural', interventions: 'new' };
-		const ranked = rankPatterns(
-			[
-				pattern({ buildingTypes: ['box'] }, 'Box only'),
-				pattern({ buildingTypes: ['cluster'] }, 'Cluster only'),
-				pattern({ buildingTypes: ['cluster'], siteTypes: ['rural'], interventions: ['new'] }, 'Rural cluster'),
-			],
-			facts,
-		);
-		expect(ranked.map((m) => m.pattern.name)).toEqual(['Rural cluster', 'Cluster only', 'Box only']);
+describe('patternForCell', () => {
+	const patterns = [pattern('a', { buildingTypes: ['box', 'box_plus'] }), pattern('b', { developmentTypes: ['new'] })];
+
+	it('finds the pattern covering a cell', () => {
+		expect(patternForCell(patterns, cell({ buildingType: 'box_plus' }))?.slug).toBe('a');
+		expect(patternForCell(patterns, cell({ developmentType: 'new' }))?.slug).toBe('b');
+	});
+
+	it('finds none for an uncovered cell', () => {
+		expect(patternForCell(patterns, cell({ siteType: 'rural' }))).toBeNull();
 	});
 });
 
-describe('closestPattern', () => {
-	const facts = { buildingTypes: 'cluster', siteTypes: 'rural', interventions: 'new' };
-	const patterns = [
-		pattern({ buildingTypes: ['cluster'], siteTypes: ['rural'], interventions: ['new'] }, 'Rural cluster'),
-		pattern({ buildingTypes: ['cluster'], siteTypes: ['rural'] }, 'Cluster anywhere'), // also above the line
-	];
-
-	it('returns only the best fit when it clears the threshold', () => {
-		expect(closestPattern(patterns, facts)?.pattern.name).toBe('Rural cluster');
+describe('nearestPattern', () => {
+	it('picks the pattern differing on the fewest axes and names them', () => {
+		const patterns = [pattern('two-off', { buildingTypes: ['cluster'], siteTypes: ['rural'] }), pattern('one-off', { siteTypes: ['suburban'] })];
+		expect(nearestPattern(patterns, cell())).toEqual({ pattern: patterns[1], differs: ['siteType'] });
 	});
 
-	it('returns nothing when no pattern fits closely enough', () => {
-		expect(closestPattern([pattern({ buildingTypes: ['box'], interventions: ['reuse'] })], facts)).toBeNull();
-		expect(closestPattern([], facts)).toBeNull();
+	it('breaks ties by keeping development type, then building type, then site type', () => {
+		const offDevelopment = pattern('dev', { developmentTypes: ['new'] });
+		const offBuilding = pattern('bld', { buildingTypes: ['object'] });
+		const offSite = pattern('site', { siteTypes: ['rural'] });
+		expect(nearestPattern([offDevelopment, offBuilding, offSite], cell())?.pattern.slug).toBe('site');
+		expect(nearestPattern([offDevelopment, offBuilding], cell())?.pattern.slug).toBe('bld');
 	});
 
-	it('treats the threshold as inclusive', () => {
-		// 3 + 2 earned of 8 possible = 62.5%
-		const p = [pattern({ buildingTypes: ['cluster'], siteTypes: ['rural'], interventions: ['reuse'] })];
-		expect(closestPattern(p, facts, 0.625)).not.toBeNull();
-		expect(closestPattern(p, facts, 0.63)).toBeNull();
+	it('keeps catalog order on a full tie', () => {
+		const first = pattern('first', { siteTypes: ['rural'] });
+		const second = pattern('second', { siteTypes: ['suburban'] });
+		expect(nearestPattern([first, second], cell())?.pattern.slug).toBe('first');
+	});
+
+	it('finds nothing in an empty catalog', () => {
+		expect(nearestPattern([], cell())).toBeNull();
+	});
+});
+
+describe('selectVariant', () => {
+	const partner: Variant = { key: 'partner', name: 'With a partner', summary: 's', when: { partnering: ['open'] } };
+	const staffed: Variant = { key: 'staffed', name: 'Staffed', summary: 's', when: { capacity: ['some_staff', 'staffed'], change: ['adapt'] } };
+	const p = pattern('p', {}, [partner, staffed]);
+
+	it('picks the first variant whose conditions all hold', () => {
+		expect(selectVariant(p, { partnering: 'open', capacity: 'staffed', change: 'adapt' })?.key).toBe('partner');
+		expect(selectVariant(p, { partnering: 'unsure', capacity: 'staffed', change: 'adapt' })?.key).toBe('staffed');
+	});
+
+	it('does not count unanswered or partly met conditions', () => {
+		expect(selectVariant(p, { capacity: 'staffed' })).toBeNull();
+		expect(selectVariant(p, {})).toBeNull();
+		expect(selectVariant(pattern('plain', {}))).toBeNull();
+	});
+});
+
+describe('coverage', () => {
+	it('lists all 60 cells with their pattern', async () => {
+		const patterns = await getPatterns();
+		const cells = coverage(patterns);
+		expect(cells).toHaveLength(60);
+		const urbanBoxReuse = cells.find((c) => c.cell.siteType === 'urban' && c.cell.buildingType === 'box' && c.cell.developmentType === 'reuse');
+		expect(urbanBoxReuse?.pattern?.slug).toBe('urban-box-adaptive-reuse');
+		expect(cells.filter((c) => c.cell.developmentType === 'existing').every((c) => c.pattern?.slug === 'stewarding-what-you-have')).toBe(true);
+	});
+});
+
+describe('conditionText', () => {
+	it('reads conditions in plain words', () => {
+		expect(conditionText({ partnering: ['open'], capacity: ['some_staff', 'staffed'] })).toBe('open to partners; some staff or dedicated staff');
 	});
 });

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Masthead from '#lib/modeler/ui/Masthead.svelte';
-	import { traitChips } from '#lib/patterns/traits';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -15,16 +14,16 @@
 	<main class="patterns-main">
 		<div class="patterns-header">
 			<h2 class="patterns-title">Pattern library</h2>
-			<a class="btn" href="/modeler">Model your site</a>
+			<div class="patterns-links">
+				<a class="btn" href="/patterns/matrix">Pattern matrix</a>
+				<a class="btn" href="/modeler">Model your site</a>
+			</div>
 		</div>
 		<ul class="pattern-cards" aria-label="Patterns">
 			{#each data.patterns as p (p.slug)}
 				<li class="pattern-card">
 					<a class="pattern-card__name" href="/patterns/{p.slug}">{p.name}</a>
 					<p class="pattern-card__summary">{p.summary}</p>
-					<ul class="chips" aria-label="Fits">
-						{#each traitChips(p).slice(0, 6) as chip (chip)}<li class="chip">{chip}</li>{/each}
-					</ul>
 					{#if p.placeholder}<span class="placeholder-tag">Placeholder</span>{/if}
 				</li>
 			{/each}
@@ -91,22 +90,7 @@
 	.pattern-card__name:hover { text-decoration: underline; }
 	.pattern-card__summary { margin: 0; font-size: 0.78rem; line-height: 1.45; color: var(--color-text); }
 
-	.chips {
-		list-style: none;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.25rem;
-		margin: 0.2rem 0 0;
-		padding: 0;
-	}
-
-	.chip {
-		font-size: 0.66rem;
-		padding: 0.1rem 0.45rem;
-		border-radius: 999px;
-		background: var(--fh-dusk-tint);
-		color: var(--color-text);
-	}
+	.patterns-links { display: flex; gap: 0.4rem; }
 
 	.placeholder-tag {
 		position: absolute;
