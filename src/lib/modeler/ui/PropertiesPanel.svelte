@@ -2,9 +2,9 @@
 	import { store } from '../store.svelte';
 	import PlanSwitcher from './PlanSwitcher.svelte';
 	import { statusColor, USE_COLORS } from '../colors';
-	import { M_TO_FT, ftToM } from '../units';
+	import { M_TO_FT, ftToM, fmtSqft } from '../units';
 	import type { BuildingType, CongregationProfile, Roof, Site, Status, Structure, Use } from '../types';
-	import { BUILDING_TYPE_LABELS, inferBuildingType } from '../metrics';
+	import { BUILDING_TYPE_LABELS, inferBuildingType, zoneDwellings, zoneFloorArea } from '../metrics';
 
 	let sidebarTab = $derived(store.sidebarTab);
 
@@ -40,6 +40,26 @@
 	];
 
 	let structures = $derived(store.plan.structures);
+
+	// Reuse zones: which one is open for editing, and a pending status change that would drop zones
+	let openZoneId = $state('');
+	let confirmStatus = $state<{ id: string; status: Status } | null>(null);
+
+	function setStatus(s: Structure, status: Status) {
+		if (status !== 'existing' && s.reuseZones?.length) confirmStatus = { id: s.id, status };
+		else store.updateStructure(s.id, { status });
+	}
+
+	function floorOptions(s: Structure): { value: number; label: string }[] {
+		const floors = Array.from({ length: s.stories }, (_, i) => ({ value: i + 1, label: `Floor ${i + 1}` }));
+		return s.basement ? [{ value: 0, label: 'Basement' }, ...floors] : floors;
+	}
+
+	function floorsLabel([from, to]: [number, number]): string {
+		const name = (f: number) => (f === 0 ? 'Basement' : String(f));
+		if (from === to) return from === 0 ? 'Basement' : `Floor ${from}`;
+		return `Floors ${name(from)}–${name(to)}`;
+	}
 	let inferredType = $derived(inferBuildingType(store.plan));
 	let effectiveType = $derived(store.plan.buildingTypeOverride ?? inferredType);
 	const BUILDING_TYPES = Object.keys(BUILDING_TYPE_LABELS) as BuildingType[];
@@ -278,10 +298,20 @@
 												class="pill"
 												class:pill--active={s.status === opt.value}
 												style={s.status === opt.value ? `background:${statusColor(opt.value)};border-color:${statusColor(opt.value)};color:#fff` : ''}
-												onclick={() => store.updateStructure(s.id, { status: opt.value })}
+												onclick={() => setStatus(s, opt.value)}
 											>{opt.label}</button>
 										{/each}
 									</div>
+									{#if confirmStatus?.id === s.id}
+										{@const n = s.reuseZones?.length ?? 0}
+										<p class="field-hint confirm-hint">
+											Reuse happens in existing buildings. This drops its {n} reuse zone{n === 1 ? '' : 's'}.
+											<span class="action-row">
+												<button class="delete-btn" onclick={() => { store.updateStructure(s.id, { status: confirmStatus!.status }); confirmStatus = null; }}>Change</button>
+												<button class="split-btn" onclick={() => (confirmStatus = null)}>Cancel</button>
+											</span>
+										</p>
+									{/if}
 								</fieldset>
 
 								<fieldset class="fieldset">
@@ -406,6 +436,64 @@
 									{/each}
 								</select>
 
+								{#if s.status === 'existing'}
+									{@const zones = s.reuseZones ?? []}
+									<div class="reuse-section" aria-label="Reuse">
+										<span class="field-label">Reuse</span>
+										{#each zones as z (z.id)}
+											{@const open = openZoneId === z.id}
+											<button class="zone-row" aria-expanded={open} onclick={() => (openZoneId = open ? '' : z.id)}>
+												<span class="zone-swatch" aria-hidden="true"></span>
+												<span class="zone-floors">{floorsLabel(z.floors)}</span>
+												<span class="zone-use">{USE_OPTIONS.find((o) => o.value === z.use)?.label ?? z.use}</span>
+												<span class="zone-area">{fmtSqft(zoneFloorArea(z, s))}</span>
+											</button>
+											{#if open}
+												<div class="zone-props">
+													<div class="row-fields">
+														<label class="field-group">
+															<span class="field-label">From</span>
+															<select class="select-input" value={z.floors[0]} onchange={(e) => store.updateZone(z.id, { floors: [Number((e.target as HTMLSelectElement).value), z.floors[1]] })}>
+																{#each floorOptions(s) as f (f.value)}<option value={f.value}>{f.label}</option>{/each}
+															</select>
+														</label>
+														<label class="field-group">
+															<span class="field-label">To</span>
+															<select class="select-input" value={z.floors[1]} onchange={(e) => store.updateZone(z.id, { floors: [z.floors[0], Number((e.target as HTMLSelectElement).value)] })}>
+																{#each floorOptions(s) as f (f.value)}<option value={f.value}>{f.label}</option>{/each}
+															</select>
+														</label>
+													</div>
+													<label class="field-label" for="zone-use-{z.id}">Proposed use</label>
+													<select id="zone-use-{z.id}" class="select-input" value={z.use} onchange={(e) => store.updateZone(z.id, { use: (e.target as HTMLSelectElement).value as Use })}>
+														{#each USE_OPTIONS as opt (opt.value)}<option value={opt.value}>{opt.label}</option>{/each}
+													</select>
+													{#if z.use === 'housing'}
+														<label class="field-label" for="zone-units-{z.id}">Housing units</label>
+														<input
+															id="zone-units-{z.id}"
+															class="num-input"
+															type="number"
+															min="0"
+															placeholder={String(zoneDwellings({ ...z, dwellings: undefined }, s))}
+															value={z.dwellings ?? ''}
+															oninput={(e) => {
+																const v = (e.target as HTMLInputElement).value;
+																store.updateZone(z.id, { dwellings: v ? Number(v) : undefined });
+															}}
+														/>
+														{#if z.dwellings === undefined}<span class="field-hint">Estimated at 900 sq ft per unit</span>{/if}
+													{/if}
+													<button class="delete-btn zone-delete" onclick={() => store.deleteZone(z.id)}>Delete zone</button>
+												</div>
+											{/if}
+										{/each}
+										<div class="reuse-actions">
+											<button class="split-btn" onclick={() => store.addWholeBuildingReuse(s.id)}>Reuse whole building</button>
+											<button class="split-btn" onclick={() => store.startDrawingZone(s.id)}>Draw reuse area</button>
+										</div>
+									</div>
+								{/if}
 								<div class="action-row">
 									<button class="split-btn" onclick={() => store.startCutting(s.id)} title="Cut into pieces, like additions">Cut</button>
 									{#if s.groupId}
@@ -503,6 +591,56 @@
 
 <style>
 	.section--site-type { padding-bottom: 0.6rem; }
+
+	.reuse-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin: 0.5rem 0;
+		padding-top: 0.45rem;
+		border-top: 1px solid var(--color-border);
+	}
+
+	.zone-row {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		grid-template-areas: 'swatch floors area' 'swatch use area';
+		column-gap: 0.4rem;
+		align-items: center;
+		text-align: left;
+		padding: 0.25rem 0.35rem;
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		background: #fff;
+		font-size: 0.68rem;
+		color: var(--color-text);
+		cursor: pointer;
+	}
+
+	.zone-row[aria-expanded='true'] { border-color: var(--color-reuse); }
+	.zone-swatch { grid-area: swatch; width: 0.7rem; height: 0.7rem; border-radius: 2px; background: var(--color-reuse); }
+	.zone-floors { grid-area: floors; font-weight: 600; }
+	.zone-use { grid-area: use; color: var(--fh-stone); }
+	.zone-area { grid-area: area; color: var(--fh-stone); font-variant-numeric: tabular-nums; }
+
+	.zone-props {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 0.35rem;
+		border-left: 2px solid var(--color-reuse);
+		margin-left: 0.35rem;
+	}
+
+	.zone-delete { margin-top: 0.25rem; }
+
+	.reuse-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+	}
+
+	.confirm-hint { display: block; margin-top: 0.3rem; color: #9a5a10; }
 	.link-btn {
 		border: none;
 		background: none;
