@@ -97,6 +97,19 @@
 	const BUILDING_TYPES = Object.keys(BUILDING_TYPE_LABELS) as BuildingType[];
 	let inferredDevelopment = $derived(inferDevelopmentType(store.plan));
 	let effectiveDevelopment = $derived(store.plan.developmentTypeOverride ?? inferredDevelopment);
+
+	// Active development pills take the pattern book's colors: green for adaptive reuse, orange
+	// for new construction, half of each for both. The others keep the selection blue.
+	function developmentPillStyle(t: DevelopmentType): string {
+		const fill =
+			t === 'reuse' ? 'var(--color-reuse)'
+			: t === 'new' ? 'var(--color-new)'
+			: t === 'reuse_new' ? 'linear-gradient(to right, var(--color-reuse) 50%, var(--color-new) 50%)'
+			: null;
+		if (!fill) return 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff';
+		// Dark text: white is hard to read on the green and orange
+		return `background:${fill};background-origin:border-box;border-color:transparent;color:var(--fh-black)`;
+	}
 	const DEVELOPMENT_TYPES = Object.keys(DEVELOPMENT_TYPE_LABELS) as DevelopmentType[];
 	let selectedOS = $derived(store.selectedOpenSpace);
 
@@ -331,7 +344,7 @@
 						class="pill"
 						class:pill--active={on}
 						aria-pressed={on}
-						style={on ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
+						style={on ? developmentPillStyle(t) : ''}
 						onclick={() => store.setDevelopmentTypeOverride(t === inferredDevelopment ? undefined : t)}
 					>{DEVELOPMENT_TYPE_LABELS[t]}</button>
 				{/each}
