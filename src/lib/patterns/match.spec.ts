@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchHint, rankPatterns, scorePattern, siteFacts } from './match';
+import { closestPattern, rankPatterns, scorePattern, siteFacts } from './match';
 import type { Pattern } from './catalog';
 import type { Part, Plan, ReuseZone, Site, Structure } from '../modeler/types';
 
@@ -97,11 +97,26 @@ describe('rankPatterns', () => {
 	});
 });
 
-describe('matchHint', () => {
-	it('asks for what would sharpen the match', () => {
-		expect(matchHint({})).toMatch('Add buildings');
-		expect(matchHint({ buildingTypes: 'box' })).toMatch('site type');
-		expect(matchHint({ buildingTypes: 'box', siteTypes: 'urban', size: 'small' })).toMatch('Social questions');
-		expect(matchHint({ buildingTypes: 'box', siteTypes: 'urban', size: 'small', role: 'gathering' })).toBeNull();
+describe('closestPattern', () => {
+	const facts = { buildingTypes: 'cluster', siteTypes: 'rural', interventions: 'new' };
+	const patterns = [
+		pattern({ buildingTypes: ['cluster'], siteTypes: ['rural'], interventions: ['new'] }, 'Rural cluster'),
+		pattern({ buildingTypes: ['cluster'], siteTypes: ['rural'] }, 'Cluster anywhere'), // also above the line
+	];
+
+	it('returns only the best fit when it clears the threshold', () => {
+		expect(closestPattern(patterns, facts)?.pattern.name).toBe('Rural cluster');
+	});
+
+	it('returns nothing when no pattern fits closely enough', () => {
+		expect(closestPattern([pattern({ buildingTypes: ['box'], interventions: ['reuse'] })], facts)).toBeNull();
+		expect(closestPattern([], facts)).toBeNull();
+	});
+
+	it('treats the threshold as inclusive', () => {
+		// 3 + 2 earned of 8 possible = 62.5%
+		const p = [pattern({ buildingTypes: ['cluster'], siteTypes: ['rural'], interventions: ['reuse'] })];
+		expect(closestPattern(p, facts, 0.625)).not.toBeNull();
+		expect(closestPattern(p, facts, 0.63)).toBeNull();
 	});
 });

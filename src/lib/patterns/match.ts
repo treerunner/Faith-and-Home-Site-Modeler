@@ -1,6 +1,6 @@
 import { BUILDING_TYPE_LABELS, buildingType, dwellingsEstimate, reuseZoneCount } from '../modeler/metrics';
 import type { Plan, Site } from '../modeler/types';
-import { WEIGHTS, type HousingScale, type Intervention, type Pattern, type TraitKey } from './catalog';
+import { MATCH_THRESHOLD, WEIGHTS, type HousingScale, type Intervention, type Pattern, type TraitKey } from './catalog';
 
 // Matches a site and its congregation to patterns: what the model knows (building type, site
 // type, reuse and new construction, housing) plus the Social answers. Pure.
@@ -95,11 +95,8 @@ export function rankPatterns(patterns: Pattern[], facts: Facts): PatternMatch[] 
 		.sort((a, b) => b.fit - a.fit || b.matches.length - a.matches.length || a.pattern.name.localeCompare(b.pattern.name));
 }
 
-// Too little known to trust the ranking: suggest what would sharpen it.
-export function matchHint(facts: Facts): string | null {
-	if (!facts.buildingTypes) return 'Add buildings to the model for a closer match.';
-	const culture = (['size', 'ownership', 'partnering', 'capacity', 'change', 'role'] as const).filter((k) => facts[k]);
-	if (!facts.siteTypes) return 'Choose a site type for a closer match.';
-	if (culture.length < 2) return 'Answer the Social questions for a closer match.';
-	return null;
+// The one pattern to show: the best fit, if it is close enough to trust.
+export function closestPattern(patterns: Pattern[], facts: Facts, threshold = MATCH_THRESHOLD): PatternMatch | null {
+	const [best] = rankPatterns(patterns, facts);
+	return best && best.fit >= threshold ? best : null;
 }

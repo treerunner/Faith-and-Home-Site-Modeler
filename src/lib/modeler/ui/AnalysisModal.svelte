@@ -32,7 +32,7 @@
 	} from '../metrics';
 	import type { Use } from '../types';
 	import { getPatterns, type Pattern } from '../../patterns/catalog';
-	import { matchHint, rankPatterns, siteFacts } from '../../patterns/match';
+	import { closestPattern, siteFacts } from '../../patterns/match';
 
 	const USE_LABELS: Record<Use, string> = {
 		worship: 'Worship', fellowship: 'Fellowship', education: 'Education',
@@ -77,9 +77,8 @@
 	$effect(() => {
 		getPatterns().then((p) => (patterns = p));
 	});
-	let facts = $derived(siteFacts(site, plan));
-	let closest = $derived(rankPatterns(patterns, facts).slice(0, 3));
-	let hint = $derived(matchHint(facts));
+	// One pattern, and only when it fits closely; a ranked list read as a hedge
+	let closest = $derived(closestPattern(patterns, siteFacts(site, plan)));
 
 	let statusCounts = $derived.by(() => {
 		const counts = { existing: 0, new: 0, removed: 0 };
@@ -179,26 +178,24 @@
 				</div>
 			</section>
 
-			<!-- Closest patterns -->
-			<section class="report-section" aria-label="Closest patterns">
-				<h2 class="section-heading">Closest patterns</h2>
-				{#if hint}<p class="pattern-hint">{hint}</p>{/if}
-				<ol class="pattern-list">
-					{#each closest as m (m.pattern.slug)}
-						{@const pct = Math.round(m.fit * 100)}
-						<li class="pattern-item">
-							<div class="pattern-head">
-								<a class="pattern-name" href="/patterns/{m.pattern.slug}" target="_blank" rel="noopener">{m.pattern.name}</a>
-								<span class="pattern-fit">{pct}% fit</span>
-							</div>
-							<div class="fit-bar" aria-hidden="true"><div class="fit-bar__fill" style="width:{pct}%"></div></div>
-							<p class="pattern-summary">{m.pattern.summary}</p>
-							{#if m.matches.length}<p class="pattern-reason"><span class="reason-label">Matches</span> {m.matches.join(', ')}</p>{/if}
-							{#if m.differs.length}<p class="pattern-reason pattern-reason--differs"><span class="reason-label">Differs</span> {m.differs.join(', ')}</p>{/if}
-						</li>
-					{/each}
-				</ol>
-			</section>
+			<!-- Your pattern: shown only for a close fit -->
+			{#if closest}
+				{@const m = closest}
+				{@const pct = Math.round(m.fit * 100)}
+				<section class="report-section" aria-label="Your pattern">
+					<h2 class="section-heading">Your pattern</h2>
+					<div class="pattern-item">
+						<div class="pattern-head">
+							<a class="pattern-name" href="/patterns/{m.pattern.slug}" target="_blank" rel="noopener">{m.pattern.name}</a>
+							<span class="pattern-fit">{pct}% fit</span>
+						</div>
+						<div class="fit-bar" aria-hidden="true"><div class="fit-bar__fill" style="width:{pct}%"></div></div>
+						<p class="pattern-summary">{m.pattern.summary}</p>
+						{#if m.matches.length}<p class="pattern-reason"><span class="reason-label">Matches</span> {m.matches.join(', ')}</p>{/if}
+						{#if m.differs.length}<p class="pattern-reason pattern-reason--differs"><span class="reason-label">Differs</span> {m.differs.join(', ')}</p>{/if}
+					</div>
+				</section>
+			{/if}
 
 			<!-- Spatial Metrics -->
 			<section class="report-section">
@@ -424,16 +421,7 @@
 		gap: 0.6rem;
 	}
 
-	.pattern-hint { font-size: 0.72rem; color: #9a5a10; margin: 0.5rem 0 0; }
-
-	.pattern-list {
-		list-style: none;
-		margin: 0.5rem 0 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.7rem;
-	}
+	.pattern-item { margin-top: 0.5rem; }
 
 	.pattern-head {
 		display: flex;

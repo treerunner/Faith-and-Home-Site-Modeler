@@ -49,6 +49,10 @@ export const WEIGHTS: Record<TraitKey, number> = {
 	role: 1,
 };
 
+// The analysis shows a pattern only when the best fit reaches this, so people see one confident
+// answer or none. Team-tunable, like WEIGHTS.
+export const MATCH_THRESHOLD = 0.75;
+
 const placeholderSections = (fits: string): Pattern['sections'] => [
 	{ heading: 'What it is', text: 'Placeholder text. The team will describe this pattern, its spatial moves and how congregations have used it.' },
 	{ heading: 'Where it fits', text: fits },

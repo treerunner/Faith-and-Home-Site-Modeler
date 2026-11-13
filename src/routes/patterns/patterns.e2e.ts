@@ -7,7 +7,7 @@ async function clickSite(page: Page, x: number, y: number) {
 	await page.mouse.click(box.x + box.width / 2 + x * s, box.y + box.height / 2 + y * s);
 }
 
-test('the analysis suggests the closest patterns and opens their pages', async ({ page, context }) => {
+test('the analysis shows one pattern when it fits closely, and opens its page', async ({ page, context }) => {
 	await page.goto('/modeler');
 
 	// An urban Box-Plus: a square cut into two touching pieces, one reused for housing
@@ -24,12 +24,12 @@ test('the analysis suggests the closest patterns and opens their pages', async (
 	await page.getByRole('group', { name: 'Who would steward a project?' }).getByRole('button', { name: 'Some staff' }).click();
 
 	await page.getByRole('button', { name: 'Analysis' }).click();
-	const closest = page.getByRole('region', { name: 'Closest patterns' });
-	await expect(closest.locator('.pattern-item')).toHaveCount(3);
-	const first = closest.locator('.pattern-item').first();
+	const yours = page.getByRole('region', { name: 'Your pattern' });
+	await expect(yours.locator('.pattern-item')).toHaveCount(1);
+	const first = yours.locator('.pattern-item');
 	await expect(first.locator('.pattern-name')).toHaveText('Urban box-plus, adaptive reuse');
+	await expect(first).toContainText('83% fit');
 	await expect(first).toContainText('Matches Box-Plus, urban site, adaptive reuse, open to partners, some staff');
-	await expect(closest.getByText(/closer match/)).toHaveCount(0); // enough is known
 	await page.screenshot({ path: 'tests/screenshots/patterns-analysis.png' });
 
 	// The pattern page opens in a new tab, so the model stays put
@@ -40,6 +40,17 @@ test('the analysis suggests the closest patterns and opens their pages', async (
 	await expect(tab.getByRole('heading', { name: 'Urban box-plus, adaptive reuse' })).toBeVisible();
 	await tab.screenshot({ path: 'tests/screenshots/patterns-page.png' });
 	await expect(first.locator('.pattern-name')).toBeVisible(); // the first tab still has the model and its analysis open
+});
+
+test('the analysis shows no pattern when none fits closely', async ({ page }) => {
+	await page.goto('/modeler');
+	// A new triangular church on a rural site: no placeholder pattern reaches 75%
+	await page.getByLabel('Drag to place Triangle').dragTo(page.locator('.canvas-area canvas'));
+	await page.getByRole('group', { name: 'Status' }).getByRole('button', { name: 'New', exact: true }).click();
+	await page.getByRole('group', { name: 'Site type' }).getByRole('button', { name: 'Rural', exact: true }).click();
+	await page.getByRole('button', { name: 'Analysis' }).click();
+	await expect(page.getByRole('heading', { name: 'Spatial Metrics' })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Your pattern' })).toHaveCount(0);
 });
 
 test('the pattern library lists every pattern and the masthead links to it', async ({ page }) => {
