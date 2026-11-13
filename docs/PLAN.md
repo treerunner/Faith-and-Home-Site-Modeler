@@ -168,6 +168,8 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 
 ## Data notes for address mode (verified Nov 2026)
 
+The full, maintained list of sources, terms and upkeep is in [DATA_SOURCES.md](DATA_SOURCES.md).
+
 The tool should eventually work beyond the Lehigh Valley, so sources are global where possible and nothing needs a per-region import.
 
 - **Buildings and roads:** Overture Maps PMTiles (`overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/<release>/{buildings,transportation}.pmtiles`), read with HTTP range requests, about 2 s per z14 tile and global. Buildings carry `height`, `num_floors`, `class` and names; roads carry `class`. Tiles cut buildings at their edges; pieces are merged by Overture id. Update `OVERTURE_RELEASE` in `src/lib/server/overture.ts` every few months (old releases are removed). Attribution: OpenStreetMap contributors, Overture Maps Foundation.

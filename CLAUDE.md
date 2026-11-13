@@ -43,7 +43,7 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 
 ## Address mode
 - Address data is fetched once at setup (`/api/context`) and saved into the Site: `context` (foam buildings, roads, sources), `origin`, `parcel`. Nothing re-fetches on load.
-- Sources and why are in docs/PLAN.md data notes. Prefer global sources; parcels are a per-county registry with drawing as the fallback.
+- Sources, terms, attribution and upkeep are in docs/DATA_SOURCES.md; update it when a source is added, dropped or bumped. Prefer global sources; parcels are a per-county registry with drawing as the fallback.
 - Pure geometry is in `src/lib/modeler/geo.ts` (projection, footprint fitting, heights from tags, site type). Site coordinates: x east, y south (north is up in plan view).
 - Real footprints become `rect` parts when nearly rectangular, otherwise `poly` parts with points normalized to w×d.
 - The board is a square around the origin, half-width `context.halfSize` (150 m default). A parcel within 30 m of the edge reloads the context on a bigger board (`boardHalfFor` in geo.ts, max 400 m). Pan and zoom are limited to the board (`store.boardHalf`; grid mode uses the 400 m ground).
