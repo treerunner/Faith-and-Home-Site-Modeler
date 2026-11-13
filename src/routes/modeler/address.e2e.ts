@@ -69,7 +69,7 @@ test('start from an address: choose the parcel and add its buildings', async ({ 
 	// The neighborhood loads and the parcel under the address is preselected
 	await expect(page.getByText('Is this your parcel? Click neighboring lots to add them.')).toBeVisible();
 	await expect(page.getByLabel('Address').getByText(PLACE.label)).toBeVisible();
-	await expect(page.getByText('© OpenStreetMap contributors, Overture Maps Foundation · Parcels: Lehigh County via PASDA')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Data credits' })).toBeVisible();
 
 	// A lot that doesn't touch is refused; the touching rear lot joins the property
 	await clickSite(page, 47, -10, 220);
@@ -111,7 +111,7 @@ test('start from an address: choose the parcel and add its buildings', async ({ 
 	await page.reload();
 	await expect(page.getByLabel('Address').getByText(PLACE.label)).toBeVisible();
 	await expect(page.locator('.struct-item')).toHaveCount(2);
-	await expect(page.getByText(/© OpenStreetMap contributors/)).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Data credits' })).toBeVisible(); // credits saved with the site
 	await expect(page.getByText('Click your parcel.')).toHaveCount(0);
 });
 
@@ -134,7 +134,7 @@ test('where there is no parcel data, trace the lot', async ({ page }) => {
 	await page.getByRole('button', { name: 'Change' }).click();
 	await page.getByRole('button', { name: 'Clear' }).click();
 	await expect(page.getByLabel('Find an address')).toBeVisible();
-	await expect(page.getByText(/© OpenStreetMap contributors/)).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Data credits' })).toHaveCount(0);
 });
 
 test('a large parcel grows the board to fit it', async ({ page }) => {
@@ -157,4 +157,37 @@ test('a large parcel grows the board to fit it', async ({ page }) => {
 	await expect(page.getByText('Add the 3 buildings on this parcel to Existing conditions?')).toBeVisible();
 	// First load at the default board; one reload sized to the parcel: 150 m + 60 m margin
 	expect(halves).toEqual([null, '210']);
+});
+
+test('data credits: a button on the map, a line in the analysis, and on PNG exports', async ({ page }) => {
+	await mockAddressApi(page, CONTEXT);
+	await page.goto('/modeler');
+	await page.getByLabel('Find an address').fill('100 Main');
+	await page.getByRole('option', { name: PLACE.label }).click();
+	await page.getByRole('button', { name: 'Use this parcel' }).click();
+	await page.getByRole('button', { name: 'Skip' }).click();
+
+	// Map: one small button; the card lists exactly this site's sources
+	const button = page.getByRole('button', { name: 'Data credits' });
+	await expect(page.getByRole('dialog', { name: 'Data credits' })).toHaveCount(0);
+	await button.click();
+	const card = page.getByRole('dialog', { name: 'Data credits' });
+	await expect(card).toContainText('Esri Community Maps (CC BY 4.0)');
+	await expect(card).toContainText('Data from TomTom');
+	await expect(card).toContainText('Lehigh County, via PASDA');
+	await page.screenshot({ path: 'tests/screenshots/credits-card.png' });
+	await page.mouse.click(600, 400); // clicking the model closes it
+	await expect(card).toHaveCount(0);
+
+	// Analysis: one line at the end of the report
+	await page.getByRole('button', { name: 'Analysis' }).click();
+	await expect(page.getByText('Data: Esri Community Maps, OpenStreetMap contributors, Overture Maps Foundation, TomTom, Lehigh County via PASDA')).toBeVisible();
+	await page.keyboard.press('Escape');
+
+	// PNG export: the image carries the credit line
+	await page.getByRole('button', { name: '3D', exact: true }).click();
+	await page.waitForTimeout(500);
+	const [download] = await Promise.all([page.waitForEvent('download'), page.getByTitle('Export PNG').click()]);
+	await download.saveAs('tests/screenshots/credits-export.png');
+	expect(download.suggestedFilename()).toBe('site-model.png');
 });

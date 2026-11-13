@@ -74,14 +74,37 @@ export function capturePlanImage(plan: Plan): string | null {
 	return dataURL;
 }
 
-export function exportPNG(filename = 'site-model.png') {
+// Data credits travel with shared images: printed small in the bottom-right corner.
+function withCredits(source: HTMLCanvasElement, credit: string): string {
+	const out = document.createElement('canvas');
+	out.width = source.width;
+	out.height = source.height;
+	const ctx = out.getContext('2d');
+	if (!ctx) return source.toDataURL('image/png');
+	ctx.drawImage(source, 0, 0);
+	const scale = source.width / source.clientWidth || 1; // device pixels per CSS pixel
+	const size = Math.round(11 * scale);
+	const pad = Math.round(6 * scale);
+	ctx.font = `${size}px system-ui, sans-serif`;
+	const width = ctx.measureText(credit).width;
+	const x = out.width - width - pad * 2;
+	const y = out.height - size - pad * 2;
+	ctx.fillStyle = 'rgba(247, 247, 242, 0.85)';
+	ctx.fillRect(x, y, width + pad * 2, size + pad * 2);
+	ctx.fillStyle = '#595657';
+	ctx.textBaseline = 'top';
+	ctx.fillText(credit, x + pad, y + pad);
+	return out.toDataURL('image/png');
+}
+
+export function exportPNG(filename = 'site-model.png', credit: string | null = null) {
 	const renderer = getRenderer();
 	const camera = getPerspCamera();
 	const scene = mainScene;
 	if (!renderer || !camera || !scene) return;
 
 	renderer.render(scene, camera);
-	const dataURL = renderer.domElement.toDataURL('image/png');
+	const dataURL = credit ? withCredits(renderer.domElement, credit) : renderer.domElement.toDataURL('image/png');
 	const a = document.createElement('a');
 	a.href = dataURL;
 	a.download = filename;

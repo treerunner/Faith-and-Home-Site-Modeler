@@ -31,6 +31,7 @@
 		reuseZoneCount,
 	} from '../metrics';
 	import type { Use } from '../types';
+	import { creditLine } from '../credits';
 	import { getPatterns, type Pattern } from '../../patterns/catalog';
 	import { closestPattern, siteFacts } from '../../patterns/match';
 
@@ -326,6 +327,10 @@
 				</section>
 			{/if}
 
+			{#if creditLine(site.context)}
+				<p class="credits-line">{creditLine(site.context)}</p>
+			{/if}
+
 		</div><!-- /.analysis-modal__body -->
 
 		<div class="analysis-modal__footer">
@@ -459,6 +464,14 @@
 	.pattern-reason { margin: 0.15rem 0 0; font-size: 0.68rem; color: var(--color-text); }
 	.pattern-reason--differs { color: var(--fh-stone); }
 	.reason-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.6rem; margin-right: 0.3rem; }
+
+	.credits-line {
+		margin: 1.25rem 0 0;
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--color-border);
+		font-size: 0.62rem;
+		color: var(--fh-stone);
+	}
 
 	.section-heading {
 		font-size: 0.65rem;

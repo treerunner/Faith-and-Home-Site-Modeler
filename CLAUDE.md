@@ -47,7 +47,7 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 - Pure geometry is in `src/lib/modeler/geo.ts` (projection, footprint fitting, heights from tags, site type). Site coordinates: x east, y south (north is up in plan view).
 - Real footprints become `rect` parts when nearly rectangular, otherwise `poly` parts with points normalized to w×d.
 - The board is a square around the origin, half-width `context.halfSize` (150 m default). A parcel within 30 m of the edge reloads the context on a bigger board (`boardHalfFor` in geo.ts, max 400 m). Pan and zoom are limited to the board (`store.boardHalf`; grid mode uses the 400 m ground).
-- Show data attribution wherever context appears (`Attribution.svelte`, from `context.sources`).
+- Credit data wherever it appears: the map's credits button, the analysis line and PNG exports, all from `src/lib/modeler/credits.ts`, which credits only the sources a site uses (`context.sources`, `context.buildingSources`). A new source needs a credit there.
 - e2e mocks our own `/api/geocode*` and `/api/context`; parsers are tested against fixtures in `src/lib/server/fixtures/` captured live.
 
 ## Colors

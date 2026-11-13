@@ -1,6 +1,6 @@
 # Data sources
 
-Every outside data source the modeler uses or has considered: what it provides, where it's called from, its terms, and its caveats. Keep this current when a source is added, dropped or updated. Last reviewed 2026-11-13.
+Every outside data source the modeler uses or has considered: what it provides, where it's called from, its terms, and its caveats. Keep this current when a source is added, dropped or updated, and update the credits in `src/lib/modeler/credits.ts` to match. Last reviewed 2026-11-13.
 
 Outbound requests identify themselves with the User-Agent in `src/lib/server/http.ts` (`FaithHomeSiteModeler/0.1 (Small Cities Lab, Lehigh University; …)`), as the services' usage policies ask.
 
@@ -79,8 +79,15 @@ Not outside data, but where everything above ends up. Each site's neighborhood, 
 | Google Maps / Photorealistic 3D Tiles | Excluded by project rule (terms and aesthetic) |
 | MapLibre and map tiles | Address picking happens in the model instead; no raster tiles in the model |
 
+## Credits
+Built from what each site actually uses (`src/lib/modeler/credits.ts`). At setup, the distinct Overture building sources (`@geometry_source`) are saved with the site, so only those are credited; roads always credit OpenStreetMap and TomTom; parcels are credited only when a county parcel was used. Sites saved before 2026-11-13 get a general Overture building credit.
+
+They appear in three places:
+- **Map:** a small "i" button in the canvas corner (address mode) opens the full credits, grouped by Buildings, Roads, Parcels.
+- **Analysis:** one "Data: …" line at the end of the report, so it prints with it.
+- **PNG export:** the same line printed in the image's bottom-right corner.
+
 ## Open items
-- **Attribution is incomplete.** The model shows "© OpenStreetMap contributors, Overture Maps Foundation · Parcels: Lehigh County via PASDA" (`src/lib/modeler/ui/Attribution.svelte`). Overture's terms also require "Data from TomTom" for roads, and credit for non-OSM building sources such as Esri Community Maps (CC BY 4.0). Fix before any public use.
 - **More counties:** add parcel sources to the registry in `src/lib/server/parcels.ts` as the tool reaches new places.
 - **Overture release:** currently `2026-10-21.0`; check for a newer one every few months.
 - **Outside the US:** the Census geocoder and USGS 3DEP are US-only; other sources would be needed abroad.

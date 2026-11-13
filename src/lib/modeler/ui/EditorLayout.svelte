@@ -10,6 +10,7 @@
 	import { store } from '../store.svelte';
 	import { clientToSite, hitTest, rendererEl } from '../scene/cameraRef';
 	import { exportPNG } from '../sceneExport';
+	import { creditLine } from '../credits';
 	import type { PaletteShape, Part } from '../types';
 	import type { ResizeHandle } from '../interaction';
 	import { panBy, scaleBar, type PlanView } from '../view';
@@ -337,7 +338,7 @@
 			<button
 				class="export-btn"
 				disabled={store.viewMode !== '3d'}
-				onclick={() => exportPNG()}
+				onclick={() => exportPNG(undefined, creditLine(store.site.context))}
 				title="Export PNG"
 			>↓ PNG</button>
 			<button
