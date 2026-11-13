@@ -17,6 +17,7 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 - Copy reactive state with the store's `copy()`, not `$state.snapshot(this.x)` alone: server builds (Vitest) compile that to the live value.
 - Metrics and building-type inference are pure functions in `src/lib/modeler/metrics.ts` with tests.
 - One three.js scene with two cameras (orthographic plan, perspective orbit). Do not build a separate 2D editor.
+- Plan view framing (pan, zoom, fit) is `store.planView`, with pure math in `src/lib/modeler/view.ts`. It is view state: never saved in the Site. Threlte renders on demand, so code that changes a camera by hand must call `invalidate()`.
 - No Google Maps or Google 3D Tiles. No raster map tiles inside the 3D model.
 - Do not add dependencies without asking.
 - Aesthetic is a physical study model (chipboard, basswood, white foam). Never aim for photorealism.
