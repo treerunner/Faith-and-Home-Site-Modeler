@@ -76,6 +76,9 @@ export interface Annotation {
 	text: string;
 }
 
+// Pattern-book building types (see inferBuildingType in metrics.ts)
+export type BuildingType = 'box' | 'box_plus' | 'object' | 'cluster';
+
 // One proposal (or the existing conditions) for a site.
 export interface Plan {
 	id: string;
@@ -86,6 +89,7 @@ export interface Plan {
 	openSpaces: OpenSpace[];
 	trees: Tree[];
 	annotations: Annotation[];
+	buildingTypeOverride?: BuildingType; // the user's choice over the inferred type
 }
 
 // Neighboring buildings (white foam) and roads (printed on the base board), in local meters.

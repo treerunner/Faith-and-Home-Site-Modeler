@@ -26,6 +26,8 @@
 		useFloorAreaByUse,
 		structureFootprint,
 		generateActionSteps,
+		buildingType,
+		BUILDING_TYPE_LABELS,
 	} from '../metrics';
 	import type { Use } from '../types';
 
@@ -113,6 +115,13 @@
 						<div class="overview-row">
 							<span class="overview-label">Type</span>
 							<span class="type-badge type-badge--{site.siteType}">{site.siteType.charAt(0).toUpperCase() + site.siteType.slice(1)}</span>
+						</div>
+					{/if}
+					{#if buildingType(plan)}
+						{@const bt = buildingType(plan)!}
+						<div class="overview-row">
+							<span class="overview-label">Building</span>
+							<span class="type-badge type-badge--building">{BUILDING_TYPE_LABELS[bt]}</span>
 						</div>
 					{/if}
 					<div class="overview-row">
@@ -457,6 +466,7 @@
 	.type-badge--urban { background: #d4e0f0; color: #1a3a6a; }
 	.type-badge--suburban { background: #e8f0d8; color: #2a4a1a; }
 	.type-badge--rural { background: #f0e8d0; color: #4a3010; }
+	.type-badge--building { background: var(--fh-lantern-tint); color: #5a3408; }
 
 	.metrics-table {
 		width: 100%;

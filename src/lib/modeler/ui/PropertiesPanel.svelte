@@ -3,7 +3,8 @@
 	import PlanSwitcher from './PlanSwitcher.svelte';
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM } from '../units';
-	import type { CongregationProfile, Roof, Site, Status, Structure, Use } from '../types';
+	import type { BuildingType, CongregationProfile, Roof, Site, Status, Structure, Use } from '../types';
+	import { BUILDING_TYPE_LABELS, inferBuildingType } from '../metrics';
 
 	let sidebarTab = $derived(store.sidebarTab);
 
@@ -40,6 +41,9 @@
 	];
 
 	let structures = $derived(store.plan.structures);
+	let inferredType = $derived(inferBuildingType(store.plan));
+	let effectiveType = $derived(store.plan.buildingTypeOverride ?? inferredType);
+	const BUILDING_TYPES = Object.keys(BUILDING_TYPE_LABELS) as BuildingType[];
 	let selectedOS = $derived(store.selectedOpenSpace);
 
 	// Track which structure is expanded — syncs when canvas selection changes
@@ -198,6 +202,34 @@
 			</div>
 			{#if store.suggestedSiteType}
 				<p class="field-hint site-type-hint">Suggested from the neighborhood: {store.suggestedSiteType}</p>
+			{/if}
+		</fieldset>
+	</div>
+
+	<div class="section section--site-type">
+		<h2 class="panel-heading">Building type</h2>
+		<fieldset class="ro-wrap" disabled={store.readOnly}>
+			<div class="pill-group" role="group" aria-label="Building type">
+				{#each BUILDING_TYPES as t (t)}
+					{@const on = effectiveType === t}
+					<button
+						class="pill"
+						class:pill--active={on}
+						aria-pressed={on}
+						style={on ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
+						onclick={() => store.setBuildingTypeOverride(t === inferredType ? undefined : t)}
+					>{BUILDING_TYPE_LABELS[t]}</button>
+				{/each}
+			</div>
+			{#if store.plan.buildingTypeOverride && inferredType && store.plan.buildingTypeOverride !== inferredType}
+				<p class="field-hint site-type-hint">
+					Inferred: {BUILDING_TYPE_LABELS[inferredType]}.
+					<button class="link-btn" onclick={() => store.setBuildingTypeOverride(undefined)}>Use inferred</button>
+				</p>
+			{:else if inferredType}
+				<p class="field-hint site-type-hint">Inferred from the structures</p>
+			{:else}
+				<p class="field-hint site-type-hint">Add structures to infer a type</p>
 			{/if}
 		</fieldset>
 	</div>
@@ -472,6 +504,15 @@
 
 <style>
 	.section--site-type { padding-bottom: 0.6rem; }
+	.link-btn {
+		border: none;
+		background: none;
+		padding: 0;
+		font: inherit;
+		color: var(--color-selection);
+		text-decoration: underline;
+		cursor: pointer;
+	}
 	.site-type-hint { display: block; margin-top: 0.35rem; }
 	.height-hint { display: block; margin: 0.15rem 0 0.35rem; }
 	.height-hint--confirm { color: #9a5a10; }

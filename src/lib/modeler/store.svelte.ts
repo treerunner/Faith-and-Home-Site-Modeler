@@ -1,4 +1,4 @@
-import type { CongregationProfile, OpenSpace, PaletteShape, Part, Plan, Site, Structure, Tree } from './types';
+import type { BuildingType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, Site, Structure, Tree } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
@@ -827,6 +827,12 @@ class ModelerStore {
 	// Suggested from how built-up the neighborhood is; derived, never stored
 	get suggestedSiteType(): Site['siteType'] {
 		return this.site.mode === 'address' ? suggestSiteType(this.site.context.buildings) : undefined;
+	}
+
+	// The current plan's building type: undefined goes back to the inferred one
+	setBuildingTypeOverride(type: BuildingType | undefined) {
+		this.#pushUndo();
+		this.plan.buildingTypeOverride = type;
 	}
 
 	setSiteType(siteType: Site['siteType']) {

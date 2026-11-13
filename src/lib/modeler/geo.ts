@@ -385,3 +385,33 @@ export function splitPart(part: Part, a: Pt, b: Pt): FittedPart[] | null {
 	const pieces = splitPolygon(partOutline(part), a, b);
 	return pieces.length ? pieces.map(fitFootprint) : null;
 }
+
+// Shortest distance between two polygons: 0 when they overlap or touch.
+export function polygonDistance(a: Pt[], b: Pt[]): number {
+	if (a.some((p) => pointInPolygon(p, b)) || b.some((p) => pointInPolygon(p, a))) return 0;
+	let best = Infinity;
+	for (let i = 0; i < a.length; i++) {
+		const a1 = a[i];
+		const a2 = a[(i + 1) % a.length];
+		for (let j = 0; j < b.length; j++) {
+			const b1 = b[j];
+			const b2 = b[(j + 1) % b.length];
+			if (segmentsCross(a1, a2, b1, b2)) return 0; // e.g. two bars crossing in a plus
+			best = Math.min(best, segmentPointDistance(a1, a2, b1), segmentPointDistance(b1, b2, a1));
+		}
+	}
+	return best;
+}
+
+function segmentPointDistance([ax, ay]: Pt, [bx, by]: Pt, [px, py]: Pt): number {
+	const dx = bx - ax;
+	const dy = by - ay;
+	const len2 = dx * dx + dy * dy;
+	const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+	return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+function segmentsCross(p1: Pt, p2: Pt, q1: Pt, q2: Pt): boolean {
+	const orient = (a: Pt, b: Pt, c: Pt) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+	return orient(p1, p2, q1) * orient(p1, p2, q2) < 0 && orient(q1, q2, p1) * orient(q1, q2, p2) < 0;
+}

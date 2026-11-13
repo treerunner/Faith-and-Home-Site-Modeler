@@ -1,4 +1,5 @@
-import type { OpenSpace, Part, Plan, Site, Structure, Use } from './types';
+import type { BuildingType, OpenSpace, Part, Plan, Site, Structure, Use } from './types';
+import { partOutline, polygonDistance } from './geo';
 
 export function partFootprint(part: Part): number {
 	if (part.shape === 'poly' && part.points) return polygonArea(part.points) * part.w * part.d;
@@ -186,4 +187,65 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	}
 
 	return steps;
+}
+
+// ── Building type ────────────────────────────────────────────────────────────
+// Pattern-book types: Box (one simple building), Box-Plus (one building of several touching
+// pieces), Object (a radial or triangular "object in space" church), Cluster (several
+// buildings near each other). The distinctions are loose; these thresholds are for the team
+// to tune.
+
+const TOUCH_TOLERANCE = 0.5; // m: pieces this close count as one building
+const MIN_CLUSTER_BUILDING = 25; // m²: smaller outbuildings (sheds) don't make a cluster
+const CLUSTER_DISTANCE = 50; // m from the main building, outline to outline
+
+export const BUILDING_TYPE_LABELS: Record<BuildingType, string> = {
+	box: 'Box',
+	box_plus: 'Box-Plus',
+	object: 'Object',
+	cluster: 'Cluster',
+};
+
+const outlines = (structures: Structure[]) => structures.flatMap((s) => s.parts.map(partOutline));
+
+function buildingDistance(a: Structure[], b: Structure[]): number {
+	let best = Infinity;
+	for (const pa of outlines(a)) for (const pb of outlines(b)) best = Math.min(best, polygonDistance(pa, pb));
+	return best;
+}
+
+// Structures joined into buildings: the same group, or footprints that touch. Removed
+// structures are left out (they are going away).
+export function planBuildings(plan: Plan): Structure[][] {
+	const structures = plan.structures.filter((s) => s.status !== 'removed' && s.parts.length > 0);
+	const parent = structures.map((_, i) => i);
+	const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+	for (let i = 0; i < structures.length; i++) {
+		for (let j = i + 1; j < structures.length; j++) {
+			const a = structures[i];
+			const b = structures[j];
+			const joined = (a.groupId && a.groupId === b.groupId) || buildingDistance([a], [b]) <= TOUCH_TOLERANCE;
+			if (joined) parent[find(i)] = find(j);
+		}
+	}
+	const buildings = new Map<number, Structure[]>();
+	structures.forEach((s, i) => buildings.set(find(i), [...(buildings.get(find(i)) ?? []), s]));
+	return [...buildings.values()];
+}
+
+export function inferBuildingType(plan: Plan): BuildingType | null {
+	const buildings = planBuildings(plan);
+	if (buildings.length === 0) return null;
+	const area = (b: Structure[]) => b.reduce((sum, s) => sum + structureFootprint(s), 0);
+	const [main, ...others] = [...buildings].sort((a, b) => area(b) - area(a));
+	const nearby = others.filter((b) => area(b) >= MIN_CLUSTER_BUILDING && buildingDistance(main, b) <= CLUSTER_DISTANCE);
+	if (nearby.length >= 2) return 'cluster';
+	const parts = main.flatMap((s) => s.parts);
+	if (parts.some((p) => p.shape === 'tri' || p.shape === 'circle')) return 'object';
+	if (parts.length >= 2) return 'box_plus';
+	return 'box';
+}
+
+export function buildingType(plan: Plan): BuildingType | null {
+	return plan.buildingTypeOverride ?? inferBuildingType(plan);
 }

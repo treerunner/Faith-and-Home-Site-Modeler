@@ -168,6 +168,9 @@ function parsePlan(v: unknown, path: string): Plan {
 		oldSlugs: optional(o.oldSlugs, (v) =>
 			arr(v, `${path}.oldSlugs`).map((s, i) => str(s, `${path}.oldSlugs[${i}]`)),
 		),
+		buildingTypeOverride: optional(o.buildingTypeOverride, (v) =>
+			oneOf(v, ['box', 'box_plus', 'object', 'cluster'] as const, `${path}.buildingTypeOverride`),
+		),
 		...parsePlanContent(o, path),
 	};
 }
