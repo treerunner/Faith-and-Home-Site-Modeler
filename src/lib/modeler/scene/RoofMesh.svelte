@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { T } from '@threlte/core';
 	import * as THREE from 'three';
+	import { applyGrain, GRAIN_BUILDING } from './grain';
 	import type { Part, Roof, Status } from '../types';
 	import { statusColor } from '../colors';
 	import { roofHeight, gableRidgeAxis } from '../geometry';
@@ -128,7 +129,7 @@
 	castShadow
 	receiveShadow
 >
-	<T.MeshLambertMaterial {color} side={THREE.DoubleSide} />
+	<T.MeshLambertMaterial {color} side={THREE.DoubleSide} oncreate={(m) => applyGrain(m, GRAIN_BUILDING)} />
 </T.Mesh>
 
 <!-- Ridge / rake edge lines -->

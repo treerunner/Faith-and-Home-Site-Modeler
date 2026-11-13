@@ -288,6 +288,45 @@ test('3D: the wheel zooms toward what is under the cursor', async ({ page }) => 
 	expect((await canvasPixel(page, ...center)).r).toBeGreaterThan(0x90);
 });
 
+test('3D: buildings carry a faint paper grain; plan view stays flat', async ({ page }) => {
+	await mockAddressApi(page, CONTEXT, hillside());
+	await page.goto('/modeler');
+	await page.getByLabel('Find an address').fill('100 Main');
+	await page.getByRole('option', { name: PLACE.label }).click();
+	await page.getByRole('button', { name: 'Use these lots' }).or(page.getByRole('button', { name: 'Use this parcel' })).click();
+	await page.getByRole('button', { name: 'Add buildings' }).click();
+	await expect(page.getByText('Loading terrain…')).toHaveCount(0);
+	const box = (await page.locator('canvas').first().boundingBox())!;
+	const roof: Pt = [box.width * 0.51, box.height * 0.41]; // the middle of the church's roof in 3D
+
+	const flat = await brightnessSpread(page, ...roof);
+	await page.getByRole('button', { name: '3D', exact: true }).click();
+	await page.waitForTimeout(800);
+	// Up close, where the grain shows (from afar it averages out)
+	await page.mouse.move(box.x + roof[0], box.y + roof[1]);
+	for (let i = 0; i < 10; i++) await page.mouse.wheel(0, -100);
+	await page.waitForTimeout(1500);
+	await page.screenshot({ path: 'tests/screenshots/paper-grain.png' });
+	const grained = await brightnessSpread(page, ...roof);
+	// A plain lit face is perfectly even (0); the grain adds about a level of variation
+	expect(flat).toBeLessThan(0.2);
+	expect(grained).toBeGreaterThan(0.5);
+});
+
+// How much brightness varies (standard deviation, 0 to 255) over a 24 px patch of the canvas
+async function brightnessSpread(page: Page, x: number, y: number): Promise<number> {
+	const buf = await page.locator('canvas').first().screenshot();
+	const png = await decodePng(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
+	const values: number[] = [];
+	for (let j = Math.round(y) - 12; j < Math.round(y) + 12; j++)
+		for (let i = Math.round(x) - 12; i < Math.round(x) + 12; i++) {
+			const at = (j * png.width + i) * png.channels;
+			values.push(0.299 * png.data[at] + 0.587 * png.data[at + 1] + 0.114 * png.data[at + 2]);
+		}
+	const mean = values.reduce((a, b) => a + b, 0) / values.length;
+	return Math.sqrt(values.reduce((a, v) => a + (v - mean) ** 2, 0) / values.length);
+}
+
 // A pixel of the canvas, at CSS pixels from its top left
 async function canvasPixel(page: Page, x: number, y: number): Promise<{ r: number; g: number; b: number }> {
 	const buf = await page.locator('canvas').first().screenshot();

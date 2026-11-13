@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { T } from '@threlte/core';
 	import * as THREE from 'three';
+	import { applyGrain, GRAIN_BUILDING } from './grain';
 	import type { Part, Status } from '../types';
 	import { COLORS, statusColor } from '../colors';
 
@@ -94,6 +95,7 @@
 		polygonOffsetFactor={1}
 		polygonOffsetUnits={1}
 		side={THREE.FrontSide}
+		oncreate={(m) => applyGrain(m, GRAIN_BUILDING)}
 	/>
 </T.Mesh>
 

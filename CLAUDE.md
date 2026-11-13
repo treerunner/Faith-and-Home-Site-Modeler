@@ -56,6 +56,7 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 
 ## Colors
 Pull from the pattern book: green (adaptive reuse), orange (new construction), blue, red, off-white base. Define as CSS tokens and share with three.js materials.
+- In 3D, buildings and roofs carry a faint paper grain (15%) and the board and terrain a fainter one (7%), from a CC0 kraft-paper texture laid by world position (`scene/grain.ts`, `applyGrain` via `oncreate`). Foam, draped print and plan view stay flat.
 
 ## Workflow
 - Start each milestone in plan mode and wait for approval.

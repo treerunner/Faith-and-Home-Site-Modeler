@@ -18,6 +18,7 @@
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
 	import { setMainScene } from './cameraRef';
+	import { applyGrain, GRAIN_BOARD, loadGrain, setGrainOn } from './grain';
 	import type { Status, Structure } from '../types';
 
 	const { scene, invalidate } = useThrelte();
@@ -45,6 +46,13 @@
 	$effect(() => {
 		if (store.viewMode === '3d') scene.background = backdrop ??= backdropTexture();
 		else scene.background = null;
+		invalidate();
+	});
+
+	// Paper grain: 3D only
+	loadGrain(invalidate);
+	$effect(() => {
+		setGrainOn(store.viewMode === '3d');
 		invalidate();
 	});
 
@@ -234,9 +242,9 @@
 		<T.BoxGeometry args={[pedestal.w, DEPTH, pedestal.d]} />
 		<!-- Address mode: an off-white printed board; grid mode keeps the kraft base -->
 		{#if isAddress}
-			<T.MeshLambertMaterial color={COLORS.base} emissive={COLORS.base} emissiveIntensity={0.4} toneMapped={false} />
+			<T.MeshLambertMaterial color={COLORS.base} emissive={COLORS.base} emissiveIntensity={0.4} toneMapped={false} oncreate={(m) => applyGrain(m, GRAIN_BOARD)} />
 		{:else}
-			<T.MeshLambertMaterial color="#c8b898" />
+			<T.MeshLambertMaterial color="#c8b898" oncreate={(m) => applyGrain(m, GRAIN_BOARD)} />
 		{/if}
 	</T.Mesh>
 {/if}

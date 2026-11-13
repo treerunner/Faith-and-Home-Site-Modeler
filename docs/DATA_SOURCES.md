@@ -66,6 +66,18 @@ Outbound requests identify themselves with the User-Agent in `src/lib/server/htt
 ### Railway Postgres with PostGIS (our own storage)
 Not outside data, but where everything above ends up. Each site's neighborhood, roads, parcel, terrain and origin are fetched once at setup and saved with the site in `sites.data`. The origin and parcel are also written as PostGIS geography (`sites.origin`, `sites.parcel`) for spatial queries. Nothing is re-fetched when a site loads.
 
+## Assets
+Not data, but outside files shipped with the app.
+
+### ambientCG Paper006: paper grain texture
+| | |
+|---|---|
+| Provides | The faint paper grain on buildings and the board in 3D (`static/textures/paper-grain.jpg`, used by `src/lib/modeler/scene/grain.ts`) |
+| Source | ambientcg.com/view?id=Paper006, 1K JPG color map, downloaded 2026-11-13 |
+| Terms | CC0 1.0 (public domain). No attribution required, so nothing in credits.ts |
+| Changes | Made gray and halved to 512 px with macOS `sips`, color profile removed, about 65 KB. Its average brightness and spread are constants in `grain.ts`; remeasure them if the image is replaced |
+| Considered | Architextures (its terms forbid publishing its images in a web app); ambientCG Paper002, Cardboard002 and Chipboard005 (tried, not chosen) |
+
 ## Considered, not used
 
 | Source | Why not |
