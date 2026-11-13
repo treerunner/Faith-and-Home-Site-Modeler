@@ -29,7 +29,7 @@ The user can override the inferred type. Site type (urban, suburban, rural) is a
 ## Data model (TypeScript)
 
 ```ts
-type Status = 'existing' | 'adaptive_reuse' | 'new' | 'removed';
+type Status = 'existing' | 'new' | 'removed';   // what stands; reuse is a ReuseZone (below)
 type Use = 'worship' | 'fellowship' | 'education' | 'office' | 'housing'
          | 'community' | 'daycare' | 'social_services' | 'other';
 type Roof = 'flat' | 'gable' | 'object';
@@ -156,7 +156,7 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 **After M6: refinements from testing** (agreed order, Nov 2026)
 1. (Done) The parcel under the address is preselected to confirm, and neighboring lots can be added. Churches often own several touching parcels (parking, rectory); they merge into one property.
 2. (Done) Cut tool: split a structure along a drawn line into grouped pieces, each with its own stories, roof, status and uses. Building-type inference (Box, Box-Plus, Object, Cluster) with a per-plan override, shown on the Spatial tab and in the analysis. Still open from M4: matching the type and culture questionnaire to the closest pattern and showing its page.
-3. Reuse zones: a footprint plus a floor range plus status and use inside a structure ("housing, 2nd floor, west side"), shown as a tinted slice. Its own milestone; how zones relate to the use sliders is a team decision.
+3. (Done) Reuse zones. Reuse left the status list: status is what stands (Existing, New, Removed), and a reuse zone marks part of an existing building (area, floors, proposed use) in the reuse green, like "housing, 2nd floor, west side". Zones count toward their use; the use sliders describe the building's current program. Housing zones estimate units at 900 sq ft each until entered.
 4. Terrain (M6.5, below).
 
 **M6.5. Terrain.** Elevation from USGS 3DEP (`getSamples`, 1 m lidar, public domain, JSON). Store an elevation grid on the site (about 5 m spacing), trace contours with a pure marching-squares function, render stacked chipboard layers in 3D, and set structures and foam on the terrain at render time (derived, not stored). Plan view prints contours; editing stays flat. Verified near Lehigh: about 90 m of relief across 400 m.
