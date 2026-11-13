@@ -28,6 +28,7 @@ describe('parseBuildings', () => {
 		const cathedral = buildings.find((b) => b.name?.includes('Cathedral'));
 		expect(cathedral).toBeDefined();
 		expect(cathedral!.tags.building).toBe('cathedral');
+		expect(cathedral!.source).toBe('OpenStreetMap'); // recorded for credits
 		expect(cathedral!.height).toBeCloseTo(8.6, 1);
 		expect(storiesFromTags(cathedral!.tags)).toMatchObject({ stories: 1, source: 'data' });
 		// Its outline contains the point Photon gives for it

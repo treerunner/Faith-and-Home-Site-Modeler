@@ -27,6 +27,7 @@ const CONTEXT: ContextResponse = {
 		{ id: '640700000003', address: '100 REAR MAIN ST', polygon: rect(-20, 20, 45, 25) }, // shares the south edge
 	],
 	sources: ['overture', 'pasda-lehigh'],
+	buildingSources: ['Esri Community Maps', 'OpenStreetMap'],
 	parcelsFailed: false,
 };
 

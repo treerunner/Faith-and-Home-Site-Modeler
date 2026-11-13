@@ -121,6 +121,7 @@ export function parseBuildings(features: Feature[], origin: LatLng, half: number
 			height: Math.round(contextHeight(tags) * 10) / 10,
 			tags,
 			name: typeof props['@name'] === 'string' ? props['@name'] : undefined,
+			source: typeof props['@geometry_source'] === 'string' ? props['@geometry_source'] : undefined,
 		});
 	}
 	return result;

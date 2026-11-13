@@ -21,11 +21,13 @@ export async function loadContext(origin: LatLng, boardHalf = CONTEXT_HALF_SIZE)
 			return null;
 		}),
 	]);
+	const buildings = parseBuildings(overture.buildings, origin, boardHalf);
 	return {
-		buildings: parseBuildings(overture.buildings, origin, boardHalf),
+		buildings,
 		roads: parseRoads(overture.roads, origin, boardHalf),
 		parcels: parcelResult?.parcels ?? [],
 		sources: ['overture', ...(parcelResult?.source ? [parcelResult.source] : [])],
+		buildingSources: [...new Set(buildings.flatMap((b) => (b.source ? [b.source] : [])))].sort(),
 		parcelsFailed: parcelResult === null,
 	};
 }

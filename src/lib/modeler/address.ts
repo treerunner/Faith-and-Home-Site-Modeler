@@ -18,6 +18,7 @@ export interface ContextBuildingData {
 	height: number; // for foam
 	tags: Tags; // OSM-style tags for storiesFromTags when prefilling structures
 	name?: string;
+	source?: string; // where Overture got the footprint, e.g. OpenStreetMap, Esri Community Maps
 }
 
 export interface ParcelData {
@@ -31,6 +32,7 @@ export interface ContextResponse {
 	roads: { line: Pt[]; kind: string }[];
 	parcels: ParcelData[];
 	sources: ContextSource[];
+	buildingSources: string[]; // distinct footprint sources, for credits
 	parcelsFailed: boolean; // the parcel service was down; drawing still works
 }
 

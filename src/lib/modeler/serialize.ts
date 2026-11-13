@@ -243,7 +243,10 @@ function parseContext(v: unknown): SiteContext {
 		arr(v, `${path}.sources`).map((s, i) => oneOf(s, CONTEXT_SOURCES, `${path}.sources[${i}]`)),
 	);
 	const halfSize = optional(o.halfSize, (n) => num(n, `${path}.halfSize`));
-	return { buildings: [...buildings, ...legacyFootprints], roads, sources, halfSize };
+	const buildingSources = optional(o.buildingSources, (v) =>
+		arr(v, `${path}.buildingSources`).map((s, i) => str(s, `${path}.buildingSources[${i}]`)),
+	);
+	return { buildings: [...buildings, ...legacyFootprints], roads, sources, halfSize, buildingSources };
 }
 
 export const DEFAULT_PLAN_NAME = 'Existing conditions';

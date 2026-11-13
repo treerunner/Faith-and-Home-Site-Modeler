@@ -964,6 +964,7 @@ class ModelerStore {
 			buildings: context.buildings.map((b) => ({ polygon: b.polygon, height: b.height })),
 			roads: context.roads,
 			sources: context.sources,
+			buildingSources: context.buildingSources,
 		};
 		this.site.siteType ??= this.suggestedSiteType;
 		this.setup = { context, selected: [], prefill: null };
@@ -1059,6 +1060,7 @@ class ModelerStore {
 				buildings: context.buildings.map((b) => ({ polygon: b.polygon, height: b.height })),
 				roads: context.roads,
 				sources: this.site.context.sources, // parcel credit stays with the original fetch
+				buildingSources: context.buildingSources,
 				halfSize: half,
 			};
 			if (this.setup) this.setup = { ...this.setup, context: { ...context, parcels: this.setup.context.parcels } };
