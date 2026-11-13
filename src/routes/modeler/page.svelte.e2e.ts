@@ -60,3 +60,17 @@ test('zoom buttons and Fit change the plan view', async ({ page }) => {
 	await page.getByRole('button', { name: 'Fit' }).click();
 	await expect.poll(async () => (await canvas.screenshot()).equals(zoomed)).toBe(false);
 });
+
+test('the scale bar follows the zoom', async ({ page }) => {
+	await page.goto('/modeler');
+	const label = page.locator('.scale-bar__label');
+	await expect(label).toHaveText('25 ft'); // default 100 m view
+	for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Zoom out' }).click();
+	await expect(label).not.toHaveText('25 ft');
+	// The bar's drawn length matches its label at the new zoom
+	const canvas = (await page.locator('.canvas-area canvas').boundingBox())!;
+	const bar = (await page.locator('.scale-bar__line').boundingBox())!;
+	const feet = Number((await label.textContent())!.replace(' ft', ''));
+	const viewMeters = 100 * 1.25 ** 4;
+	expect(bar.width).toBeCloseTo(((feet / 3.28084) / viewMeters) * canvas.height, 0);
+});

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { contentBounds, fitView, maxViewHeight, panBy, zoomAt, DEFAULT_VIEW } from './view';
+import { contentBounds, fitView, maxViewHeight, panBy, scaleBar, zoomAt, DEFAULT_VIEW } from './view';
+import { ftToM } from './units';
 
 const HALF = 150; // default address board
 import type { Plan } from './types';
@@ -82,5 +83,22 @@ describe('board limits', () => {
 
 	it('keeps a fitted view centered on the board', () => {
 		expect(fitView({ minX: 500, maxX: 520, minY: 0, maxY: 20 }, 1, HALF).center[0]).toBe(HALF);
+	});
+});
+
+describe('scaleBar', () => {
+	it('picks a round length near a tenth of the view', () => {
+		expect(scaleBar(100).feet).toBe(25); // target 32.8 ft
+		expect(scaleBar(30).feet).toBe(10);
+		expect(scaleBar(660).feet).toBe(200);
+	});
+
+	it('sizes the bar to match its label', () => {
+		for (const h of [20, 73, 100, 220, 880]) {
+			const { feet, fraction } = scaleBar(h);
+			expect(fraction * h).toBeCloseTo(ftToM(feet), 6); // the bar is exactly `feet` long
+			expect(fraction).toBeGreaterThan(0.05);
+			expect(fraction).toBeLessThan(0.2);
+		}
 	});
 });

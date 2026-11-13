@@ -12,7 +12,7 @@
 	import { exportPNG } from '../sceneExport';
 	import type { PaletteShape, Part } from '../types';
 	import type { ResizeHandle } from '../interaction';
-	import { panBy, type PlanView } from '../view';
+	import { panBy, scaleBar, type PlanView } from '../view';
 
 	let canvasAreaEl: HTMLDivElement | undefined = $state();
 	let viewModeBeforeAnalysis = $state<'plan' | '3d'>('plan');
@@ -250,9 +250,10 @@
 		<SetupBanner />
 
 		{#if store.viewMode === 'plan'}
-			<div class="scale-bar" aria-label="Scale: 33 feet">
-				<div class="scale-bar__line"></div>
-				<span class="scale-bar__label">33 ft</span>
+			{@const bar = scaleBar(store.planView.height)}
+			<div class="scale-bar" aria-label="Scale: {bar.feet} feet">
+				<div class="scale-bar__line" style="width: {bar.fraction * 100}cqh"></div>
+				<span class="scale-bar__label">{bar.feet} ft</span>
 			</div>
 		{/if}
 
@@ -340,8 +341,8 @@
 	}
 
 	/* 10m = 10% of canvas height (camera shows 100m vertically) */
+	/* Width set inline from the zoom: cqh of the canvas area, so it matches the view's meters */
 	.scale-bar__line {
-		width: 10cqh;
 		height: 3px;
 		background: var(--color-text);
 		border-left: 2px solid var(--color-text);

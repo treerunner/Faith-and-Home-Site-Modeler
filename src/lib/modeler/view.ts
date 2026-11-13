@@ -2,6 +2,7 @@
 // never saved. The view is a center (site meters) and how many meters fit top to bottom.
 
 import { getPartAABB } from './snap';
+import { ftToM, M_TO_FT } from './units';
 import type { Plan } from './types';
 
 type Pt = [number, number];
@@ -80,4 +81,17 @@ export function panBy(view: PlanView, dx: number, dy: number, canvasHeight: numb
 		...view,
 		center: [clampPan(view.center[0] - dx * metersPerPixel, half), clampPan(view.center[1] - dy * metersPerPixel, half)],
 	};
+}
+
+const NICE_FEET = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];
+const SCALE_TARGET = 0.1; // the bar aims for about a tenth of the view's height
+
+// A scale bar that stays readable at any zoom: a round length in feet, and its width as a
+// fraction of the view's height (the canvas sizes it in container-height units).
+export function scaleBar(viewHeight: number): { feet: number; fraction: number } {
+	const targetFeet = viewHeight * SCALE_TARGET * M_TO_FT;
+	const feet = NICE_FEET.reduce((best, f) =>
+		Math.abs(Math.log(f / targetFeet)) < Math.abs(Math.log(best / targetFeet)) ? f : best,
+	);
+	return { feet, fraction: ftToM(feet) / viewHeight };
 }
