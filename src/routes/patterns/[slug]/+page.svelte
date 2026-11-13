@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Masthead from '#lib/modeler/ui/Masthead.svelte';
-	import { traitChips } from '#lib/patterns/traits';
+	import MatrixGrid from '#lib/patterns/MatrixGrid.svelte';
+	import { conditionText } from '#lib/patterns/match';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -20,15 +21,28 @@
 		{/if}
 		<h2 class="pattern-title">{p.name}</h2>
 		<p class="pattern-summary">{p.summary}</p>
-		<ul class="chips" aria-label="Fits">
-			{#each traitChips(p) as chip (chip)}<li class="chip">{chip}</li>{/each}
-		</ul>
+		<section class="pattern-section" aria-label="Where it sits in the matrix">
+			<h3 class="section-heading">In the matrix</h3>
+			<MatrixGrid pattern={p} />
+		</section>
 		{#each p.sections as section (section.heading)}
 			<section class="pattern-section">
 				<h3 class="section-heading">{section.heading}</h3>
 				<p>{section.text}</p>
 			</section>
 		{/each}
+		{#if p.variants?.length}
+			<section class="pattern-section" aria-label="Variants">
+				<h3 class="section-heading">Variants</h3>
+				{#each p.variants as v (v.key)}
+					<div class="variant">
+						<h4 class="variant-name">{v.name}</h4>
+						<p class="variant-when">When {conditionText(v.when)}</p>
+						<p>{v.summary}</p>
+					</div>
+				{/each}
+			</section>
+		{/if}
 	</main>
 </div>
 
@@ -71,21 +85,6 @@
 
 	.pattern-summary { font-size: 0.95rem; line-height: 1.5; margin: 0 0 0.75rem; }
 
-	.chips {
-		list-style: none;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.3rem;
-		margin: 0 0 1.25rem;
-		padding: 0;
-	}
-
-	.chip {
-		font-size: 0.7rem;
-		padding: 0.15rem 0.5rem;
-		border-radius: 999px;
-		background: var(--fh-dusk-tint);
-	}
 
 	.pattern-section { margin-top: 1.25rem; }
 
@@ -100,4 +99,7 @@
 	}
 
 	.pattern-section p { font-size: 0.85rem; line-height: 1.55; margin: 0; }
+	.variant + .variant { margin-top: 0.75rem; }
+	.variant-name { margin: 0; font-size: 0.85rem; }
+	.pattern-section .variant-when { font-size: 0.72rem; color: var(--fh-stone); }
 </style>

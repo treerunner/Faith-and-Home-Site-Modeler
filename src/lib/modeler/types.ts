@@ -96,6 +96,10 @@ export interface Annotation {
 // Pattern-book building types (see inferBuildingType in metrics.ts)
 export type BuildingType = 'box' | 'box_plus' | 'object' | 'cluster';
 
+// What a plan does with the property (see inferDevelopmentType in metrics.ts). Reuse and new
+// can happen together. Downsize / sell covers consolidating or disposing of land or buildings.
+export type DevelopmentType = 'existing' | 'reuse' | 'new' | 'reuse_new' | 'downsize_sell';
+
 // One proposal (or the existing conditions) for a site.
 export interface Plan {
 	id: string;
@@ -107,6 +111,7 @@ export interface Plan {
 	trees: Tree[];
 	annotations: Annotation[];
 	buildingTypeOverride?: BuildingType; // the user's choice over the inferred type
+	developmentTypeOverride?: DevelopmentType; // the user's choice; selling land is invisible to the model
 }
 
 // Neighboring buildings (white foam) and roads (printed on the base board), in local meters.

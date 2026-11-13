@@ -1,4 +1,4 @@
-import type { BuildingType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, ReuseZone, Site, Structure, Tree, Use } from './types';
+import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, ReuseZone, Site, Structure, Tree, Use } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
@@ -946,6 +946,12 @@ class ModelerStore {
 	setBuildingTypeOverride(type: BuildingType | undefined) {
 		this.#pushUndo();
 		this.plan.buildingTypeOverride = type;
+	}
+
+	// The current plan's development type: undefined goes back to the inferred one
+	setDevelopmentTypeOverride(type: DevelopmentType | undefined) {
+		this.#pushUndo();
+		this.plan.developmentTypeOverride = type;
 	}
 
 	setMainBuildingFront(front: Site['mainBuildingFront']) {

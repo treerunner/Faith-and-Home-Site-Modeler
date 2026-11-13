@@ -33,7 +33,7 @@
 	import type { Use } from '../types';
 	import { creditLine } from '../credits';
 	import { getPatterns, type Pattern } from '../../patterns/catalog';
-	import { closestPattern, siteFacts } from '../../patterns/match';
+	import { AXIS_LABELS, cellLabel, isComplete, nearestPattern, patternForCell, selectVariant, siteCell } from '../../patterns/match';
 
 	const USE_LABELS: Record<Use, string> = {
 		worship: 'Worship', fellowship: 'Fellowship', education: 'Education',
@@ -73,13 +73,15 @@
 
 	let reuseZones = $derived(reuseZoneCount(plan));
 
-	// Closest patterns: the catalog loads async (Directus later), the ranking is pure
+	// The pattern matrix: the catalog loads async (Directus later), the matching is pure
 	let patterns = $state<Pattern[]>([]);
 	$effect(() => {
 		getPatterns().then((p) => (patterns = p));
 	});
-	// One pattern, and only when it fits closely; a ranked list read as a hedge
-	let closest = $derived(closestPattern(patterns, siteFacts(site, plan)));
+	let cell = $derived(siteCell(site, plan));
+	let cellPattern = $derived(isComplete(cell) ? patternForCell(patterns, cell) : null);
+	let variant = $derived(cellPattern ? selectVariant(cellPattern, profile) : null);
+	let nearest = $derived(isComplete(cell) && !cellPattern ? nearestPattern(patterns, cell) : null);
 
 	let statusCounts = $derived.by(() => {
 		const counts = { existing: 0, new: 0, removed: 0 };
@@ -179,22 +181,35 @@
 				</div>
 			</section>
 
-			<!-- Your pattern: shown only for a close fit -->
-			{#if closest}
-				{@const m = closest}
-				{@const pct = Math.round(m.fit * 100)}
+			<!-- Your pattern: the site's cell in the matrix, and the pattern written for it -->
+			{#if patterns.length}
 				<section class="report-section" aria-label="Your pattern">
 					<h2 class="section-heading">Your pattern</h2>
-					<div class="pattern-item">
-						<div class="pattern-head">
-							<a class="pattern-name" href="/patterns/{m.pattern.slug}" target="_blank" rel="noopener">{m.pattern.name}</a>
-							<span class="pattern-fit">{pct}% fit</span>
-						</div>
-						<div class="fit-bar" aria-hidden="true"><div class="fit-bar__fill" style="width:{pct}%"></div></div>
-						<p class="pattern-summary">{m.pattern.summary}</p>
-						{#if m.matches.length}<p class="pattern-reason"><span class="reason-label">Matches</span> {m.matches.join(', ')}</p>{/if}
-						{#if m.differs.length}<p class="pattern-reason pattern-reason--differs"><span class="reason-label">Differs</span> {m.differs.join(', ')}</p>{/if}
-					</div>
+					{#if isComplete(cell)}
+						<p class="pattern-cell">{cellLabel(cell)}</p>
+						{#if cellPattern}
+							<div class="pattern-item">
+								<a class="pattern-name" href="/patterns/{cellPattern.slug}" target="_blank" rel="noopener">{cellPattern.name}</a>
+								<p class="pattern-summary">{cellPattern.summary}</p>
+								{#if variant}
+									<p class="pattern-variant"><span class="reason-label">Variant</span> <strong>{variant.name}</strong>. {variant.summary}</p>
+								{/if}
+							</div>
+						{:else}
+							<p class="pattern-summary pattern-empty">No pattern written for this combination yet.</p>
+							{#if nearest}
+								<p class="pattern-reason">
+									<span class="reason-label">Closest written pattern</span>
+									<a class="pattern-name" href="/patterns/{nearest.pattern.slug}" target="_blank" rel="noopener">{nearest.pattern.name}</a>
+									(differs in {nearest.differs.map((a) => AXIS_LABELS[a]).join(' and ')})
+								</p>
+							{/if}
+						{/if}
+					{:else if !cell.buildingType}
+						<p class="pattern-summary pattern-empty">Add buildings to place the site in the pattern matrix.</p>
+					{:else}
+						<p class="pattern-summary pattern-empty">Choose a site type to place the site in the pattern matrix.</p>
+					{/if}
 				</section>
 			{/if}
 
@@ -428,11 +443,10 @@
 
 	.pattern-item { margin-top: 0.5rem; }
 
-	.pattern-head {
-		display: flex;
-		justify-content: space-between;
-		align-items: baseline;
-		gap: 1rem;
+	.pattern-cell {
+		margin: 0.4rem 0 0;
+		font-size: 0.85rem;
+		font-weight: 700;
 	}
 
 	.pattern-name {
@@ -445,24 +459,11 @@
 	}
 
 	.pattern-name:hover { text-decoration-color: currentColor; }
-	.pattern-fit { font-size: 0.72rem; font-variant-numeric: tabular-nums; color: var(--fh-stone); }
-
-	.fit-bar {
-		height: 4px;
-		margin: 0.3rem 0;
-		border-radius: 2px;
-		background: var(--fh-stone-tint);
-	}
-
-	.fit-bar__fill {
-		height: 100%;
-		border-radius: 2px;
-		background: var(--fh-lantern);
-	}
 
 	.pattern-summary { margin: 0; font-size: 0.72rem; color: var(--color-text); }
 	.pattern-reason { margin: 0.15rem 0 0; font-size: 0.68rem; color: var(--color-text); }
-	.pattern-reason--differs { color: var(--fh-stone); }
+	.pattern-variant { margin: 0.3rem 0 0; font-size: 0.72rem; color: var(--color-text); }
+	.pattern-empty { margin-top: 0.3rem; color: var(--fh-stone); }
 	.reason-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.6rem; margin-right: 0.3rem; }
 
 	.credits-line {

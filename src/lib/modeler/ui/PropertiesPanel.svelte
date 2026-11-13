@@ -3,8 +3,8 @@
 	import PlanSwitcher from './PlanSwitcher.svelte';
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM, fmtSqft } from '../units';
-	import type { BuildingType, CongregationProfile, Roof, Site, Status, Structure, Use } from '../types';
-	import { BUILDING_TYPE_LABELS, inferBuildingType, zoneDwellings, zoneFloorArea } from '../metrics';
+	import type { BuildingType, CongregationProfile, DevelopmentType, Roof, Site, Status, Structure, Use } from '../types';
+	import { BUILDING_TYPE_LABELS, DEVELOPMENT_TYPE_LABELS, inferBuildingType, inferDevelopmentType, zoneDwellings, zoneFloorArea } from '../metrics';
 
 	let sidebarTab = $derived(store.sidebarTab);
 
@@ -95,6 +95,9 @@
 	];
 	let effectiveType = $derived(store.plan.buildingTypeOverride ?? inferredType);
 	const BUILDING_TYPES = Object.keys(BUILDING_TYPE_LABELS) as BuildingType[];
+	let inferredDevelopment = $derived(inferDevelopmentType(store.plan));
+	let effectiveDevelopment = $derived(store.plan.developmentTypeOverride ?? inferredDevelopment);
+	const DEVELOPMENT_TYPES = Object.keys(DEVELOPMENT_TYPE_LABELS) as DevelopmentType[];
 	let selectedOS = $derived(store.selectedOpenSpace);
 
 	// Track which structure is expanded — syncs when canvas selection changes
@@ -312,6 +315,34 @@
 				</p>
 			{:else if inferredType}
 				<p class="field-hint site-type-hint">Inferred from the structures</p>
+			{:else}
+				<p class="field-hint site-type-hint">Add structures to infer a type</p>
+			{/if}
+		</fieldset>
+	</div>
+
+	<div class="section section--site-type">
+		<h2 class="panel-heading">Development type</h2>
+		<fieldset class="ro-wrap" disabled={store.readOnly}>
+			<div class="pill-group" role="group" aria-label="Development type">
+				{#each DEVELOPMENT_TYPES as t (t)}
+					{@const on = effectiveDevelopment === t}
+					<button
+						class="pill"
+						class:pill--active={on}
+						aria-pressed={on}
+						style={on ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
+						onclick={() => store.setDevelopmentTypeOverride(t === inferredDevelopment ? undefined : t)}
+					>{DEVELOPMENT_TYPE_LABELS[t]}</button>
+				{/each}
+			</div>
+			{#if store.plan.developmentTypeOverride && inferredDevelopment && store.plan.developmentTypeOverride !== inferredDevelopment}
+				<p class="field-hint site-type-hint">
+					Inferred: {DEVELOPMENT_TYPE_LABELS[inferredDevelopment]}.
+					<button class="link-btn" onclick={() => store.setDevelopmentTypeOverride(undefined)}>Use inferred</button>
+				</p>
+			{:else if inferredDevelopment}
+				<p class="field-hint site-type-hint">Inferred from the plan</p>
 			{:else}
 				<p class="field-hint site-type-hint">Add structures to infer a type</p>
 			{/if}
