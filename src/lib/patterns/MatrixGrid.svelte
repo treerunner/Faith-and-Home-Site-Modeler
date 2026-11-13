@@ -56,6 +56,7 @@
 	}
 
 	.grid {
+		width: max-content;
 		border-collapse: collapse;
 		font-size: 0.66rem;
 	}
