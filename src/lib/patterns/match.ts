@@ -75,7 +75,7 @@ export function scorePattern(pattern: Pattern, facts: Facts): PatternMatch {
 	for (const [key, fact] of Object.entries(facts) as [TraitKey, string][]) {
 		const weight = WEIGHTS[key];
 		possible += weight;
-		const allowed = pattern.traits[key];
+		const allowed: readonly string[] | undefined = pattern.traits[key];
 		if (!allowed) {
 			earned += weight * UNSPECIFIED_CREDIT;
 		} else if (allowed.includes(fact)) {
