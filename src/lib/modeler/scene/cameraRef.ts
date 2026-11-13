@@ -37,17 +37,33 @@ export type HitResult =
 	| { kind: 'tree'; treeId: string; x: number; y: number }
 	| { kind: 'ground'; x: number; y: number };
 
+// The first visible surface of the model a ray meets (not lines, not invisible hit planes)
+function firstSurface(rc: THREE.Raycaster): THREE.Vector3 | null {
+	if (!mainScene) return null;
+	for (const hit of rc.intersectObjects(mainScene.children, true)) {
+		const obj = hit.object as THREE.Mesh;
+		const material = obj.material as THREE.Material | undefined;
+		if (obj.isMesh && material?.visible !== false) return hit.point;
+	}
+	return null;
+}
+
 // The highest visible surface of the model straight below (x, z), or null over nothing
 const down = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
 export function topBelow(x: number, z: number): number | null {
-	if (!mainScene) return null;
 	down.ray.origin.set(x, 10000, z);
-	for (const hit of down.intersectObjects(mainScene.children, true)) {
-		const obj = hit.object as THREE.Mesh;
-		const material = obj.material as THREE.Material | undefined;
-		if (obj.isMesh && material?.visible !== false) return hit.point.y;
-	}
-	return null;
+	return firstSurface(down)?.y ?? null;
+}
+
+// 3D: the surface of the model under the cursor, or null over the backdrop
+const pick = new THREE.Raycaster();
+export function surfaceUnder(clientX: number, clientY: number): THREE.Vector3 | null {
+	if (!perspCamera || !rendererEl) return null;
+	const rect = rendererEl.getBoundingClientRect();
+	if (rect.width === 0 || rect.height === 0) return null;
+	const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+	pick.setFromCamera(ndc, perspCamera);
+	return firstSurface(pick)?.clone() ?? null;
 }
 
 function makeRaycaster(clientX: number, clientY: number): THREE.Raycaster | null {
