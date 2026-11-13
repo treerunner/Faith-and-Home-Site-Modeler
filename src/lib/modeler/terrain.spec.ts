@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildingFooting, contourInterval, drapeLine, drapeTriangles, footingOf, terrainModel, terrainSurface, type TerrainSurface } from './terrain';
+import { cameraFloor, CAMERA_CLEARANCE } from './view';
 import type { Terrain } from './types';
 
 type Pt = [number, number];
@@ -79,6 +80,11 @@ describe('terrainModel', () => {
 describe('terrainSurface', () => {
 	const m = terrainModel(slope, 100)!;
 	const s = terrainSurface(m);
+
+	it('keeps the orbit camera above it, out to past the board', () => {
+		expect(cameraFloor(s, 0, 50)).toBeCloseTo(5 + CAMERA_CLEARANCE, 5);
+		expect(cameraFloor(s, 0, 400)).toBeCloseTo(10 + CAMERA_CLEARANCE, 5); // the board's south edge
+	});
 
 	it('is the natural ground, meeting buildings flush', () => {
 		for (const [x, y] of [[0, 0], [12.5, -31], [-99, 99]] as Pt[]) expect(s.groundAt(x, y)).toBeCloseTo(m.heightAt(x, y), 5);
