@@ -105,6 +105,23 @@ describe('zone metrics', () => {
 		expect(Object.values(areas).reduce((a, b) => a + b!, 0)).toBeCloseTo(600);
 	});
 
+	it('counts housing reuse zones toward a structure that lists housing', () => {
+		const site = { id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, plans: [] } as Site;
+		const flagged = (structures: Structure[]) =>
+			generateActionSteps(plan(structures), site).find((s) => s.message.includes('without a unit count'))?.message;
+		// Housing listed, no units anywhere: flagged by name
+		expect(flagged([structure({ label: 'Hall', uses: ['housing'] })])).toBe(
+			'Hall lists housing without a unit count. Add an estimate, or a housing reuse zone, to enable density metrics.',
+		);
+		// The reported case: no units on the structure, 6 in its zone
+		expect(flagged([structure({ uses: ['housing'], reuseZones: [zone({ dwellings: 6 })] })])).toBeUndefined();
+		// A zone estimate counts too (100 m² on 3 floors: 3 units)
+		expect(flagged([structure({ uses: ['housing'], reuseZones: [zone({ floors: [1, 3] })] })])).toBeUndefined();
+		// A non-housing zone doesn't
+		expect(flagged([structure({ label: 'Hall', uses: ['housing'], reuseZones: [zone({ use: 'community' })] })])).toMatch(/^Hall lists/);
+		expect(flagged([structure({ uses: ['housing'] }), structure({ id: 't', uses: ['housing'] })])).toMatch(/^2 structures list/);
+	});
+
 	it('does not suggest change when reuse is proposed', () => {
 		const site = { id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, plans: [] } as Site;
 		const message = 'No new construction or adaptive reuse proposed';

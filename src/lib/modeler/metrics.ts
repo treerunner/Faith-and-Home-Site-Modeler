@@ -147,7 +147,7 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	if (coverage !== null && coverage > 60) {
 		steps.push({
 			category: 'density',
-			message: 'High lot coverage — consider additional stories to increase GFA without expanding the footprint.',
+			message: 'High lot coverage. Consider additional stories to increase GFA without expanding the footprint.',
 			severity: 'suggest',
 		});
 	}
@@ -155,13 +155,13 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	if (green === 0 && footprint > 0) {
 		steps.push({
 			category: 'green-space',
-			message: 'No green space identified — lawn, garden, or courtyard can improve site quality.',
+			message: 'No green space identified. Lawn, garden, or courtyard can improve site quality.',
 			severity: 'flag',
 		});
 	} else if (green > 0 && parking > green) {
 		steps.push({
 			category: 'green-space',
-			message: 'Parking dominates open space — consider reducing surface parking in favor of green space.',
+			message: 'Parking dominates open space. Consider reducing surface parking in favor of green space.',
 			severity: 'suggest',
 		});
 	}
@@ -173,7 +173,7 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	) {
 		steps.push({
 			category: 'program',
-			message: 'Single-use worship site — fellowship, education, or community uses increase neighborhood engagement.',
+			message: 'Single-use worship site. Fellowship, education, or community uses increase neighborhood engagement.',
 			severity: 'suggest',
 		});
 	}
@@ -181,7 +181,7 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	if (plan.structures.length > 0 && plan.structures.every((s) => s.status === 'existing') && reuseZoneCount(plan) === 0) {
 		steps.push({
 			category: 'pattern',
-			message: 'No new construction or adaptive reuse proposed — consider opportunities for change.',
+			message: 'No new construction or adaptive reuse proposed. Consider opportunities for change.',
 			severity: 'info',
 		});
 	}
@@ -193,17 +193,24 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	) {
 		steps.push({
 			category: 'density',
-			message: 'Urban site with all single-story buildings — additional stories could increase gross floor area.',
+			message: 'Urban site with all single-story buildings. Additional stories could increase gross floor area.',
 			severity: 'suggest',
 		});
 	}
 
-	const hasHousingUse = plan.structures.some((s) => s.uses.includes('housing'));
-	const hasDwellings = plan.structures.some((s) => (s.dwellings ?? 0) > 0);
-	if (hasHousingUse && !hasDwellings) {
+	// A structure that lists housing is counted when it has units of its own or a housing reuse
+	// zone with units (entered or estimated from area)
+	const uncounted = plan.structures.filter(
+		(s) =>
+			s.uses.includes('housing') &&
+			!(s.dwellings && s.dwellings > 0) &&
+			!(s.reuseZones ?? []).some((z) => zoneDwellings(z, s) > 0),
+	);
+	if (uncounted.length) {
+		const which = uncounted.length === 1 ? uncounted[0].label || 'A structure' : `${uncounted.length} structures`;
 		steps.push({
 			category: 'program',
-			message: 'Housing use is selected but dwelling count is unset — add an estimate to enable density metrics.',
+			message: `${which} ${uncounted.length === 1 ? 'lists' : 'list'} housing without a unit count. Add an estimate, or a housing reuse zone, to enable density metrics.`,
 			severity: 'flag',
 		});
 	}
@@ -211,7 +218,7 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	if (osArea === 0 && footprint > 0) {
 		steps.push({
 			category: 'land-use',
-			message: 'No open spaces drawn — add parking, lawn, or walkway areas for a complete site picture.',
+			message: 'No open spaces drawn. Add parking, lawn, or walkway areas for a complete site picture.',
 			severity: 'info',
 		});
 	}
