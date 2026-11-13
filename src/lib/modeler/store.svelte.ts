@@ -2,6 +2,7 @@ import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, Pal
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
+import { terrainModel, type TerrainModel } from './terrain';
 import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
 import {
 	boardHalfFor,
@@ -86,6 +87,14 @@ class ModelerStore {
 	#parcelVersion = 0; // bumped on every parcel change, so slow reloads can tell they're stale
 	#terrainVersion = 0; // bumped on every terrain request and address change, for the same reason
 	terrainState = $state<'idle' | 'loading' | 'failed'>('idle'); // not saved
+	// Layers and contours, derived from the stored heights. Address mode only.
+	terrain = $derived(
+		this.site.mode === 'address' && this.site.context.terrain ? terrainModel(this.site.context.terrain, this.boardHalf) : null,
+	);
+	// What 3D sets on the terrain; plan view and editing stay flat
+	get terrain3D(): TerrainModel | null {
+		return this.viewMode === '3d' ? this.terrain : null;
+	}
 	// Address setup, between picking an address and finishing the parcel. Not saved.
 	setup = $state<{
 		context: ContextResponse;

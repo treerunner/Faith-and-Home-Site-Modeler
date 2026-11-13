@@ -3,6 +3,8 @@
 	import * as THREE from 'three';
 	import type { OpenSpace } from '../types';
 	import { OPEN_SPACE_COLORS } from '../colors';
+	import { store } from '../store.svelte';
+	import { drapeGeometry } from './drape';
 
 	interface Props {
 		openSpace: OpenSpace;
@@ -30,7 +32,9 @@
 		return geo;
 	}
 
-	let geo = $derived(makeGeo(openSpace.polygon));
+	let flatGeo = $derived(makeGeo(openSpace.polygon));
+	// In 3D on terrain, laid onto the layers
+	let geo = $derived(flatGeo && store.terrain3D ? drapeGeometry(flatGeo, store.terrain3D) : flatGeo);
 	let color = $derived(OPEN_SPACE_COLORS[openSpace.kind]);
 	let opacity = $derived(draft ? 0.3 : selected ? 0.75 : 0.55);
 </script>

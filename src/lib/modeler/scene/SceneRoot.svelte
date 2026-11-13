@@ -12,6 +12,9 @@
 	import ParcelLine from './ParcelLine.svelte';
 	import ParcelMask from './ParcelMask.svelte';
 	import ReuseZoneMesh from './ReuseZoneMesh.svelte';
+	import TerrainLayers from './TerrainLayers.svelte';
+	import { partOutline } from '../geo';
+	import { baseOf } from '../terrain';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
 	import { setMainScene } from './cameraRef';
@@ -45,6 +48,19 @@
 	);
 
 	let allParts = $derived(store.plan.structures.flatMap((s) => s.parts));
+
+	// In 3D on terrain, each structure stands on the lowest layer under any of its pieces, so a
+	// building never floats and its pieces stay level with each other. Derived, never saved.
+	let structureBase = $derived.by(() => {
+		const model = store.terrain3D;
+		const bases = new Map<string, number>();
+		if (!model) return bases;
+		for (const s of store.plan.structures) {
+			bases.set(s.id, Math.min(...s.parts.map((p) => baseOf(model, partOutline(p)))));
+		}
+		return bases;
+	});
+	const baseFor = (s: Structure | undefined) => (s ? (structureBase.get(s.id) ?? 0) : 0);
 
 	// Cutting: the building being cut is highlighted, with a dashed line from the first click
 	let cutting = $derived(store.mode.type === 'cutting' ? store.mode : null);
@@ -192,7 +208,9 @@
 
 {#if store.viewMode === '3d'}
 	<!-- Pedestal base -->
-	<T.Mesh position={[pedestal.cx, -DEPTH / 2, pedestal.cz]} receiveShadow>
+	<!-- On terrain, the board sits under the lowest layer -->
+	{@const boardTop = store.terrain3D ? store.terrain3D.minY - 0.01 : 0}
+	<T.Mesh position={[pedestal.cx, boardTop - DEPTH / 2, pedestal.cz]} receiveShadow>
 		<T.BoxGeometry args={[pedestal.w, DEPTH, pedestal.d]} />
 		<!-- Address mode: an off-white printed board; grid mode keeps the kraft base -->
 		{#if isAddress}
@@ -203,12 +221,16 @@
 	</T.Mesh>
 {/if}
 
-<ContextLayer context={store.site.context} half={store.boardHalf} is3D={store.viewMode === '3d'} />
+{#if store.terrain}
+	<TerrainLayers model={store.terrain} is3D={store.viewMode === '3d'} />
+{/if}
+
+<ContextLayer context={store.site.context} half={store.boardHalf} is3D={store.viewMode === '3d'} terrain={store.terrain3D} />
 
 {#if store.site.parcel && store.site.parcel.length >= 3}
 	<ParcelLine polygon={store.site.parcel} />
 	{#if isAddress && store.mode.type !== 'choosingParcel'}
-		<ParcelMask parcel={store.site.parcel} half={store.boardHalf} is3D={store.viewMode === '3d'} />
+		<ParcelMask parcel={store.site.parcel} half={store.boardHalf} is3D={store.viewMode === '3d'} terrain={store.terrain3D} />
 	{/if}
 {/if}
 
@@ -254,22 +276,24 @@
 
 {#each allParts as part (part.id)}
 	{@const struct = partStructureMap.get(part.id)}
-	<PartMesh
-		{part}
-		selected={store.selectedPartId === part.id || cutPartIds.has(part.id)}
-		status={partStatusMap.get(part.id) ?? 'existing'}
-		cloning={store.mode.type === 'dragging' && store.mode.cloning === true && store.mode.companions.some((c) => c.id === part.id)}
-		height={store.viewMode === '3d' ? (partHeightMap.get(part.id) ?? 3.5) : undefined}
-		stories={struct?.stories ?? 1}
-	/>
-	{#if store.viewMode === '3d' && struct && struct.roof !== 'flat'}
-		<RoofMesh
+	<T.Group position.y={baseFor(struct)}>
+		<PartMesh
 			{part}
-			roof={struct.roof}
-			status={struct.status}
-			totalHeight={partHeightMap.get(part.id) ?? 3.5}
+			selected={store.selectedPartId === part.id || cutPartIds.has(part.id)}
+			status={partStatusMap.get(part.id) ?? 'existing'}
+			cloning={store.mode.type === 'dragging' && store.mode.cloning === true && store.mode.companions.some((c) => c.id === part.id)}
+			height={store.viewMode === '3d' ? (partHeightMap.get(part.id) ?? 3.5) : undefined}
+			stories={struct?.stories ?? 1}
 		/>
-	{/if}
+		{#if store.viewMode === '3d' && struct && struct.roof !== 'flat'}
+			<RoofMesh
+				{part}
+				roof={struct.roof}
+				status={struct.status}
+				totalHeight={partHeightMap.get(part.id) ?? 3.5}
+			/>
+		{/if}
+	</T.Group>
 {/each}
 
 {#if cutLine}
@@ -282,7 +306,9 @@
 	{#each s.reuseZones ?? [] as zone (zone.id)}
 		{@const part = s.parts.find((p) => p.id === zone.partId)}
 		{#if part}
-			<ReuseZoneMesh {zone} {part} structure={s} is3D={store.viewMode === '3d'} />
+			<T.Group position.y={baseFor(s)}>
+				<ReuseZoneMesh {zone} {part} structure={s} is3D={store.viewMode === '3d'} />
+			</T.Group>
 		{/if}
 	{/each}
 {/each}
@@ -300,5 +326,7 @@
 {/if}
 
 {#each store.plan.trees as tree (tree.id)}
-	<TreeMesh {tree} selected={store.selectedTreeId === tree.id} is3D={store.viewMode === '3d'} />
+	<T.Group position.y={store.terrain3D?.stepAt(tree.x, tree.y) ?? 0}>
+		<TreeMesh {tree} selected={store.selectedTreeId === tree.id} is3D={store.viewMode === '3d'} />
+	</T.Group>
 {/each}

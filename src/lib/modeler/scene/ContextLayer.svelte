@@ -4,6 +4,8 @@
 	import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 	import type { SiteContext } from '../types';
 	import { COLORS } from '../colors';
+	import { baseOf, type TerrainModel } from '../terrain';
+	import { drapeGeometry } from './drape';
 
 	// Neighbors as white foam blocks and roads printed on the base board. Both are built as
 	// one merged geometry each: an urban block can hold hundreds of buildings.
@@ -12,9 +14,10 @@
 		context: SiteContext;
 		half: number; // board half-width
 		is3D: boolean;
+		terrain: TerrainModel | null; // in 3D: foam stands on the layers and roads lie on them
 	}
 
-	let { context, half, is3D }: Props = $props();
+	let { context, half, is3D, terrain }: Props = $props();
 
 	// Foam, road print and board skip tone mapping: the renderer's filmic curve greys off-white
 	// down, and these must read as white foam and light print against the chipboard.
@@ -24,7 +27,7 @@
 	const ROAD_Y = 0.002;
 	const FOAM_EDGE = '#cfcac0';
 
-	function makeBuildings(buildings: SiteContext['buildings'], flat: boolean): THREE.BufferGeometry | null {
+	function makeBuildings(buildings: SiteContext['buildings'], flat: boolean, model: TerrainModel | null): THREE.BufferGeometry | null {
 		const geos = buildings
 			.filter((b) => b.polygon.length >= 3)
 			.map((b) => {
@@ -33,7 +36,7 @@
 				const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
 				// Same mapping as parts: shape y -> site y (+Z); extrusion -> up
 				geo.rotateX(Math.PI / 2);
-				geo.translate(0, depth, 0);
+				geo.translate(0, depth + (model ? baseOf(model, b.polygon) : 0), 0);
 				return geo;
 			});
 		return geos.length ? mergeGeometries(geos) : null;
@@ -46,7 +49,7 @@
 	};
 	const JOINT_SEGMENTS = 10;
 
-	function makeRoads(roads: SiteContext['roads'], half: number): THREE.BufferGeometry | null {
+	function makeRoads(roads: SiteContext['roads'], half: number, model: TerrainModel | null): THREE.BufferGeometry | null {
 		const pos: number[] = [];
 		// Clamped to the board so the print stops at its edge instead of overhanging
 		const c = (v: number) => Math.max(-half, Math.min(half, v));
@@ -76,13 +79,18 @@
 		if (pos.length === 0) return null;
 		const geo = new THREE.BufferGeometry();
 		geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+		if (model) {
+			const draped = drapeGeometry(geo, model);
+			draped.translate(0, ROAD_Y, 0);
+			return draped;
+		}
 		geo.computeVertexNormals();
 		return geo;
 	}
 
-	let buildingGeo = $derived(makeBuildings(context.buildings, !is3D));
+	let buildingGeo = $derived(makeBuildings(context.buildings, !is3D, terrain));
 	let buildingEdges = $derived(buildingGeo ? new THREE.EdgesGeometry(buildingGeo, 20) : null);
-	let roadGeo = $derived(makeRoads(context.roads, half));
+	let roadGeo = $derived(makeRoads(context.roads, half, terrain));
 </script>
 
 {#if roadGeo}
