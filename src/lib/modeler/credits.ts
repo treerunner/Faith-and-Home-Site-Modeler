@@ -4,7 +4,7 @@ import type { SiteContext } from './types';
 // (see docs/DATA_SOURCES.md and https://docs.overturemaps.org/attribution/).
 
 export interface CreditGroup {
-	heading: string; // what the data is: Buildings, Roads, Parcels
+	heading: string; // what the data is: Buildings, Roads, Parcels, Elevation
 	credits: string[]; // full credit lines, with license where known
 }
 
@@ -44,6 +44,7 @@ export function creditGroups(context: SiteContext): CreditGroup[] {
 	if (sources.includes('pasda-lehigh')) {
 		groups.push({ heading: 'Parcels', credits: ['Lehigh County, via PASDA (Pennsylvania Spatial Data Access)'] });
 	}
+	if (context.terrain) groups.push({ heading: 'Elevation', credits: ['USGS 3D Elevation Program (public domain)'] });
 	return groups;
 }
 
@@ -58,6 +59,7 @@ export function creditLine(context: SiteContext): string | null {
 		orgs.push(...buildingOrgs, 'OpenStreetMap contributors', 'Overture Maps Foundation', 'TomTom');
 	}
 	if (sources.includes('pasda-lehigh')) orgs.push('Lehigh County via PASDA');
+	if (context.terrain) orgs.push('USGS');
 	const unique = [...new Set(orgs)];
 	return unique.length ? `Data: ${unique.join(', ')}` : null;
 }

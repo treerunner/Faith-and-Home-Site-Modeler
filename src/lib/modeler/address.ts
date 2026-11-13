@@ -1,5 +1,5 @@
 import type { Tags } from './geo';
-import type { ContextSource } from './types';
+import type { ContextSource, Terrain } from './types';
 
 // Shapes shared by the address-mode endpoints and the browser, plus the browser-side calls.
 
@@ -49,6 +49,10 @@ export const fetchSuggestions = (q: string, signal?: AbortSignal) =>
 	getJson<Suggestion[]>(`/api/geocode/suggest?${new URLSearchParams({ q })}`, signal);
 
 export const fetchGeocode = (q: string) => getJson<Suggestion | null>(`/api/geocode?${new URLSearchParams({ q })}`);
+
+// Elevation for a board: null where there is no data (outside the US)
+export const fetchTerrain = (lat: number, lng: number, half: number) =>
+	getJson<{ terrain: Terrain | null }>(`/api/terrain?${new URLSearchParams({ lat: String(lat), lng: String(lng), half: String(half) })}`).then((r) => r.terrain);
 
 export const fetchContext = (lat: number, lng: number, half?: number) =>
 	getJson<ContextResponse>(

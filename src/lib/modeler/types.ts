@@ -121,6 +121,14 @@ export interface SiteContext {
 	sources?: ContextSource[]; // shown as attribution wherever the data appears
 	buildingSources?: string[]; // where the footprints came from (Overture's @geometry_source); absent on sites saved before credits
 	halfSize?: number; // board half-width in meters; absent means CONTEXT_HALF_SIZE (150)
+	terrain?: Terrain; // ground elevation; absent means a flat board
+}
+
+// Ground elevation on the board: a square grid from -halfSize to +halfSize every `spacing` m,
+// row by row from north to south, in absolute meters. Layers and contours are derived from it.
+export interface Terrain {
+	spacing: number;
+	heights: number[];
 }
 
 export type ContextSource = 'overture' | 'pasda-lehigh';

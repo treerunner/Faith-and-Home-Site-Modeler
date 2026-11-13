@@ -335,6 +335,15 @@
 				onclick={() => { store.showLabels = !store.showLabels; }}
 				title="Toggle open space labels"
 			>Labels</button>
+			{#if store.hasTerrain}
+				<button
+					class="labels-btn"
+					class:labels-btn--off={!store.showTerrain}
+					aria-pressed={store.showTerrain}
+					onclick={() => { store.showTerrain = !store.showTerrain; }}
+					title="Show the ground's slope and contours, or a flat board"
+				>Terrain</button>
+			{/if}
 			<button
 				class="export-btn"
 				disabled={store.viewMode !== '3d'}

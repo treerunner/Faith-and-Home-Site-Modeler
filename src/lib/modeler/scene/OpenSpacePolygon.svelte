@@ -3,6 +3,8 @@
 	import * as THREE from 'three';
 	import type { OpenSpace } from '../types';
 	import { OPEN_SPACE_COLORS } from '../colors';
+	import { store } from '../store.svelte';
+	import { drapeGeometry } from './drape';
 
 	interface Props {
 		openSpace: OpenSpace;
@@ -13,6 +15,7 @@
 	let { openSpace, draft = false, selected = false }: Props = $props();
 
 	const Y_FILL = 0.01;   // above grid, below parts
+	const DRAPED_Y = 0.08; // on terrain: above roads and the parcel mask
 	const Y_HANDLE = 0.3;
 	const HANDLE_R = 0.9;
 
@@ -30,14 +33,16 @@
 		return geo;
 	}
 
-	let geo = $derived(makeGeo(openSpace.polygon));
+	let flatGeo = $derived(makeGeo(openSpace.polygon));
+	// In 3D on terrain, laid on the surface
+	let geo = $derived(flatGeo && store.ground ? drapeGeometry(flatGeo, store.ground) : flatGeo);
 	let color = $derived(OPEN_SPACE_COLORS[openSpace.kind]);
 	let opacity = $derived(draft ? 0.3 : selected ? 0.75 : 0.55);
 </script>
 
 {#if geo}
 	<!-- Visible fill — polygonOffset pulls depth toward camera to beat the pedestal -->
-	<T.Mesh position={[0, Y_FILL, 0]} geometry={geo}>
+	<T.Mesh position={[0, store.ground ? DRAPED_Y : Y_FILL, 0]} geometry={geo}>
 		<T.MeshLambertMaterial {color} {opacity} transparent side={THREE.DoubleSide}
 			polygonOffset={true} polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
 	</T.Mesh>

@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { ContextResponse, Suggestion } from '../../lib/modeler/address';
+import type { Terrain } from '../../lib/modeler/types';
 
-// Address mode with our own /api/geocode* and /api/context mocked, so this never depends on
-// Photon, Census, Overture or PASDA being up. Those are covered by fixture tests in
+// Address mode with our own /api/geocode*, /api/context and /api/terrain mocked, so this never
+// depends on Photon, Census, Overture, PASDA or USGS being up. Those are covered by fixture tests in
 // src/lib/server/parsers.spec.ts. Saves to the DATABASE_URL database and cleans up.
 
 type Pt = [number, number];
@@ -31,10 +32,26 @@ const CONTEXT: ContextResponse = {
 	parcelsFailed: false,
 };
 
-async function mockAddressApi(page: Page, context: ContextResponse) {
+// A hillside for a 150 m board at 5 m, like the Lehigh Valley's: rising 1 m every 20 m to the
+// south, with a knoll to the northeast. About 24 m of relief: 2 m layers.
+function hillside(half = 150): Terrain {
+	const n = (2 * half) / 5 + 1;
+	const heights: number[] = [];
+	for (let i = 0; i < n; i++) {
+		for (let j = 0; j < n; j++) {
+			const x = -half + j * 5, y = -half + i * 5;
+			heights.push(Math.round((100 + y * 0.05 + 10 * Math.exp(-((x - 70) ** 2 + (y + 70) ** 2) / 1800)) * 10) / 10);
+		}
+	}
+	return { spacing: 5, heights };
+}
+
+// Terrain defaults to none, as outside the US
+async function mockAddressApi(page: Page, context: ContextResponse, terrain: Terrain | null = null) {
 	await page.route('**/api/geocode/suggest?**', (r) => r.fulfill({ json: [PLACE] }));
 	await page.route('**/api/geocode?**', (r) => r.fulfill({ json: PLACE }));
 	await page.route('**/api/context?**', (r) => r.fulfill({ json: context }));
+	await page.route('**/api/terrain?**', (r) => r.fulfill({ json: { terrain } }));
 }
 
 // Plan view is centered on the origin; site meters to page pixels at the current zoom
@@ -142,6 +159,7 @@ test('a large parcel grows the board to fit it', async ({ page }) => {
 	const bigLot = rect(-20, -20, 170, 40);
 	const halves: (string | null)[] = [];
 	await page.route('**/api/geocode/suggest?**', (r) => r.fulfill({ json: [PLACE] }));
+	await page.route('**/api/terrain?**', (r) => r.fulfill({ json: { terrain: null } }));
 	await page.route('**/api/context?**', async (r) => {
 		halves.push(new URL(r.request().url()).searchParams.get('half'));
 		if (halves.length > 1) await new Promise((done) => setTimeout(done, 300)); // let the banner show
@@ -190,4 +208,81 @@ test('data credits: a button on the map, a line in the analysis, and on PNG expo
 	const [download] = await Promise.all([page.waitForEvent('download'), page.getByTitle('Export PNG').click()]);
 	await download.saveAs('tests/screenshots/credits-export.png');
 	expect(download.suggestedFilename()).toBe('site-model.png');
+});
+
+test('terrain: board layers in 3D, contours in plan, credited', async ({ page }) => {
+	await mockAddressApi(page, CONTEXT, hillside());
+	await page.goto('/modeler');
+	await page.getByLabel('Find an address').fill('100 Main');
+	await page.getByRole('option', { name: PLACE.label }).click();
+	await page.getByRole('button', { name: 'Use these lots' }).or(page.getByRole('button', { name: 'Use this parcel' })).click();
+	await page.getByRole('button', { name: 'Add buildings' }).click();
+	await expect(page.getByText('Loading terrain…')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Add terrain' })).toHaveCount(0);
+	for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'Zoom out' }).click();
+	await page.screenshot({ path: 'tests/screenshots/terrain-plan-contours.png' });
+
+	await page.getByRole('button', { name: 'Data credits' }).click();
+	await expect(page.getByRole('dialog', { name: 'Data credits' })).toContainText('USGS 3D Elevation Program');
+	await page.mouse.click(600, 400);
+
+	await page.getByRole('button', { name: '3D', exact: true }).click();
+	await page.waitForTimeout(800);
+	await page.screenshot({ path: 'tests/screenshots/terrain-3d.png' });
+
+	// Terrain can be turned off for a flat board, and back on
+	const toggle = page.getByRole('button', { name: 'Terrain', exact: true });
+	await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+	await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+	await page.waitForTimeout(500);
+	await page.screenshot({ path: 'tests/screenshots/terrain-off.png' });
+	await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('terrain: outside coverage the board stays flat; older sites can add it', async ({ page }) => {
+	const name = `E2E terrain ${Date.now()}`;
+	created.push(name);
+	let terrain: Terrain | null = null;
+	await mockAddressApi(page, CONTEXT);
+	await page.unroute('**/api/terrain?**');
+	await page.route('**/api/terrain?**', (r) =>
+		terrain ? r.fulfill({ json: { terrain } }) : r.fulfill({ status: 502, json: { message: 'No elevation data here.' } }),
+	);
+	await page.goto('/modeler');
+	await page.getByLabel('Site name').fill(name);
+	await page.getByLabel('Find an address').fill('100 Main');
+	await page.getByRole('option', { name: PLACE.label }).click();
+	await page.getByRole('button', { name: 'Use this parcel' }).click();
+	await page.getByRole('button', { name: 'Skip' }).click();
+
+	// The service failed: setup still finished, on a flat board, with nothing to toggle
+	await expect(page.getByText('No elevation data here. The board stays flat.')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Terrain', exact: true })).toHaveCount(0);
+
+	// Saved without terrain, as sites set up before terrain were
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(page).toHaveURL(/\/modeler\/e2e-terrain-\d+\/existing-conditions$/);
+	await page.reload();
+	const add = page.getByRole('button', { name: 'Add terrain' });
+	await expect(add).toBeVisible();
+	await page.screenshot({ path: 'tests/screenshots/terrain-add-button.png' });
+
+	terrain = hillside();
+	await add.click();
+	await expect(add).toHaveCount(0);
+	await page.getByRole('button', { name: 'Data credits' }).click();
+	await expect(page.getByRole('dialog', { name: 'Data credits' })).toContainText('USGS 3D Elevation Program');
+	await page.mouse.click(600, 400);
+
+	// Saved with the site: no refetch on load
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+	terrain = null;
+	await page.reload();
+	await expect(page.getByLabel('Address').getByText(PLACE.label)).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Add terrain' })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Data credits' }).click();
+	await expect(page.getByRole('dialog', { name: 'Data credits' })).toContainText('USGS 3D Elevation Program');
 });

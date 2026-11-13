@@ -1,6 +1,6 @@
-import type { Annotation, ContextSource, OpenSpace, Part, Plan, ReuseZone, Site, SiteContext, Structure, Tree, Use } from './types';
+import type { Annotation, ContextSource, OpenSpace, Part, Plan, ReuseZone, Site, SiteContext, Structure, Terrain, Tree, Use } from './types';
 import { slugify } from './slug';
-import { wholePartZone } from './geo';
+import { CONTEXT_HALF_SIZE, wholePartZone } from './geo';
 
 // Validates a Site read from the database or posted to the API, and fills
 // defaults for fields added after older sites were saved. Throws on bad input.
@@ -249,7 +249,20 @@ function parseContext(v: unknown): SiteContext {
 	const buildingSources = optional(o.buildingSources, (v) =>
 		arr(v, `${path}.buildingSources`).map((s, i) => str(s, `${path}.buildingSources[${i}]`)),
 	);
-	return { buildings: [...buildings, ...legacyFootprints], roads, sources, halfSize, buildingSources };
+	const terrain = parseTerrain(o.terrain, halfSize ?? CONTEXT_HALF_SIZE);
+	return { buildings: [...buildings, ...legacyFootprints], roads, sources, halfSize, buildingSources, terrain };
+}
+
+// Malformed terrain is dropped rather than rejected: the board just loads flat. The grid must
+// be square and span the board exactly.
+function parseTerrain(v: unknown, half: number): Terrain | undefined {
+	if (!v || typeof v !== 'object') return undefined;
+	const { spacing, heights } = v as Record<string, unknown>;
+	if (typeof spacing !== 'number' || !(spacing > 0) || !Array.isArray(heights)) return undefined;
+	const n = Math.round(Math.sqrt(heights.length));
+	if (n < 2 || n * n !== heights.length || Math.abs((n - 1) * spacing - 2 * half) > 1e-6) return undefined;
+	if (!heights.every((h) => typeof h === 'number' && Number.isFinite(h))) return undefined;
+	return { spacing, heights };
 }
 
 export const DEFAULT_PLAN_NAME = 'Existing conditions';

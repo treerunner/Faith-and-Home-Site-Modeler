@@ -24,7 +24,7 @@
   /* App surface colors */
   --color-context:   var(--fh-linen);
   --color-base:      var(--fh-linen);
-  --color-road:      var(--fh-stone-tint);
+  --color-road:      #c4c1bf;
   --color-parcel:    var(--fh-black);
   --color-grid:      #d9d8d7;
   --color-selection: var(--fh-dusk);

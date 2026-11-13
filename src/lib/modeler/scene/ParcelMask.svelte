@@ -2,6 +2,8 @@
 	import { T } from '@threlte/core';
 	import * as THREE from 'three';
 	import { COLORS } from '../colors';
+	import type { TerrainSurface } from '../terrain';
+	import { drapeGeometry } from './drape';
 
 	// Dims the board outside the chosen parcel so the property reads as the focus:
 	// a translucent sheet over the whole board with the parcel cut out.
@@ -10,14 +12,16 @@
 		parcel: [number, number][];
 		half: number; // board half-width
 		is3D: boolean;
+		surface: TerrainSurface | null; // in 3D: laid on it
 	}
 
-	let { parcel, half, is3D }: Props = $props();
+	let { parcel, half, is3D, surface }: Props = $props();
 
 	const OPACITY = 0.22;
 	// Plan: just above the foam footprint slabs (0.05), below parts (0.1).
 	// 3D: on the board, ordered by polygonOffset above roads (-1) and below open spaces (-2).
 	const PLAN_Y = 0.06;
+	const DRAPED_Y = 0.06; // on terrain: above roads (0.04), below open spaces (0.08)
 
 	let geo = $derived.by(() => {
 		const h = half;
@@ -30,11 +34,11 @@
 		sheet.holes.push(new THREE.Path(parcel.map(([x, y]) => new THREE.Vector2(x, y))));
 		const g = new THREE.ShapeGeometry(sheet);
 		g.rotateX(Math.PI / 2); // shape y -> site y (+Z)
-		return g;
+		return surface ? drapeGeometry(g, surface) : g;
 	});
 </script>
 
-<T.Mesh geometry={geo} position={[0, is3D ? 0.002 : PLAN_Y, 0]} renderOrder={1}>
+<T.Mesh geometry={geo} position={[0, surface ? DRAPED_Y : is3D ? 0.002 : PLAN_Y, 0]} renderOrder={1}>
 	<T.MeshBasicMaterial
 		color={COLORS.existing}
 		transparent

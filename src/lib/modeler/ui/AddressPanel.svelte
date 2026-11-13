@@ -114,6 +114,17 @@
 				{/if}
 				<button class="address__btn" onclick={() => (confirmingClear = true)}>Change</button>
 			</div>
+			<!-- Terrain: fetched at setup; sites set up before terrain can add it -->
+			{#if store.terrainState === 'loading'}
+				<p class="address__note address__note--busy" role="status">Loading terrain…</p>
+			{:else if store.terrainState === 'failed'}
+				<p class="address__note" role="status">
+					No elevation data here. The board stays flat.
+					<button class="address__link" onclick={() => store.loadTerrain()}>Try again</button>
+				</p>
+			{:else if !store.site.context.terrain && !store.readOnly}
+				<button class="address__btn address__terrain" onclick={() => store.loadTerrain()}>Add terrain</button>
+			{/if}
 		{/if}
 	{:else}
 		<div class="address__combo">
@@ -234,6 +245,7 @@
 	}
 
 	.address__note--busy { color: var(--color-text); }
+	.address__terrain { margin-top: 0.35rem; }
 
 	.address__actions {
 		display: flex;
