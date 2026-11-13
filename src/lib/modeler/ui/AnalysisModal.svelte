@@ -31,6 +31,8 @@
 		reuseZoneCount,
 	} from '../metrics';
 	import type { Use } from '../types';
+	import { getPatterns, type Pattern } from '../../patterns/catalog';
+	import { matchHint, rankPatterns, siteFacts } from '../../patterns/match';
 
 	const USE_LABELS: Record<Use, string> = {
 		worship: 'Worship', fellowship: 'Fellowship', education: 'Education',
@@ -69,6 +71,15 @@
 	);
 
 	let reuseZones = $derived(reuseZoneCount(plan));
+
+	// Closest patterns: the catalog loads async (Directus later), the ranking is pure
+	let patterns = $state<Pattern[]>([]);
+	$effect(() => {
+		getPatterns().then((p) => (patterns = p));
+	});
+	let facts = $derived(siteFacts(site, plan));
+	let closest = $derived(rankPatterns(patterns, facts).slice(0, 3));
+	let hint = $derived(matchHint(facts));
 
 	let statusCounts = $derived.by(() => {
 		const counts = { existing: 0, new: 0, removed: 0 };
@@ -166,6 +177,27 @@
 					<img class="overview-plan" src={planImageSrc} alt="Site plan" />
 				{/if}
 				</div>
+			</section>
+
+			<!-- Closest patterns -->
+			<section class="report-section" aria-label="Closest patterns">
+				<h2 class="section-heading">Closest patterns</h2>
+				{#if hint}<p class="pattern-hint">{hint}</p>{/if}
+				<ol class="pattern-list">
+					{#each closest as m (m.pattern.slug)}
+						{@const pct = Math.round(m.fit * 100)}
+						<li class="pattern-item">
+							<div class="pattern-head">
+								<a class="pattern-name" href="/patterns/{m.pattern.slug}" target="_blank" rel="noopener">{m.pattern.name}</a>
+								<span class="pattern-fit">{pct}% fit</span>
+							</div>
+							<div class="fit-bar" aria-hidden="true"><div class="fit-bar__fill" style="width:{pct}%"></div></div>
+							<p class="pattern-summary">{m.pattern.summary}</p>
+							{#if m.matches.length}<p class="pattern-reason"><span class="reason-label">Matches</span> {m.matches.join(', ')}</p>{/if}
+							{#if m.differs.length}<p class="pattern-reason pattern-reason--differs"><span class="reason-label">Differs</span> {m.differs.join(', ')}</p>{/if}
+						</li>
+					{/each}
+				</ol>
 			</section>
 
 			<!-- Spatial Metrics -->
@@ -391,6 +423,54 @@
 		flex-direction: column;
 		gap: 0.6rem;
 	}
+
+	.pattern-hint { font-size: 0.72rem; color: #9a5a10; margin: 0.5rem 0 0; }
+
+	.pattern-list {
+		list-style: none;
+		margin: 0.5rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.7rem;
+	}
+
+	.pattern-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 1rem;
+	}
+
+	.pattern-name {
+		font-weight: 700;
+		font-size: 0.8rem;
+		color: var(--color-text);
+		text-decoration: underline;
+		text-decoration-color: var(--color-border);
+		text-underline-offset: 2px;
+	}
+
+	.pattern-name:hover { text-decoration-color: currentColor; }
+	.pattern-fit { font-size: 0.72rem; font-variant-numeric: tabular-nums; color: var(--fh-stone); }
+
+	.fit-bar {
+		height: 4px;
+		margin: 0.3rem 0;
+		border-radius: 2px;
+		background: var(--fh-stone-tint);
+	}
+
+	.fit-bar__fill {
+		height: 100%;
+		border-radius: 2px;
+		background: var(--fh-lantern);
+	}
+
+	.pattern-summary { margin: 0; font-size: 0.72rem; color: var(--color-text); }
+	.pattern-reason { margin: 0.15rem 0 0; font-size: 0.68rem; color: var(--color-text); }
+	.pattern-reason--differs { color: var(--fh-stone); }
+	.reason-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.6rem; margin-right: 0.3rem; }
 
 	.section-heading {
 		font-size: 0.65rem;
