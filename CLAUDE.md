@@ -27,6 +27,11 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 - Use pattern-book vocabulary in UI copy: box, box-plus, cluster, object; urban, suburban, rural; adaptive reuse, new construction.
 - UI copy: concise, no em dashes.
 
+## Patterns
+- Catalog, traits and match weights live in `src/lib/patterns/catalog.ts`. The patterns are placeholders (`placeholder: true`) for the team to replace; weights are team decisions. `getPatterns()` is the one place a future Directus fetch goes.
+- Matching is pure (`src/lib/patterns/match.ts`): facts from the model and congregation profile, scored over every known fact (allowed: full weight, not allowed: none, unmentioned by the pattern: half). Tested in `match.spec.ts`.
+- The four culture questions in the Social tab (partnering, capacity, change, role) are drafts for team review.
+
 ## Persistence
 - One `sites` table (`src/lib/server/db/schema.ts`): the full `Site` as JSON in `data`, plus `name` for listing. Server helpers in `src/lib/server/sites.ts`.
 - Every read and write passes through `normalizeSite` (`src/lib/modeler/serialize.ts`). When adding a field to `Site`, update it there with a default so older saves still load.
