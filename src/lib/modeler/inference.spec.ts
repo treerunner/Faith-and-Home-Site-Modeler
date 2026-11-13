@@ -104,6 +104,28 @@ describe('inferBuildingType', () => {
 	});
 });
 
+describe('the front question', () => {
+	it('makes a main building with no clear front, or several, an Object', () => {
+		expect(inferBuildingType(plan([nave()]), { mainBuildingFront: 'none' })).toBe('object');
+		expect(inferBuildingType(plan([nave()]), { mainBuildingFront: 'several' })).toBe('object');
+		expect(inferBuildingType(plan([nave()]), { mainBuildingFront: 'clear' })).toBe('box');
+		expect(inferBuildingType(plan([nave()]))).toBe('box');
+	});
+
+	it('outranks Box-Plus', () => {
+		const wing = structure([piece(21, 0, 12, 10)]);
+		expect(inferBuildingType(plan([nave(), wing]), { mainBuildingFront: 'several' })).toBe('object');
+	});
+
+	it('leaves a cluster a cluster, as with St. Tim\'s and its cottages', () => {
+		const cottage = (x: number, y: number) => structure([piece(x, y, 8, 6)]);
+		const church = nave();
+		const front = { mainBuildingFront: 'several' } as const;
+		expect(inferBuildingType(plan([church]), front)).toBe('object'); // existing conditions
+		expect(inferBuildingType(plan([church, cottage(0, 25), cottage(15, 25), cottage(-30, 0)]), front)).toBe('cluster');
+	});
+});
+
 describe('buildingType', () => {
 	it('prefers the override and falls back to the inferred type', () => {
 		expect(buildingType(plan([nave()], { buildingTypeOverride: 'object' }))).toBe('object');

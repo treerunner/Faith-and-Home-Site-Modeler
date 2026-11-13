@@ -12,7 +12,7 @@ const SIGNIFICANT_HOUSING = 10; // units
 export function siteFacts(site: Site, plan: Plan): Facts {
 	const facts: Facts = {};
 	const built = plan.structures.some((s) => s.status !== 'removed');
-	const type = buildingType(plan);
+	const type = buildingType(plan, site);
 	if (type) facts.buildingTypes = type;
 	if (site.siteType) facts.siteTypes = site.siteType;
 	if (built) {

@@ -139,6 +139,11 @@ describe('normalizeSite', () => {
 		expect(() => normalizeSite(badFloors)).toThrow('reuseZones[0].floors');
 	});
 
+	it('keeps the front answer', () => {
+		expect(normalizeSite(makeSite({ mainBuildingFront: 'several' })).mainBuildingFront).toBe('several');
+		expect(() => normalizeSite({ ...makeSite(), mainBuildingFront: 'sideways' })).toThrow('site.mainBuildingFront');
+	});
+
 	it('keeps the culture answers', () => {
 		const profile = { size: 'small', partnering: 'open', capacity: 'volunteers', change: 'adapt', role: 'housing_partner' } as const;
 		expect(normalizeSite(makeSite({ congregationProfile: profile })).congregationProfile).toEqual(profile);

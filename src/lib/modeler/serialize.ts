@@ -284,6 +284,9 @@ export function normalizeSite(raw: unknown): Site {
 		}),
 		parcel: optional(o.parcel, (v) => polygon(v, 'site.parcel')),
 		siteType: optional(o.siteType, (v) => oneOf(v, SITE_TYPES, 'site.siteType')),
+		mainBuildingFront: optional(o.mainBuildingFront, (v) =>
+			oneOf(v, ['clear', 'none', 'several'] as const, 'site.mainBuildingFront'),
+		),
 		context,
 		// Free-form questionnaire answers; keep only string values
 		congregationProfile: profile

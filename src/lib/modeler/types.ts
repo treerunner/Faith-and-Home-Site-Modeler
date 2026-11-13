@@ -129,6 +129,10 @@ export interface Site {
 	origin?: { lat: number; lng: number }; // local 0,0 in address mode
 	parcel?: [number, number][];
 	siteType?: 'urban' | 'suburban' | 'rural';
+	// Does the main building present a clear front? An "object in space" church has none, or
+	// several; footprints can't show this, so it is asked. Describes the building, so the
+	// plans share it.
+	mainBuildingFront?: 'clear' | 'none' | 'several';
 	context: SiteContext;
 	congregationProfile?: CongregationProfile;
 	plans: Plan[];

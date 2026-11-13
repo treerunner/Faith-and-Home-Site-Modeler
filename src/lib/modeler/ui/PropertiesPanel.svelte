@@ -86,7 +86,13 @@
 		if (from === to) return from === 0 ? 'Basement' : `Floor ${from}`;
 		return `Floors ${name(from)}–${name(to)}`;
 	}
-	let inferredType = $derived(inferBuildingType(store.plan));
+	let inferredType = $derived(inferBuildingType(store.plan, store.site));
+
+	const FRONT_OPTIONS: { value: NonNullable<Site['mainBuildingFront']>; label: string }[] = [
+		{ value: 'clear', label: 'Yes' },
+		{ value: 'none', label: 'No' },
+		{ value: 'several', label: 'Several fronts' },
+	];
 	let effectiveType = $derived(store.plan.buildingTypeOverride ?? inferredType);
 	const BUILDING_TYPES = Object.keys(BUILDING_TYPE_LABELS) as BuildingType[];
 	let selectedOS = $derived(store.selectedOpenSpace);
@@ -284,6 +290,21 @@
 					>{BUILDING_TYPE_LABELS[t]}</button>
 				{/each}
 			</div>
+			<fieldset class="fieldset front-question">
+				<legend class="field-label culture-question">Does the main building have a clear front?</legend>
+				<div class="pill-group">
+					{#each FRONT_OPTIONS as opt (opt.value)}
+						{@const on = store.site.mainBuildingFront === opt.value}
+						<button
+							class="pill"
+							class:pill--active={on}
+							aria-pressed={on}
+							style={on ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
+							onclick={() => store.setMainBuildingFront(on ? undefined : opt.value)}
+						>{opt.label}</button>
+					{/each}
+				</div>
+			</fieldset>
 			{#if store.plan.buildingTypeOverride && inferredType && store.plan.buildingTypeOverride !== inferredType}
 				<p class="field-hint site-type-hint">
 					Inferred: {BUILDING_TYPE_LABELS[inferredType]}.
@@ -635,6 +656,7 @@
 
 <style>
 	.section--site-type { padding-bottom: 0.6rem; }
+	.front-question { margin-top: 0.5rem; }
 	/* Questions are full sentences; the small caps label style reads poorly at that length */
 	.culture-question { text-transform: none; letter-spacing: 0; font-weight: 600; line-height: 1.3; }
 

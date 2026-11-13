@@ -83,3 +83,28 @@ test('three separate buildings nearby are a Cluster', async ({ page }) => {
 	await expect(typePill(page, 'Cluster')).toHaveAttribute('aria-pressed', 'true');
 	await page.screenshot({ path: 'tests/screenshots/split-building-type.png' });
 });
+
+test('a main building without a clear front is an Object, unless the site is a Cluster', async ({ page }) => {
+	await page.goto('/modeler');
+	await placeSquare(page, 0, 0);
+	await expect(typePill(page, 'Box')).toHaveAttribute('aria-pressed', 'true');
+
+	const front = page.getByRole('group', { name: 'Does the main building have a clear front?' });
+	await front.getByRole('button', { name: 'Several fronts' }).click();
+	await expect(typePill(page, 'Object')).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.getByText('Inferred from the structures')).toBeVisible();
+
+	// Two buildings nearby make it a Cluster, whatever the main building is
+	await placeSquare(page, 20, 0);
+	await placeSquare(page, 0, 20);
+	await expect(typePill(page, 'Cluster')).toHaveAttribute('aria-pressed', 'true');
+
+	// Undo the two extra buildings: alone again, it is an Object
+	await page.keyboard.press('ControlOrMeta+z');
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect(typePill(page, 'Object')).toHaveAttribute('aria-pressed', 'true');
+
+	// A clear front makes it a Box
+	await front.getByRole('button', { name: 'Yes' }).click();
+	await expect(typePill(page, 'Box')).toHaveAttribute('aria-pressed', 'true');
+});

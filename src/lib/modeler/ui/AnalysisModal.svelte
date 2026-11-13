@@ -131,8 +131,8 @@
 							<span class="type-badge type-badge--{site.siteType}">{site.siteType.charAt(0).toUpperCase() + site.siteType.slice(1)}</span>
 						</div>
 					{/if}
-					{#if buildingType(plan)}
-						{@const bt = buildingType(plan)!}
+					{#if buildingType(plan, site)}
+						{@const bt = buildingType(plan, site)!}
 						<div class="overview-row">
 							<span class="overview-label">Building</span>
 							<span class="type-badge type-badge--building">{BUILDING_TYPE_LABELS[bt]}</span>

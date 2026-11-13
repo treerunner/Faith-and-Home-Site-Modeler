@@ -270,19 +270,23 @@ export function planBuildings(plan: Plan): Structure[][] {
 	return [...buildings.values()];
 }
 
-export function inferBuildingType(plan: Plan): BuildingType | null {
+// Order: Cluster, then Object, then Box-Plus, then Box. A cluster stays a cluster whatever its
+// main building looks like. The main building is an Object when the site says it has no clear
+// front (or several), or when it has a triangle or circle piece.
+export function inferBuildingType(plan: Plan, site?: Pick<Site, 'mainBuildingFront'>): BuildingType | null {
 	const buildings = planBuildings(plan);
 	if (buildings.length === 0) return null;
 	const area = (b: Structure[]) => b.reduce((sum, s) => sum + structureFootprint(s), 0);
 	const [main, ...others] = [...buildings].sort((a, b) => area(b) - area(a));
 	const nearby = others.filter((b) => area(b) >= MIN_CLUSTER_BUILDING && buildingDistance(main, b) <= CLUSTER_DISTANCE);
 	if (nearby.length >= 2) return 'cluster';
+	if (site?.mainBuildingFront === 'none' || site?.mainBuildingFront === 'several') return 'object';
 	const parts = main.flatMap((s) => s.parts);
 	if (parts.some((p) => p.shape === 'tri' || p.shape === 'circle')) return 'object';
 	if (parts.length >= 2) return 'box_plus';
 	return 'box';
 }
 
-export function buildingType(plan: Plan): BuildingType | null {
-	return plan.buildingTypeOverride ?? inferBuildingType(plan);
+export function buildingType(plan: Plan, site?: Pick<Site, 'mainBuildingFront'>): BuildingType | null {
+	return plan.buildingTypeOverride ?? inferBuildingType(plan, site);
 }

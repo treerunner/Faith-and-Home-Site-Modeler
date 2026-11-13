@@ -948,6 +948,11 @@ class ModelerStore {
 		this.plan.buildingTypeOverride = type;
 	}
 
+	setMainBuildingFront(front: Site['mainBuildingFront']) {
+		this.#pushUndo();
+		this.site.mainBuildingFront = front;
+	}
+
 	setSiteType(siteType: Site['siteType']) {
 		this.#pushUndo();
 		this.site.siteType = siteType;
