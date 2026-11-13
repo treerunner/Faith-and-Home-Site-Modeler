@@ -56,11 +56,11 @@ Outbound requests identify themselves with the User-Agent in `src/lib/server/htt
 |---|---|
 | Provides | Ground elevation for stacked chipboard terrain layers and plan contours |
 | Source | `https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage` |
-| Access | One request per board: `format=tiff`, `pixelType=F32`, `compression=None`, bilinear, 2.5 m pixels in degrees (`bboxSR=imageSR=4326`). About 130 KB, 5 to 10 s cold, under 1 s warm. Parsed by our own minimal GeoTIFF reader (`src/lib/server/tiff.ts`), resampled to a 5 m grid saved with the site. No key |
+| Access | One request per board: `format=tiff`, `pixelType=F32`, `compression=None`, bilinear, 5 m pixels in degrees (`bboxSR=imageSR=4326`). 70 to 260 KB. Response times vary a lot: under 2 s for an area read recently, up to about 25 s or a 504 for a cold one, so the fetch waits 30 s and retries once. Parsed by our own minimal GeoTIFF reader (`src/lib/server/tiff.ts`), resampled to a 5 m grid saved with the site. No key |
 | Called from | `src/lib/server/elevation.ts`, via `/api/terrain` (separate from `/api/context`, so setup never waits on it) |
 | Terms | Public domain (USGS) |
 | Attribution shown | "USGS 3D Elevation Program" when a site has terrain |
-| Coverage notes | US only, 1 m lidar where available. Outside the US the service hangs and returns 504 (London tested); the board stays flat. `getSamples` was tried first: over 20 s for 500 points, and 2,000 points timed out |
+| Coverage notes | US only, 1 m lidar where available. Outside the US the service hangs and returns 504 (London tested), so we only ask within rough boxes around the US and its territories; elsewhere the board stays flat. `getSamples` was tried first: over 20 s for 500 points, and 2,000 points timed out |
 
 ### Railway Postgres with PostGIS (our own storage)
 Not outside data, but where everything above ends up. Each site's neighborhood, roads, parcel, terrain and origin are fetched once at setup and saved with the site in `sites.data`. The origin and parcel are also written as PostGIS geography (`sites.origin`, `sites.parcel`) for spatial queries. Nothing is re-fetched when a site loads.

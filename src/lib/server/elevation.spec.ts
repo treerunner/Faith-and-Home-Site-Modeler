@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseGeoTiff } from './tiff';
-import { terrainFromRaster, terrainUrl, TERRAIN_SPACING } from './elevation';
+import { inCoverage, terrainFromRaster, terrainUrl, TERRAIN_SPACING } from './elevation';
 import fixture from './fixtures/usgs-3dep.json';
 
 // Captured live from USGS 3DEP exportImage for a 150 m board around the church fixture's origin
@@ -58,5 +58,15 @@ describe('terrainUrl', () => {
 		expect(e).toBeGreaterThan(origin.lng);
 		expect(s).toBeLessThan(origin.lat);
 		expect(n).toBeGreaterThan(origin.lat);
+	});
+});
+
+describe('inCoverage', () => {
+	it('asks USGS only within the US', () => {
+		expect(inCoverage(origin)).toBe(true);
+		expect(inCoverage({ lat: 61.2, lng: -149.9 })).toBe(true); // Anchorage
+		expect(inCoverage({ lat: 21.3, lng: -157.86 })).toBe(true); // Honolulu
+		expect(inCoverage({ lat: 51.5, lng: -0.13 })).toBe(false); // London
+		expect(inCoverage({ lat: 19.43, lng: -99.13 })).toBe(false); // Mexico City
 	});
 });
