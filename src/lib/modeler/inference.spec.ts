@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildingType, inferBuildingType, planBuildings } from './metrics';
+import { buildingType, developmentType, inferBuildingType, inferDevelopmentType, planBuildings } from './metrics';
 import { polygonDistance } from './geo';
 import type { Part, Plan, Structure } from './types';
 
@@ -130,5 +130,34 @@ describe('buildingType', () => {
 	it('prefers the override and falls back to the inferred type', () => {
 		expect(buildingType(plan([nave()], { buildingTypeOverride: 'object' }))).toBe('object');
 		expect(buildingType(plan([nave()]))).toBe('box');
+	});
+});
+
+describe('inferDevelopmentType', () => {
+	const zone = (partId: string) => ({ id: 'z', partId, points: [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5]] as [number, number][], floors: [1, 1] as [number, number], use: 'housing' as const });
+
+	it('is null with nothing built', () => {
+		expect(inferDevelopmentType(plan([]))).toBeNull();
+	});
+
+	it('reads reuse, new and both from the model', () => {
+		const church = nave();
+		const reused = structure(church.parts, { reuseZones: [zone(church.parts[0].id)] });
+		const added = structure([piece(0, 40, 10, 10)], { status: 'new' });
+		expect(inferDevelopmentType(plan([nave()]))).toBe('existing');
+		expect(inferDevelopmentType(plan([reused]))).toBe('reuse');
+		expect(inferDevelopmentType(plan([nave(), added]))).toBe('new');
+		expect(inferDevelopmentType(plan([reused, added]))).toBe('reuse_new');
+	});
+
+	it('reads removing buildings without adding any as downsizing', () => {
+		const gone = structure([piece(0, 40, 10, 10)], { status: 'removed' });
+		expect(inferDevelopmentType(plan([nave(), gone]))).toBe('downsize_sell');
+		expect(inferDevelopmentType(plan([nave(), gone, structure([piece(40, 0, 8, 8)], { status: 'new' })]))).toBe('new');
+	});
+
+	it('prefers the override, such as selling land the model cannot show', () => {
+		expect(developmentType(plan([nave()], { developmentTypeOverride: 'downsize_sell' }))).toBe('downsize_sell');
+		expect(developmentType(plan([nave()]))).toBe('existing');
 	});
 });

@@ -215,6 +215,9 @@ function parsePlan(v: unknown, path: string): Plan {
 		buildingTypeOverride: optional(o.buildingTypeOverride, (v) =>
 			oneOf(v, ['box', 'box_plus', 'object', 'cluster'] as const, `${path}.buildingTypeOverride`),
 		),
+		developmentTypeOverride: optional(o.developmentTypeOverride, (v) =>
+			oneOf(v, ['existing', 'reuse', 'new', 'reuse_new', 'downsize_sell'] as const, `${path}.developmentTypeOverride`),
+		),
 		...parsePlanContent(o, path),
 	};
 }

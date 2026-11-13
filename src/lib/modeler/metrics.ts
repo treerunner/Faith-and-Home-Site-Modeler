@@ -1,4 +1,4 @@
-import type { BuildingType, OpenSpace, Part, Plan, ReuseZone, Site, Structure, Use } from './types';
+import type { BuildingType, DevelopmentType, OpenSpace, Part, Plan, ReuseZone, Site, Structure, Use } from './types';
 import { partOutline, polygonDistance, zoneOutline } from './geo';
 import { AVG_UNIT_SQFT, sqmToSqft } from './units';
 
@@ -289,4 +289,32 @@ export function inferBuildingType(plan: Plan, site?: Pick<Site, 'mainBuildingFro
 
 export function buildingType(plan: Plan, site?: Pick<Site, 'mainBuildingFront'>): BuildingType | null {
 	return plan.buildingTypeOverride ?? inferBuildingType(plan, site);
+}
+
+// ── Development type ─────────────────────────────────────────────────────────
+
+export const DEVELOPMENT_TYPE_LABELS: Record<DevelopmentType, string> = {
+	existing: 'Existing conditions',
+	reuse: 'Adaptive reuse',
+	new: 'New development',
+	reuse_new: 'Reuse + new',
+	downsize_sell: 'Downsize / sell',
+};
+
+// What the plan does, read from the model: reuse zones are adaptive reuse, New structures are
+// new development, removing buildings without adding any is downsizing. Selling land doesn't
+// show in a model, so that comes from the override.
+export function inferDevelopmentType(plan: Plan): DevelopmentType | null {
+	if (plan.structures.length === 0) return null;
+	const reuse = reuseZoneCount(plan) > 0;
+	const added = plan.structures.some((s) => s.status === 'new');
+	if (reuse && added) return 'reuse_new';
+	if (reuse) return 'reuse';
+	if (added) return 'new';
+	if (plan.structures.some((s) => s.status === 'removed')) return 'downsize_sell';
+	return 'existing';
+}
+
+export function developmentType(plan: Plan): DevelopmentType | null {
+	return plan.developmentTypeOverride ?? inferDevelopmentType(plan);
 }
