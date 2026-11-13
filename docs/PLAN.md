@@ -155,7 +155,7 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 
 **After M6: refinements from testing** (agreed order, Nov 2026)
 1. (Done) The parcel under the address is preselected to confirm, and neighboring lots can be added. Churches often own several touching parcels (parking, rectory); they merge into one property.
-2. Split tool: cut a structure along a drawn line into parts, with per-part heights (`Part.storiesOverride`, unused so far). Map data has one outline for a building made of several additions. Pair with building-type inference (Box, Box-Plus, Object, Cluster), planned in M4 but not yet built; it is what "Find Your Pattern" rests on.
+2. (Done) Cut tool: split a structure along a drawn line into grouped pieces, each with its own stories, roof, status and uses. Building-type inference (Box, Box-Plus, Object, Cluster) with a per-plan override, shown on the Spatial tab and in the analysis. Still open from M4: matching the type and culture questionnaire to the closest pattern and showing its page.
 3. Reuse zones: a footprint plus a floor range plus status and use inside a structure ("housing, 2nd floor, west side"), shown as a tinted slice. Its own milestone; how zones relate to the use sliders is a team decision.
 4. Terrain (M6.5, below).
 

@@ -16,6 +16,7 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 - The store edits one plan at a time: use `store.plan`, not `store.site`, for plan-level fields. Plan-only metrics take a `Plan`; metrics that need the parcel or site type take `(plan, site)`.
 - Copy reactive state with the store's `copy()`, not `$state.snapshot(this.x)` alone: server builds (Vitest) compile that to the live value.
 - Metrics and building-type inference are pure functions in `src/lib/modeler/metrics.ts` with tests.
+- A building is a set of touching pieces: structures in the same group, or footprints within 0.5 m. Each placed or cut piece is its own structure; joined pieces share a `groupId`. Inference (`inferBuildingType`): 3+ buildings near each other is a Cluster, otherwise the main building decides (triangle or circle: Object, several pieces: Box-Plus, one piece: Box). Thresholds are team-tunable constants; `Plan.buildingTypeOverride` holds the user's choice.
 - One three.js scene with two cameras (orthographic plan, perspective orbit). Do not build a separate 2D editor.
 - Plan view framing (pan, zoom, fit) is `store.planView`, with pure math in `src/lib/modeler/view.ts`. It is view state: never saved in the Site. Threlte renders on demand, so code that changes a camera by hand must call `invalidate()`.
 - No Google Maps or Google 3D Tiles. No raster map tiles inside the 3D model.
