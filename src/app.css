@@ -28,6 +28,9 @@
   --color-parcel:    var(--fh-black);
   --color-grid:      #d9d8d7;
   --color-selection: var(--fh-dusk);
+  --color-cut:       #a29e97;
+  --color-backdrop-mid: #e9e6df;
+  --color-backdrop-top: #b9b4ab;
 
   /* UI surface tokens */
   --color-surface: var(--fh-linen);   /* panels, sidebars */

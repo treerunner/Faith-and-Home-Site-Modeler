@@ -20,10 +20,32 @@
 	import { setMainScene } from './cameraRef';
 	import type { Status, Structure } from '../types';
 
-	const { scene } = useThrelte();
+	const { scene, invalidate } = useThrelte();
 
 	$effect(() => {
 		setMainScene(scene);
+	});
+
+	// 3D: a backdrop behind the model, linen at the bottom darkening upward like a studio sweep,
+	// so exports carry it too. Plan view stays the flat linen drawing (a transparent canvas).
+	function backdropTexture(): THREE.Texture {
+		const canvas = document.createElement('canvas');
+		canvas.width = 2;
+		canvas.height = 256;
+		const ctx = canvas.getContext('2d')!;
+		const g = ctx.createLinearGradient(0, canvas.height, 0, 0);
+		COLORS.backdrop.forEach((c, i) => g.addColorStop(i / (COLORS.backdrop.length - 1), c));
+		ctx.fillStyle = g;
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		const tex = new THREE.CanvasTexture(canvas);
+		tex.colorSpace = THREE.SRGBColorSpace;
+		return tex;
+	}
+	let backdrop: THREE.Texture | null = null;
+	$effect(() => {
+		if (store.viewMode === '3d') scene.background = backdrop ??= backdropTexture();
+		else scene.background = null;
+		invalidate();
 	});
 
 	// Per-part lookup maps derived from structures

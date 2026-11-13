@@ -61,6 +61,10 @@
 	<T.Mesh geometry={ground} castShadow receiveShadow>
 		<T.MeshLambertMaterial color={COLORS.base} emissive={COLORS.base} emissiveIntensity={0.2} toneMapped={false} />
 	</T.Mesh>
+	<!-- From below (a low camera over a hill) the ground reads as cut solid board, not a shell -->
+	<T.Mesh geometry={ground}>
+		<T.MeshBasicMaterial color={COLORS.cut} toneMapped={false} side={THREE.BackSide} />
+	</T.Mesh>
 	<T.Mesh geometry={sides} receiveShadow>
 		<T.MeshLambertMaterial color={COLORS.base} emissive={COLORS.base} emissiveIntensity={0.2} toneMapped={false} side={THREE.DoubleSide} />
 	</T.Mesh>

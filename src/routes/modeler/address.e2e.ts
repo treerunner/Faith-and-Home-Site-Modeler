@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { ContextResponse, Suggestion } from '../../lib/modeler/address';
 import type { Terrain } from '../../lib/modeler/types';
+import { decodePng } from '../../lib/server/png';
 
 // Address mode with our own /api/geocode*, /api/context and /api/terrain mocked, so this never
 // depends on Photon, Census, Overture, PASDA or USGS being up. Those are covered by fixture tests in
@@ -239,7 +240,33 @@ test('terrain: board layers in 3D, contours in plan, credited', async ({ page })
 	await page.screenshot({ path: 'tests/screenshots/terrain-off.png' });
 	await toggle.click();
 	await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+	// Dragging the view all the way down stops near level, above the board: the backdrop's
+	// darker top still shows, rather than the board seen from underneath
+	const canvas = page.locator('canvas').first();
+	const box = (await canvas.boundingBox())!;
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2, box.y - 400, { steps: 30 });
+	await page.mouse.up();
+	await page.waitForTimeout(800);
+	await page.screenshot({ path: 'tests/screenshots/view-level.png' });
+	expect(await topPixel(page)).toEqual(expect.objectContaining({ r: near(0xb9), g: near(0xb4), b: near(0xab) }));
+
+	// Plan view keeps its flat linen drawing, not the backdrop
+	await page.getByRole('button', { name: 'Plan', exact: true }).click();
+	await page.waitForTimeout(500);
+	expect((await topPixel(page)).r).toBeGreaterThan(0xd0);
 });
+
+// A pixel at the canvas's top, behind everything else
+async function topPixel(page: Page): Promise<{ r: number; g: number; b: number }> {
+	const buf = await page.locator('canvas').first().screenshot();
+	const png = await decodePng(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
+	const at = (2 * png.width + 60) * png.channels; // clear of the credits button in the corner
+	return { r: png.data[at], g: png.data[at + 1], b: png.data[at + 2] };
+}
+const near = (v: number) => ({ asymmetricMatch: (n: number) => Math.abs(n - v) <= 12 });
 
 test('terrain: outside coverage the board stays flat; older sites can add it', async ({ page }) => {
 	const name = `E2E terrain ${Date.now()}`;
