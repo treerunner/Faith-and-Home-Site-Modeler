@@ -259,13 +259,45 @@ test('terrain: board layers in 3D, contours in plan, credited', async ({ page })
 	expect((await topPixel(page)).r).toBeGreaterThan(0xd0);
 });
 
-// A pixel at the canvas's top, behind everything else
-async function topPixel(page: Page): Promise<{ r: number; g: number; b: number }> {
+test('3D: the wheel zooms toward what is under the cursor', async ({ page }) => {
+	await mockAddressApi(page, CONTEXT, hillside());
+	await page.goto('/modeler');
+	await page.getByLabel('Find an address').fill('100 Main');
+	await page.getByRole('option', { name: PLACE.label }).click();
+	await page.getByRole('button', { name: 'Use these lots' }).or(page.getByRole('button', { name: 'Use this parcel' })).click();
+	await page.getByRole('button', { name: 'Add buildings' }).click();
+	await expect(page.getByText('Loading terrain…')).toHaveCount(0);
+	await page.getByRole('button', { name: '3D', exact: true }).click();
+	await page.waitForTimeout(800);
+
+	// The church is near the middle of the view; a neighbor's foam block is off to the right
+	const box = (await page.locator('canvas').first().boundingBox())!;
+	const center: Pt = [box.width * 0.52, box.height * 0.5];
+	const cursor: Pt = [box.width * 0.8, box.height * 0.6];
+	const foam = await canvasPixel(page, ...cursor);
+	expect((await canvasPixel(page, ...center)).r).toBeLessThan(0x70);
+	expect(foam.r).toBeGreaterThan(0xc0);
+
+	await page.mouse.move(box.x + cursor[0], box.y + cursor[1]);
+	for (let i = 0; i < 8; i++) await page.mouse.wheel(0, -100);
+	await page.waitForTimeout(1500);
+	await page.screenshot({ path: 'tests/screenshots/zoom-to-cursor.png' });
+
+	// The foam block stays under the cursor and the church slides away from the center
+	expect((await canvasPixel(page, ...cursor)).r).toBeGreaterThan(0xc0);
+	expect((await canvasPixel(page, ...center)).r).toBeGreaterThan(0x90);
+});
+
+// A pixel of the canvas, at CSS pixels from its top left
+async function canvasPixel(page: Page, x: number, y: number): Promise<{ r: number; g: number; b: number }> {
 	const buf = await page.locator('canvas').first().screenshot();
 	const png = await decodePng(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
-	const at = (2 * png.width + 60) * png.channels; // clear of the credits button in the corner
+	const at = (Math.round(y) * png.width + Math.round(x)) * png.channels;
 	return { r: png.data[at], g: png.data[at + 1], b: png.data[at + 2] };
 }
+
+// A pixel at the canvas's top, behind everything else (clear of the credits button in the corner)
+const topPixel = (page: Page) => canvasPixel(page, 60, 2);
 const near = (v: number) => ({ asymmetricMatch: (n: number) => Math.abs(n - v) <= 12 });
 
 test('terrain: outside coverage the board stays flat; older sites can add it', async ({ page }) => {

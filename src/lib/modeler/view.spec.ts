@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cameraFloor, CAMERA_CLEARANCE, contentBounds, fitView, maxViewHeight, panBy, scaleBar, zoomAt, DEFAULT_VIEW } from './view';
+import { cameraFloor, CAMERA_CLEARANCE, zoomAbout, ZOOM_LIMITS, contentBounds, fitView, maxViewHeight, panBy, scaleBar, zoomAt, DEFAULT_VIEW } from './view';
 import { ftToM } from './units';
 
 const HALF = 150; // default address board
@@ -117,5 +117,41 @@ describe('cameraFloor', () => {
 	it('clears a roof under the camera, but not a hole below the ground', () => {
 		expect(cameraFloor(null, 0, 0, 14)).toBe(14 + CAMERA_CLEARANCE);
 		expect(cameraFloor(null, 0, 0, -3)).toBe(CAMERA_CLEARANCE);
+	});
+});
+
+describe('zoomAbout', () => {
+	type P3 = [number, number, number];
+	const limits = { ...ZOOM_LIMITS, half: 150 };
+	const position: P3 = [60, 80, 80], target: P3 = [0, 0, 0], point: P3 = [30, 0, -20];
+	const dir = (a: P3, b: P3) => { const d = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); return [0, 1, 2].map((i) => (b[i] - a[i]) / d); };
+	const close = (a: number[], b: number[]) => a.forEach((v, i) => expect(v).toBeCloseTo(b[i], 6));
+
+	it('keeps the view direction and the point on the same line of sight', () => {
+		const z = zoomAbout(position, target, point, 0.5, limits);
+		close(dir(z.position, z.target), dir(position, target));
+		close(dir(z.position, point), dir(position, point));
+		expect(Math.hypot(...z.position.map((v, i) => v - point[i]))).toBeCloseTo(Math.hypot(...position.map((v, i) => v - point[i])) / 2);
+	});
+
+	it('zooming in then out returns to the start', () => {
+		const a = zoomAbout(position, target, point, 0.8, limits);
+		const b = zoomAbout(a.position, a.target, point, 1 / 0.8, limits);
+		close(b.position, position);
+		close(b.target, target);
+	});
+
+	it('stops short of the point, and no farther than the far limit', () => {
+		const inside = zoomAbout(position, target, point, 0.0001, limits);
+		expect(Math.hypot(...inside.position.map((v, i) => v - point[i]))).toBeCloseTo(limits.near);
+		expect(zoomAbout(inside.position, inside.target, point, 0.5, limits)).toEqual(inside);
+		const out = zoomAbout(position, target, target, 1000, limits);
+		expect(Math.hypot(...out.position.map((v, i) => v - out.target[i]))).toBeCloseTo(limits.far);
+	});
+
+	it('keeps the pivot over the board', () => {
+		const z = zoomAbout(position, target, [-400, 0, 0], 0.2, limits);
+		expect(z.target[0]).toBe(-150);
+		close(dir(z.position, z.target), dir(position, target));
 	});
 });

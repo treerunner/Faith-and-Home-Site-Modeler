@@ -108,3 +108,32 @@ export function cameraFloor(
 ): number {
 	return Math.max(ground ? ground.groundAt(x, z) : 0, top ?? -Infinity) + CAMERA_CLEARANCE;
 }
+
+type P3 = [number, number, number];
+export interface ZoomLimits {
+	near: number; // closest the camera gets to the point it zooms toward
+	far: number; // farthest the camera gets from the pivot
+	half: number; // the pivot stays over the board
+}
+export const ZOOM_LIMITS = { near: 5, far: 1500 };
+
+// 3D zoom toward a point (what's under the cursor): the camera and the orbit pivot both scale
+// about it, so the view keeps its direction and the point stays under the cursor. A factor
+// below 1 zooms in. Stops `near` short of the point, so it never passes through a wall or roof.
+export function zoomAbout(position: P3, target: P3, point: P3, factor: number, limits: ZoomLimits): { position: P3; target: P3 } {
+	const dist = (a: P3, b: P3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+	let f = factor;
+	if (f < 1) {
+		const d = dist(position, point);
+		f = d <= limits.near ? 1 : Math.max(f, limits.near / d);
+	} else {
+		const d = dist(position, target);
+		f = d >= limits.far ? 1 : Math.min(f, limits.far / d);
+	}
+	const about = (p: P3) => p.map((v, i) => point[i] + (v - point[i]) * f) as P3;
+	const pos = about(position), tgt = about(target);
+	// Slide the whole view back if the pivot would leave the board
+	const dx = Math.max(-limits.half, Math.min(limits.half, tgt[0])) - tgt[0];
+	const dz = Math.max(-limits.half, Math.min(limits.half, tgt[2])) - tgt[2];
+	return { position: [pos[0] + dx, pos[1], pos[2] + dz], target: [tgt[0] + dx, tgt[1], tgt[2] + dz] };
+}
