@@ -17,7 +17,8 @@
 
 	let { parcel, half, is3D, surface }: Props = $props();
 
-	const OPACITY = 0.22;
+	// Lighter in 3D, where the board is also lit: the foam neighbors should stand off it
+	const OPACITY = { plan: 0.22, '3d': 0.12 };
 	// Plan: just above the foam footprint slabs (0.05), below parts (0.1).
 	// 3D: on the board, ordered by polygonOffset above roads (-1) and below open spaces (-2).
 	const PLAN_Y = 0.06;
@@ -42,7 +43,7 @@
 	<T.MeshBasicMaterial
 		color={COLORS.existing}
 		transparent
-		opacity={OPACITY}
+		opacity={is3D ? OPACITY['3d'] : OPACITY.plan}
 		toneMapped={false}
 		depthWrite={false}
 		side={THREE.DoubleSide}
