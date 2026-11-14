@@ -81,7 +81,7 @@
 		width: max-content;
 		max-width: 18rem;
 		padding: 0.55rem 0.7rem;
-		background: #fff;
+		background: var(--fh-linen);
 		border: 1px solid var(--color-border);
 		border-radius: 4px;
 		box-shadow: 0 4px 12px rgba(0 0 0 / 0.1);

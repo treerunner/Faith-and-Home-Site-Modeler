@@ -195,6 +195,11 @@
 		cam.near = 1;    cam.far = 400;
 		cam.updateProjectionMatrix();
 		dirLight.shadow.bias = -0.0005;
+		// 3D: soft, slightly light shadows, as under a diffuse studio lamp: a blur of 6 shadow texels
+		// (about half a meter on the board). Plan view stays crisp; a wide blur speckles flat roofs there.
+		const is3D = store.viewMode === '3d';
+		dirLight.shadow.radius = is3D ? 6 : 1;
+		dirLight.shadow.intensity = is3D ? 0.8 : 1;
 	});
 
 	// Pedestal: AABB of all parts + margin, 4 m deep. In address mode, the whole context board.
