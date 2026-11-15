@@ -209,11 +209,26 @@ function parsePlanContent(o: Obj, path: string): Pick<Plan, 'structures' | 'open
 	};
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Plans are rows keyed by uuid; ids from older saves (like "p") become a uuid made from them,
+// the same every time, so the browser and the server agree
+export function planUuid(id: string): string {
+	if (UUID.test(id)) return id.toLowerCase();
+	let hex = '';
+	for (let seed = 0; hex.length < 32; seed++) {
+		let h = 0x811c9dc5 ^ seed;
+		for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0;
+		hex += h.toString(16).padStart(8, '0');
+	}
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 function parsePlan(v: unknown, path: string): Plan {
 	const o = obj(v, path);
 	const name = str(o.name ?? '', `${path}.name`);
 	return {
-		id: str(o.id, `${path}.id`),
+		id: planUuid(str(o.id, `${path}.id`)),
 		name,
 		slug: str(o.slug ?? slugify(name), `${path}.slug`),
 		oldSlugs: optional(o.oldSlugs, (v) =>

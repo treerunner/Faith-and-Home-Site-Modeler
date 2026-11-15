@@ -252,20 +252,22 @@ class ModelerStore {
 		this.#selectPlan(stayOn);
 	}
 
-	// Upserts the site. Edits made while a save is in flight stay dirty.
-	save(): Promise<boolean> {
+	// Upserts the site. Edits made while a save is in flight stay dirty. A thumbnail of what's on
+	// screen (an image data URL) is saved with the plan being viewed.
+	save(thumbnail?: string | null): Promise<boolean> {
 		if (this.readOnly) return Promise.resolve(false);
-		this.#inflightSave ??= this.#doSave().finally(() => {
+		this.#inflightSave ??= this.#doSave(thumbnail ?? null).finally(() => {
 			this.#inflightSave = null;
 		});
 		return this.#inflightSave;
 	}
 
-	async #doSave(): Promise<boolean> {
+	async #doSave(thumbnail: string | null): Promise<boolean> {
 		assignPlanSlugs(this.site); // renamed plans get new slugs; old ones are kept for redirects
 		this.#syncPlans();
 		const json = JSON.stringify($state.snapshot(this.site));
-		const stored = JSON.stringify(storedSite($state.snapshot(this.site) as Site));
+		const planId = this.onSite ? null : this.plan.id;
+		const stored = JSON.stringify({ ...storedSite($state.snapshot(this.site) as Site), ...(thumbnail ? { thumbnail: { planId, image: thumbnail } } : {}) });
 		this.saveState = 'saving';
 		try {
 			const ref = await putSite(stored, this.site.id);

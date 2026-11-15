@@ -1,3 +1,8 @@
+<script lang="ts" module>
+	// Shared by every instance of the modal
+	const patternsVersion = $state({ n: 0 });
+</script>
+
 <script lang="ts">
 	import { store } from '../store.svelte';
 
@@ -14,6 +19,8 @@
 	import { USE_COLORS } from '../colors';
 	import { addedStories, totalStories } from '../geometry';
 	import { capturePlanImage } from '../sceneExport';
+	import { saveSite } from './SiteBar.svelte';
+	import { planUrl } from '../api';
 	import { fmtSqft, AVG_UNIT_SQFT } from '../units';
 	import {
 		siteFootprint,
@@ -77,12 +84,39 @@
 	// The pattern matrix: the catalog loads async (Directus later), the matching is pure
 	let patterns = $state<Pattern[]>([]);
 	$effect(() => {
+		void patternsVersion.n; // reloads after pegging an example
 		getPatterns().then((p) => (patterns = p));
 	});
 	let cell = $derived(siteCell(site, plan));
 	let cellPattern = $derived(isComplete(cell) ? patternForCell(patterns, cell) : null);
 	let variant = $derived(cellPattern ? selectVariant(cellPattern, profile) : null);
 	let nearest = $derived(isComplete(cell) && !cellPattern ? nearestPattern(patterns, cell) : null);
+
+	// Until the CMS runs, the team pegs a modeled plan as its pattern's example from here
+	let pegState = $state<'idle' | 'saving' | 'failed'>('idle');
+	let isExample = $derived(
+		!!cellPattern?.example && store.isPersisted && cellPattern.example.url === planUrl(store.siteSlug, store.onSite ? '' : store.plan.slug, true),
+	);
+	async function pegExample() {
+		if (!cellPattern) return;
+		pegState = 'saving';
+		try {
+			if (!(await saveSite())) throw new Error('save failed');
+			const res = await fetch(`/api/patterns/${cellPattern.slug}/example`, {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ siteId: store.site.id, planId: store.onSite ? null : store.plan.id }),
+			});
+			if (!res.ok) throw new Error(`peg failed: ${res.status}`);
+			// A first save moves to the site's URL and may remount this modal: bump the shared
+			// version so whichever instance is showing reloads the catalog
+			patternsVersion.n++;
+			pegState = 'idle';
+		} catch (e) {
+			console.error(e);
+			pegState = 'failed';
+		}
+	}
 
 	let statusCounts = $derived.by(() => {
 		const counts = { existing: 0, new: 0, removed: 0 };
@@ -194,6 +228,14 @@
 								<p class="pattern-summary">{cellPattern.summary}</p>
 								{#if variant}
 									<p class="pattern-variant"><span class="reason-label">Variant</span> <strong>{variant.name}</strong>. {variant.summary}</p>
+								{/if}
+								{#if isExample}
+									<p class="pattern-variant peg-note">This plan is the pattern's example.</p>
+								{:else if !store.readOnly}
+									<button class="peg-btn" onclick={pegExample} disabled={pegState === 'saving'}>
+										{pegState === 'saving' ? 'Saving' : "Use this plan as the pattern's example"}
+									</button>
+									{#if pegState === 'failed'}<p class="pattern-variant peg-note">Could not set the example. Try again.</p>{/if}
 								{/if}
 							</div>
 						{:else}
@@ -443,6 +485,21 @@
 	}
 
 	.pattern-item { margin-top: 0.5rem; }
+
+	.peg-btn {
+		margin-top: 0.4rem;
+		padding: 0.2rem 0.6rem;
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		background: none;
+		font-size: 0.7rem;
+		font-family: inherit;
+		color: var(--color-text);
+		cursor: pointer;
+	}
+	.peg-btn:hover:not(:disabled) { background: #ece8e0; }
+	.peg-note { color: var(--fh-stone); }
+	@media print { .peg-btn { display: none; } }
 
 	.pattern-cell {
 		margin: 0.4rem 0 0;

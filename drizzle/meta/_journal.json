@@ -36,6 +36,13 @@
       "when": 1794525619756,
       "tag": "0004_site_geography",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794759314611,
+      "tag": "0005_plans_and_patterns",
+      "breakpoints": true
     }
   ]
 }

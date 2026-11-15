@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { store } from '../store.svelte';
 	import { planUrl } from '../api';
+	import { captureThumbnail } from '../sceneExport';
 
 	// Points the address bar at the plan on screen. Within a site this is shallow (no reload),
 	// so unsaved edits survive plan switches; the first save from /modeler navigates for real.
@@ -15,7 +16,8 @@
 	}
 
 	export async function saveSite(): Promise<boolean> {
-		const ok = await store.save();
+		const thumbnail = await captureThumbnail(store.plan, store.viewMode === '3d').catch(() => null);
+		const ok = await store.save(thumbnail);
 		if (ok) await syncUrl();
 		return ok;
 	}

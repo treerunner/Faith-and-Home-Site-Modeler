@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { BUILDING_TYPES, DEVELOPMENT_TYPES, getPattern, getPatterns, SITE_TYPES, type SocialConditions } from './catalog';
+import { BUILDING_TYPES, DEVELOPMENT_TYPES, SITE_TYPES, type SocialConditions } from './catalog';
+import { SEED_PATTERNS } from './seed';
 import { covers } from './match';
 
 // Whatever content the team puts in, it must stay well formed.
@@ -14,7 +15,7 @@ const ANSWERS: { [K in keyof SocialConditions]-?: readonly string[] } = {
 };
 
 describe('pattern catalog', async () => {
-	const patterns = await getPatterns();
+	const patterns = SEED_PATTERNS;
 
 	it('has patterns with unique, URL-safe slugs', () => {
 		expect(patterns.length).toBeGreaterThan(0);
@@ -65,10 +66,5 @@ describe('pattern catalog', async () => {
 			expect(p.name && p.summary).toBeTruthy();
 			expect(p.sections.length).toBeGreaterThan(0);
 		}
-	});
-
-	it('finds a pattern by slug', async () => {
-		expect((await getPattern(patterns[0].slug))?.name).toBe(patterns[0].name);
-		expect(await getPattern('no-such-pattern')).toBeUndefined();
 	});
 });

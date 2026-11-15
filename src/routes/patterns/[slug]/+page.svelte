@@ -21,6 +21,22 @@
 		{/if}
 		<h2 class="pattern-title">{p.name}</h2>
 		<p class="pattern-summary">{p.summary}</p>
+		{#if p.example}
+			<!-- A modeled site that shows the pattern -->
+			<section class="pattern-section example" aria-label="Example">
+				<h3 class="section-heading">Example</h3>
+				<a class="example-card" href={p.example.url}>
+					{#if p.example.thumbnail}
+						<img class="example-thumb" src={p.example.thumbnail} alt="{p.example.siteName}, {p.example.planName}" />
+					{/if}
+					<span class="example-text">
+						<span class="example-site">{p.example.siteName}</span>
+						<span class="example-plan">{p.example.planName}</span>
+						<span class="example-link">View the model</span>
+					</span>
+				</a>
+			</section>
+		{/if}
 		<section class="pattern-section" aria-label="Where it sits in the matrix">
 			<h3 class="section-heading">In the matrix</h3>
 			<MatrixGrid pattern={p} />
@@ -64,6 +80,32 @@
 		font-size: 0.75rem;
 		color: var(--color-text);
 	}
+
+	.example-card {
+		display: flex;
+		gap: 0.9rem;
+		align-items: center;
+		padding: 0.6rem;
+		border: 1px solid var(--color-border);
+		border-radius: 4px;
+		background: var(--fh-linen);
+		color: var(--color-text);
+		text-decoration: none;
+	}
+
+	.example-card:hover { border-color: var(--fh-stone); }
+
+	.example-thumb {
+		width: 12rem;
+		max-width: 50%;
+		border-radius: 3px;
+		border: 1px solid var(--color-border);
+	}
+
+	.example-text { display: flex; flex-direction: column; gap: 0.15rem; }
+	.example-site { font-weight: 700; font-size: 0.9rem; }
+	.example-plan { font-size: 0.78rem; }
+	.example-link { margin-top: 0.3rem; font-size: 0.75rem; text-decoration: underline; }
 
 	.placeholder-banner {
 		margin: 1rem 0 0;

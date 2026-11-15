@@ -57,6 +57,14 @@ export function patternForCell(patterns: Pattern[], cell: CompleteCell): Pattern
 	return patterns.find((p) => covers(p, cell)) ?? null;
 }
 
+// Cells two or more patterns claim. Editors can make these in the CMS; matching takes the first
+// pattern in the catalog's order, and the matrix page lists them so the team can fix them.
+export function overlaps(patterns: Pattern[]): { cell: CompleteCell; patterns: Pattern[] }[] {
+	return coverage(patterns)
+		.map(({ cell }) => ({ cell, patterns: patterns.filter((p) => covers(p, cell)) }))
+		.filter((o) => o.patterns.length > 1);
+}
+
 // Axes on which a pattern can't cover the cell
 function differingAxes(pattern: Pattern, cell: CompleteCell): Axis[] {
 	const axes: Axis[] = [];
