@@ -98,3 +98,30 @@ test('a site saved with the old Reuse status opens as Existing with a reuse zone
 	await page.locator('.zone-row').click();
 	await expect(zoneUnits(page)).toHaveValue('8');
 });
+
+test('a reuse zone works on the added floors and can add its own', async ({ page }) => {
+	await page.goto('/modeler');
+	await page.getByLabel('Drag to place Square').dragTo(page.locator('.canvas-area canvas'));
+	await page.getByLabel('Stories', { exact: true }).fill('2');
+	await page.getByRole('button', { name: 'New plan' }).click();
+
+	// Two floors on the whole building, then a zone reaching the top one
+	await page.getByLabel('Added stories').fill('2');
+	await page.getByRole('button', { name: 'Reuse whole building' }).click();
+	await page.locator('.zone-row').click();
+	await expect(page.locator('.zone-props select').nth(1).locator('option')).toHaveText(['Floor 1', 'Floor 2', 'Floor 3 (added)', 'Floor 4 (added)']);
+	await page.locator('.zone-props select').nth(1).selectOption('4');
+	await page.locator('.zone-props').getByLabel('Added stories').fill('1');
+	await expect(page.locator('.zone-row')).toHaveText(/Floors 1–4\s*\+1\s*Housing/);
+
+	// Reuse below, new construction above: the units split, and the plan is Reuse + new
+	await page.getByRole('button', { name: 'Analysis' }).click();
+	await expect(page.getByText(/\d+ adaptive reuse/)).toBeVisible();
+	await expect(page.getByText(/\d+ new construction/)).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('group', { name: 'Development type' }).getByRole('button', { name: 'Reuse + new' })).toHaveAttribute('aria-pressed', 'true');
+
+	await page.getByRole('button', { name: '3D', exact: true }).click();
+	await page.waitForTimeout(800);
+	await page.screenshot({ path: 'tests/screenshots/reuse-zone-addition.png' });
+});

@@ -17,11 +17,20 @@ export function siteFootprint(plan: Plan): number {
 	return plan.structures.reduce((sum, s) => sum + structureFootprint(s), 0);
 }
 
+// Every floor of every building, with the floors reuse zones add on top
 export function grossFloorArea(plan: Plan): number {
 	return plan.structures.reduce(
-		(sum, s) => sum + structureFootprint(s) * (totalStories(s) + (s.basement ? 1 : 0)),
+		(sum, s) => sum + structureFootprint(s) * (totalStories(s) + (s.basement ? 1 : 0)) + zoneAdditions(s),
 		0,
 	);
+}
+
+// Floor area reuse zones add above a building's roof
+function zoneAdditions(s: Structure): number {
+	return (s.reuseZones ?? []).reduce((sum, z) => {
+		const part = s.parts.find((p) => p.id === z.partId);
+		return sum + (part ? polygonArea(zoneOutline(z, part)) * (z.addedStories ?? 0) : 0);
+	}, 0);
 }
 
 // Polygon area via shoelace formula (meters²)
@@ -73,11 +82,24 @@ export function lotCoverage(plan: Plan, site: Site): number | null {
 
 // ── Reuse zones ──────────────────────────────────────────────────────────────
 
-// Floor area of a reuse zone: its outline on every floor in its range
-export function zoneFloorArea(zone: ReuseZone, structure: Structure): number {
+// A zone's floor area, split by how it comes about. A building's floors are one stack: its own
+// stories, then any stories a plan adds to the whole building, then the zone's own added stories
+// on top. On its own floors the zone is adaptive reuse; on added floors it is new construction
+// with the zone's use.
+export function zoneAreas(zone: ReuseZone, structure: Structure): { reuse: number; new: number } {
 	const part = structure.parts.find((p) => p.id === zone.partId);
-	if (!part) return 0;
-	return polygonArea(zoneOutline(zone, part)) * (zone.floors[1] - zone.floors[0] + 1);
+	if (!part) return { reuse: 0, new: 0 };
+	const area = polygonArea(zoneOutline(zone, part));
+	const [from, to] = zone.floors;
+	const own = Math.max(0, Math.min(to, structure.stories) - from + 1);
+	const added = to - from + 1 - own + (zone.addedStories ?? 0);
+	return { reuse: area * own, new: area * added };
+}
+
+// Floor area of a reuse zone: its outline on every floor in its range, and on any it adds
+export function zoneFloorArea(zone: ReuseZone, structure: Structure): number {
+	const { reuse, new: added } = zoneAreas(zone, structure);
+	return reuse + added;
 }
 
 // Housing units in a zone: the entered count, or an estimate from its area
@@ -105,7 +127,14 @@ export function dwellingsByStatus(plan: Plan): { adaptive_reuse: number; new: nu
 		if (s.status === 'new') result.new += s.dwellings;
 		else if (s.status === 'existing') result.existing += s.dwellings;
 	}
-	for (const { z, s } of zonesOf(plan)) result.adaptive_reuse += zoneDwellings(z, s);
+	// A zone's units split between reuse and new as its floor area does
+	for (const { z, s } of zonesOf(plan)) {
+		const units = zoneDwellings(z, s);
+		const { reuse, new: added } = zoneAreas(z, s);
+		const reused = reuse + added > 0 ? Math.round((units * reuse) / (reuse + added)) : 0;
+		result.adaptive_reuse += reused;
+		result.new += units - reused;
+	}
 	return result;
 }
 
@@ -119,8 +148,10 @@ export function useFloorAreaByUse(plan: Plan): Partial<Record<Use, number>> {
 		let zoned = 0;
 		for (const z of zones) {
 			const area = zoneFloorArea(z, s);
-			zoned += area;
 			add(z.use, area);
+			// Its floors within the building come out of the building's program; what it adds on top doesn't
+			const part = s.parts.find((p) => p.id === z.partId);
+			zoned += area - (part ? polygonArea(zoneOutline(z, part)) * (z.addedStories ?? 0) : 0);
 		}
 		if (s.uses.length === 0) continue;
 		// Added stories take the building's program, like its other floors
@@ -308,8 +339,9 @@ export const DEVELOPMENT_TYPE_LABELS: Record<DevelopmentType, string> = {
 // show in a model, so that comes from the override.
 export function inferDevelopmentType(plan: Plan): DevelopmentType | null {
 	if (plan.structures.length === 0) return null;
-	const reuse = reuseZoneCount(plan) > 0;
-	const added = plan.structures.some((s) => s.status === 'new' || addedStories(s) > 0);
+	const areas = zonesOf(plan).map(({ z, s }) => zoneAreas(z, s));
+	const reuse = areas.some((a) => a.reuse > 0);
+	const added = plan.structures.some((s) => s.status === 'new' || addedStories(s) > 0) || areas.some((a) => a.new > 0);
 	if (reuse && added) return 'reuse_new';
 	if (reuse) return 'reuse';
 	if (added) return 'new';

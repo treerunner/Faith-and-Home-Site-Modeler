@@ -25,6 +25,7 @@ import { contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } fr
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
 import { freshStructures, storedSite, syncPlan } from './existing';
+import { totalStories } from './geometry';
 
 const PART_DEFAULTS: Record<PaletteShape, { w: number; d: number }> = {
 	rect: { w: 10, d: 6 },
@@ -35,11 +36,14 @@ const PART_DEFAULTS: Record<PaletteShape, { w: number; d: number }> = {
 
 const MAX_UNDO = 50;
 
-// A zone's floors kept within the building: 1 to stories, or from 0 with a basement
+// A zone's floors kept within the building's stack: 1 (0 with a basement) up to its top floor,
+// counting stories a plan added to the whole building. A zone above a lowered top comes down
+// to it rather than disappearing.
 function clampFloors([from, to]: [number, number], s: Structure): [number, number] {
 	const lowest = s.basement ? 0 : 1;
-	const f = Math.min(Math.max(from, lowest), s.stories);
-	return [f, Math.min(Math.max(to, f), s.stories)];
+	const top = totalStories(s);
+	const f = Math.min(Math.max(from, lowest), top);
+	return [f, Math.min(Math.max(to, f), top)];
 }
 
 // Deep copy of reactive state. Not $state.snapshot(this.x) alone: server builds (which
@@ -423,12 +427,13 @@ class ModelerStore {
 		}
 	}
 
-	updateZone(zoneId: string, patch: Partial<Pick<ReuseZone, 'floors' | 'use' | 'dwellings'>>) {
+	updateZone(zoneId: string, patch: Partial<Pick<ReuseZone, 'floors' | 'use' | 'dwellings' | 'addedStories'>>) {
 		const found = this.#findZone(zoneId);
 		if (!found) return;
 		this.#pushUndo();
 		Object.assign(found.z, patch);
 		found.z.floors = clampFloors(found.z.floors, found.s);
+		if (patch.addedStories !== undefined) found.z.addedStories = Math.min(20, Math.max(0, Math.round(patch.addedStories))) || undefined;
 		if (found.z.use !== 'housing') found.z.dwellings = undefined;
 	}
 
@@ -650,6 +655,8 @@ class ModelerStore {
 			}
 			if (addedStories !== undefined) s.addedStories = Math.max(0, Math.round(addedStories)) || undefined;
 			if (s.status !== 'existing') s.reuseZones = undefined;
+			// Zones re-fit the stack when the building's added stories change
+			if (s.reuseZones) s.reuseZones = s.reuseZones.map((z) => ({ ...z, floors: clampFloors(z.floors, s) }));
 			return;
 		}
 		// Status follows from where a piece is drawn: the site's stand, a plan's are proposed

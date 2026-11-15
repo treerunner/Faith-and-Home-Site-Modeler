@@ -4,12 +4,16 @@
 	import type { Part, ReuseZone, Structure } from '../types';
 	import { COLORS } from '../colors';
 	import { offsetPolygon, zoneOutline } from '../geo';
+	import { totalStories } from '../geometry';
 
 	// A reuse zone in the reuse green. In 3D it is the slice of the building on the zone's
 	// floors, set a few centimeters proud of the walls (and roof, when it reaches the top), so it
 	// shows wherever the zone meets the outside and stays hidden inside the building elsewhere:
 	// a green layer set into a chipboard model. Sharing the walls' exact surface made the two
 	// flicker. In plan it is a fill.
+	// A building's floors are one stack: its own, then any a plan added to the whole building,
+	// then the zone's own added stories over its outline. Only the zone's own floors are reuse;
+	// the rest is new construction, drawn orange with the zone's green edges.
 
 	interface Props {
 		zone: ReuseZone;
@@ -29,19 +33,27 @@
 	let shape = $derived(toShape(outline));
 	let proudShape = $derived(toShape(offsetPolygon(outline, PROUD)));
 
-	// Floor 1 starts at ground level; floor 0 is the basement, below it
-	let bottom = $derived((zone.floors[0] - 1) * structure.floorHeight);
-	// Reaching the top floor, the slice covers the roof too, so it rises just above it
-	let top = $derived(zone.floors[1] * structure.floorHeight + (zone.floors[1] >= structure.stories ? PROUD : 0));
-
-	let solid = $derived.by(() => {
-		const depth = top - bottom;
-		const g = new THREE.ExtrudeGeometry(proudShape, { depth, bevelEnabled: false });
+	// Floors from-to as a slab. Floor 1 starts at ground level; floor 0 is the basement, below it.
+	// A slab reaching the roof covers it too, so it rises just above it.
+	function slab(from: number, to: number, roofTop: number): THREE.BufferGeometry {
+		const fh = structure.floorHeight;
+		const top = to * fh + (to >= roofTop ? PROUD : 0);
+		const g = new THREE.ExtrudeGeometry(proudShape, { depth: top - (from - 1) * fh, bevelEnabled: false });
 		g.rotateX(Math.PI / 2); // shape y -> site y (+Z); extrusion runs down
 		g.translate(0, top, 0);
 		return g;
+	}
+
+	let slabs = $derived.by(() => {
+		const [from, to] = zone.floors;
+		const own = structure.stories, stack = totalStories(structure), added = zone.addedStories ?? 0;
+		const roofTop = stack + added;
+		const out: { geo: THREE.BufferGeometry; color: string }[] = [];
+		if (from <= own) out.push({ geo: slab(from, Math.min(to, own), roofTop), color: COLORS.reuse });
+		if (to > own) out.push({ geo: slab(Math.max(from, own + 1), to, roofTop), color: COLORS.new });
+		if (added) out.push({ geo: slab(stack + 1, stack + added, roofTop), color: COLORS.new });
+		return out.map((s) => ({ ...s, edges: new THREE.EdgesGeometry(s.geo) }));
 	});
-	let solidEdges = $derived(new THREE.EdgesGeometry(solid));
 
 	let flat = $derived.by(() => {
 		const g = new THREE.ShapeGeometry(shape);
@@ -61,12 +73,14 @@
 </script>
 
 {#if is3D}
-	<T.Mesh geometry={solid} castShadow>
-		<T.MeshLambertMaterial color={COLORS.reuse} />
-	</T.Mesh>
-	<T.LineSegments geometry={solidEdges}>
-		<T.LineBasicMaterial color={EDGE} />
-	</T.LineSegments>
+	{#each slabs as s, i (i)}
+		<T.Mesh geometry={s.geo} castShadow>
+			<T.MeshLambertMaterial color={s.color} />
+		</T.Mesh>
+		<T.LineSegments geometry={s.edges}>
+			<T.LineBasicMaterial color={EDGE} />
+		</T.LineSegments>
+	{/each}
 {:else}
 	<T.Mesh geometry={flat} position={[0, PLAN_Y, 0]}>
 		<T.MeshBasicMaterial color={COLORS.reuse} transparent opacity={upstairs ? 0.45 : 0.85} side={THREE.DoubleSide} depthWrite={false} />
