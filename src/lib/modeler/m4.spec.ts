@@ -27,7 +27,7 @@ type SitePlan = Site & Plan;
 
 function makeSite(overrides: Partial<SitePlan> = {}): SitePlan {
 	return {
-		id: 'site1', name: 'Test Site', mode: 'grid', slug: 'plan', plans: [],
+		id: 'site1', name: 'Test Site', mode: 'grid', slug: 'plan', plans: [], existing: { id: 'ec', name: 'Existing conditions', slug: '', structures: [], openSpaces: [], trees: [], annotations: [] },
 		structures: [], openSpaces: [], trees: [], context: { buildings: [], roads: [] }, annotations: [],
 		...overrides,
 	};

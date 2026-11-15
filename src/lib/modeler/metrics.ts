@@ -1,6 +1,7 @@
 import type { BuildingType, DevelopmentType, OpenSpace, Part, Plan, ReuseZone, Site, Structure, Use } from './types';
 import { partOutline, polygonDistance, zoneOutline } from './geo';
 import { AVG_UNIT_SQFT, sqmToSqft } from './units';
+import { addedStories, totalStories } from './geometry';
 
 export function partFootprint(part: Part): number {
 	if (part.shape === 'poly' && part.points) return polygonArea(part.points) * part.w * part.d;
@@ -18,7 +19,7 @@ export function siteFootprint(plan: Plan): number {
 
 export function grossFloorArea(plan: Plan): number {
 	return plan.structures.reduce(
-		(sum, s) => sum + structureFootprint(s) * (s.stories + (s.basement ? 1 : 0)),
+		(sum, s) => sum + structureFootprint(s) * (totalStories(s) + (s.basement ? 1 : 0)),
 		0,
 	);
 }
@@ -122,7 +123,8 @@ export function useFloorAreaByUse(plan: Plan): Partial<Record<Use, number>> {
 			add(z.use, area);
 		}
 		if (s.uses.length === 0) continue;
-		const remaining = Math.max(0, structureFootprint(s) * s.stories - zoned);
+		// Added stories take the building's program, like its other floors
+		const remaining = Math.max(0, structureFootprint(s) * totalStories(s) - zoned);
 		const totalWeight = s.uses.reduce((sum, u) => sum + (s.useWeights?.[u] ?? 50), 0);
 		if (totalWeight === 0) continue;
 		for (const u of s.uses) add(u, remaining * ((s.useWeights?.[u] ?? 50) / totalWeight));
@@ -189,7 +191,7 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	if (
 		site.siteType === 'urban' &&
 		plan.structures.length > 0 &&
-		plan.structures.every((s) => s.stories === 1)
+		plan.structures.every((s) => totalStories(s) === 1)
 	) {
 		steps.push({
 			category: 'density',
@@ -301,13 +303,13 @@ export const DEVELOPMENT_TYPE_LABELS: Record<DevelopmentType, string> = {
 	downsize_sell: 'Downsize / sell',
 };
 
-// What the plan does, read from the model: reuse zones are adaptive reuse, New structures are
-// new development, removing buildings without adding any is downsizing. Selling land doesn't
+// What the plan does, read from the model: reuse zones are adaptive reuse, New structures and
+// stories added to existing buildings are new development, removing buildings without adding any is downsizing. Selling land doesn't
 // show in a model, so that comes from the override.
 export function inferDevelopmentType(plan: Plan): DevelopmentType | null {
 	if (plan.structures.length === 0) return null;
 	const reuse = reuseZoneCount(plan) > 0;
-	const added = plan.structures.some((s) => s.status === 'new');
+	const added = plan.structures.some((s) => s.status === 'new' || addedStories(s) > 0);
 	if (reuse && added) return 'reuse_new';
 	if (reuse) return 'reuse';
 	if (added) return 'new';

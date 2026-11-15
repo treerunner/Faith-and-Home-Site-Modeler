@@ -57,7 +57,7 @@ function makePlan(name: string, slug = '', oldSlugs?: string[]): Plan {
 }
 
 function makeSite(plans: Plan[]): Site {
-	return { id: 's', name: 'Site', mode: 'grid', context: { buildings: [], roads: [] }, plans };
+	return { id: 's', name: 'Site', mode: 'grid', context: { buildings: [], roads: [] }, existing: { id: 'ec', name: 'Existing conditions', slug: '', structures: [], openSpaces: [], trees: [], annotations: [] }, plans };
 }
 
 describe('assignPlanSlugs', () => {

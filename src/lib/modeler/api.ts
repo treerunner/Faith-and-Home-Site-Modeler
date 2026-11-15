@@ -29,7 +29,8 @@ export function deleteSite(id: string): Promise<void> {
 	return request(`/api/sites/${id}`, { method: 'DELETE' });
 }
 
-// /modeler/<site> redirects to the site's first plan
+// /modeler/<site> is the site view (existing conditions); a plan adds its slug. Existing
+// conditions have no slug, so planUrl with an empty slug is the site view.
 export const siteUrl = (siteSlug: string) => `/modeler/${siteSlug}`;
 export const planUrl = (siteSlug: string, planSlug: string, view = false) =>
-	`/modeler/${siteSlug}/${planSlug}${view ? '/view' : ''}`;
+	`/modeler/${siteSlug}${planSlug ? `/${planSlug}` : ''}${view ? '/view' : ''}`;

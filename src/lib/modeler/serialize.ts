@@ -1,10 +1,12 @@
 import type { Annotation, ContextSource, OpenSpace, Part, Plan, ReuseZone, Site, SiteContext, Structure, Terrain, TerrainRegion, Tree, Use } from './types';
 import { slugify } from './slug';
 import { CONTEXT_HALF_SIZE, wholePartZone } from './geo';
+import { choicesOf, expandPlan, type ExistingChoice, type ExistingChoices } from './existing';
 
 // Validates a Site read from the database or posted to the API, and fills
 // defaults for fields added after older sites were saved. Throws on bad input.
-// Sites saved before plans existed are wrapped into one "Existing conditions" plan.
+// Sites saved before plans existed are wrapped into one "Existing conditions" plan. Sites saved
+// before the site view (no `existing`) take their existing conditions from the first plan.
 
 export class SiteFormatError extends Error {}
 
@@ -137,6 +139,8 @@ function parseStructure(v: unknown, path: string): Structure {
 		heightSource: optional(o.heightSource, (h) => oneOf(h, ['data', 'default'] as const, `${path}.heightSource`)),
 		groupId: optional(o.groupId, (g) => str(g, `${path}.groupId`)),
 		reuseZones: reuseZones?.length ? reuseZones : undefined,
+		addedStories: optional(o.addedStories, (n) => num(n, `${path}.addedStories`)) || undefined,
+		planRoof: optional(o.planRoof, (v) => oneOf(v, ROOFS, `${path}.planRoof`)),
 	};
 }
 
@@ -271,18 +275,109 @@ function parseTerrain(v: unknown, half: number): Terrain | undefined {
 
 export const DEFAULT_PLAN_NAME = 'Existing conditions';
 
+// A plan's choices about the site's pieces. Choices about pieces the site no longer has are
+// dropped, as are zones on parts it no longer has: the site can change under its plans.
+function parseChoices(v: unknown, path: string, existing: Plan): ExistingChoices {
+	const o = obj(v, path);
+	const out: ExistingChoices = {};
+	for (const [id, raw] of Object.entries(o)) {
+		const base = existing.structures.find((s) => s.id === id);
+		if (!base) continue;
+		const c = obj(raw, `${path}.${id}`);
+		const partIds = new Set(base.parts.map((p) => p.id));
+		const zones = arr(c.reuseZones ?? [], `${path}.${id}.reuseZones`)
+			.filter((z) => partIds.has(String((z as Obj)?.partId)))
+			.map((z, i) => parseZone(z, `${path}.${id}.reuseZones[${i}]`, partIds));
+		const choice: ExistingChoice = {};
+		if (c.removed === true) choice.removed = true;
+		const added = optional(c.addedStories, (n) => num(n, `${path}.${id}.addedStories`));
+		if (added) choice.addedStories = added;
+		const roof = optional(c.roof, (r) => oneOf(r, ROOFS, `${path}.${id}.roof`));
+		if (roof) choice.roof = roof;
+		if (zones.length) choice.reuseZones = zones;
+		if (Object.keys(choice).length) out[id] = choice;
+	}
+	return out;
+}
+
+// Before the site view: existing conditions are the first plan's buildings as they stand, with
+// its open spaces and trees, and every plan keeps what it proposed as choices. A first plan
+// that is just "Existing conditions", proposing nothing, becomes the site view.
+function migrateToSiteView(plans: Plan[]): { existing: Plan; plans: Plan[] } {
+	const [first] = plans;
+	const asBuilt = (s: Structure): Structure => ({ ...structuredClone(s), status: 'existing', reuseZones: undefined, addedStories: undefined, planRoof: undefined });
+	const existing: Plan = {
+		id: `${first.id}-existing`,
+		name: DEFAULT_PLAN_NAME,
+		slug: '',
+		structures: first.structures.filter((s) => s.status !== 'new').map(asBuilt),
+		openSpaces: structuredClone(first.openSpaces),
+		trees: structuredClone(first.trees),
+		annotations: [],
+		buildingTypeOverride: first.buildingTypeOverride,
+	};
+	// An existing building only a later plan has joins the site, so nothing is lost
+	const firstIds = new Set(existing.structures.map((s) => s.id));
+	const ids = new Set(firstIds);
+	for (const p of plans.slice(1)) {
+		for (const s of p.structures) {
+			if (s.status !== 'new' && !ids.has(s.id)) {
+				existing.structures.push(asBuilt(s));
+				ids.add(s.id);
+			}
+		}
+	}
+	const converted = plans.map((p) => {
+		const choices = choicesOf(existing, p);
+		// A later plan that had deleted one of the first plan's buildings: it's gone in that plan
+		for (const id of firstIds) if (!p.structures.some((s) => s.id === id)) choices[id] = { removed: true };
+		const own = p.structures.filter((s) => s.status === 'new');
+		return { plan: expandPlan(existing, { ...p, structures: own, existingChoices: choices }), proposes: own.length > 0 || Object.keys(choices).length > 0 };
+	});
+	const [head, ...rest] = converted;
+	if (first.name === DEFAULT_PLAN_NAME) {
+		if (!head.proposes && !first.developmentTypeOverride) {
+			existing.id = first.id;
+			return { existing, plans: rest.map((c) => c.plan) };
+		}
+		// A proposal under the old default name: existing conditions are the site now, so it's
+		// renamed, and its old URL redirects
+		head.plan = { ...head.plan, name: 'Plan 1', slug: slugify('Plan 1'), oldSlugs: [...(head.plan.oldSlugs ?? []), head.plan.slug] };
+	}
+	return { existing, plans: converted.map((c) => c.plan) };
+}
+
 export function normalizeSite(raw: unknown): Site {
 	const o = obj(raw, 'site');
 	const id = str(o.id, 'site.id');
 	const context = parseContext(o.context);
 	const profile = optional(o.congregationProfile, (p) => obj(p, 'site.congregationProfile'));
 
-	const plans =
-		o.plans === undefined
-			? [{ id, name: DEFAULT_PLAN_NAME, slug: slugify(DEFAULT_PLAN_NAME), ...parsePlanContent(o, 'site') }]
-			: arr(o.plans, 'site.plans').map((p, i) => parsePlan(p, `site.plans[${i}]`));
-	if (plans.length === 0) fail('site.plans', 'expected at least one plan');
-	const ids = new Set<string>();
+	let existing: Plan;
+	let plans: Plan[];
+	if (o.existing !== undefined) {
+		existing = { ...parsePlan(o.existing, 'site.existing'), name: DEFAULT_PLAN_NAME, slug: '', oldSlugs: undefined };
+		// The site's pieces are as built: what happens to them is up to each plan
+		existing.structures = existing.structures.map((s) => ({ ...s, status: 'existing', reuseZones: undefined, addedStories: undefined, planRoof: undefined }));
+		plans = arr(o.plans ?? [], 'site.plans').map((v, i) => {
+			const path = `site.plans[${i}]`;
+			const plan = parsePlan(v, path);
+			const pv = obj(v, path);
+			const choices = pv.existingChoices === undefined ? {} : parseChoices(pv.existingChoices, `${path}.existingChoices`, existing);
+			const ids = new Set(existing.structures.map((s) => s.id));
+			// A plan's own pieces are new construction
+			const own = plan.structures.filter((s) => !ids.has(s.id)).map((s) => ({ ...s, status: 'new' as const, reuseZones: undefined, addedStories: undefined, planRoof: undefined }));
+			return expandPlan(existing, { ...plan, structures: own, existingChoices: choices });
+		});
+	} else {
+		const legacy =
+			o.plans === undefined
+				? [{ id, name: DEFAULT_PLAN_NAME, slug: slugify(DEFAULT_PLAN_NAME), ...parsePlanContent(o, 'site') }]
+				: arr(o.plans, 'site.plans').map((p, i) => parsePlan(p, `site.plans[${i}]`));
+		if (legacy.length === 0) fail('site.plans', 'expected at least one plan');
+		({ existing, plans } = migrateToSiteView(legacy));
+	}
+	const ids = new Set<string>([existing.id]);
 	const slugs = new Set<string>();
 	plans.forEach((p, i) => {
 		if (ids.has(p.id)) fail(`site.plans[${i}].id`, 'duplicate plan id');
@@ -314,6 +409,7 @@ export function normalizeSite(raw: unknown): Site {
 					Object.entries(profile).filter(([, v]) => typeof v === 'string'),
 				) as Site['congregationProfile'])
 			: undefined,
+		existing,
 		plans,
 	};
 	return stripUndefined(site);

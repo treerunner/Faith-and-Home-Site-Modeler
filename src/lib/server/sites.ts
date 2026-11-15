@@ -3,6 +3,9 @@ import { and, desc, eq, like, ne, or, sql } from 'drizzle-orm';
 import { db } from './db';
 import { sites, siteSlugs } from './db/schema';
 import { normalizeSite, SiteFormatError } from '../modeler/serialize';
+import { storedSite } from '../modeler/existing';
+import { developmentType } from '../modeler/metrics';
+import type { DevelopmentType } from '../modeler/types';
 import { findPlanBySlug, pickSlug, RESERVED_SITE_SLUGS, slugify } from '../modeler/slug';
 import { planUrl, type SiteRef } from '../modeler/api';
 import type { Site } from '../modeler/types';
@@ -14,7 +17,7 @@ export interface SiteSummary {
 	name: string;
 	duplicatedFrom: string | null;
 	updatedAt: Date;
-	plans: { name: string; slug: string }[];
+	plans: { name: string; slug: string; developmentType: DevelopmentType | null }[];
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -60,7 +63,7 @@ export async function listSites(): Promise<SiteSummary[]> {
 		.orderBy(desc(sites.updatedAt));
 	return rows.map(({ data, ...row }) => ({
 		...row,
-		plans: normalizeSite(data).plans.map((p) => ({ name: p.name, slug: p.slug })),
+		plans: normalizeSite(data).plans.map((p) => ({ name: p.name, slug: p.slug, developmentType: developmentType(p) })),
 	}));
 }
 
@@ -83,16 +86,16 @@ async function getSiteBySlug(slug: string): Promise<{ site: Site; slug: string }
 	return { site: normalizeSite(row.data), slug: row.slug };
 }
 
-// Page load for /modeler/<site>[/<plan>][/view]. A missing or unknown plan goes to the
-// site's first plan; old site or plan slugs redirect to the current ones.
+// Page load for /modeler/<site>[/<plan>][/view]. No plan is the site view (existing
+// conditions); an unknown plan goes there too. Old site or plan slugs redirect to the current ones.
 export async function loadPlanRoute(
 	siteParam: string,
 	planParam: string | undefined,
 	readOnly: boolean,
 ): Promise<{ site: Site; siteSlug: string; planId: string }> {
 	const { site, slug } = await getSiteBySlug(siteParam);
-	const plan = (planParam && findPlanBySlug(site.plans, planParam)) || site.plans[0];
-	if (siteParam !== slug || planParam !== plan.slug) redirect(307, planUrl(slug, plan.slug, readOnly));
+	const plan = (planParam && findPlanBySlug(site.plans, planParam)) || site.existing;
+	if (siteParam !== slug || (planParam ?? '') !== plan.slug) redirect(307, planUrl(slug, plan.slug, readOnly));
 	return { site, siteSlug: slug, planId: plan.id };
 }
 
@@ -106,11 +109,11 @@ export async function saveSite(id: string, body: unknown): Promise<SiteRef> {
 		if (existing) {
 			await tx
 				.update(sites)
-				.set({ name: site.name, data: site, ...geo, updatedAt: sql`now()` })
+				.set({ name: site.name, data: storedSite(site), ...geo, updatedAt: sql`now()` })
 				.where(eq(sites.id, id));
 		} else {
 			// Placeholder until claimSlug sets the real one: the column is unique and not null
-			await tx.insert(sites).values({ id, slug: id, name: site.name, data: site, ...geo });
+			await tx.insert(sites).values({ id, slug: id, name: site.name, data: storedSite(site), ...geo });
 		}
 		const slug = await claimSlug(tx, id, site.name, existing?.slug);
 		return { id, slug, name: site.name };
@@ -126,7 +129,7 @@ export async function duplicateSite(id: string): Promise<SiteRef> {
 	const source = await getSite(id);
 	const copy: Site = { ...source, id: crypto.randomUUID(), name: `${source.name || 'Untitled'} copy` };
 	return db.transaction(async (tx) => {
-		await tx.insert(sites).values({ id: copy.id, slug: copy.id, name: copy.name, data: copy, duplicatedFrom: id, ...siteGeography(copy) });
+		await tx.insert(sites).values({ id: copy.id, slug: copy.id, name: copy.name, data: storedSite(copy), duplicatedFrom: id, ...siteGeography(copy) });
 		const slug = await claimSlug(tx, copy.id, copy.name);
 		return { id: copy.id, slug, name: copy.name };
 	});

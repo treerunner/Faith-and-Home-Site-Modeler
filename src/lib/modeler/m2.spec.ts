@@ -47,10 +47,13 @@ describe('store.updateStructure', () => {
 		expect(store.plan.structures[0].label).toBe('Sanctuary');
 	});
 
-	it('mutates status', () => {
+	it('keeps status: what the site draws stands, what a plan draws is new', () => {
 		const id = store.plan.structures[0].id;
 		store.updateStructure(id, { status: 'new' });
-		expect(store.plan.structures[0].status).toBe('new');
+		expect(store.plan.structures[0].status).toBe('existing');
+		store.newPlan();
+		store.addStructure();
+		expect(store.plan.structures.at(-1)!.status).toBe('new');
 	});
 
 	it('mutates uses', () => {

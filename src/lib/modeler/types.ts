@@ -56,6 +56,10 @@ export interface Structure {
 	heightSource?: 'data' | 'default'; // where stories came from for prefilled buildings; cleared once edited
 	groupId?: string; // shared with other structures that move together
 	reuseZones?: ReuseZone[]; // existing structures only
+	// In a plan, on the site's existing pieces (see existing.ts): floors added on top of `stories`,
+	// and a roof chosen by the plan over the site's
+	addedStories?: number;
+	planRoof?: Roof;
 }
 
 export interface OpenSpace {
@@ -100,7 +104,7 @@ export type BuildingType = 'box' | 'box_plus' | 'object' | 'cluster';
 // can happen together. Downsize / sell covers consolidating or disposing of land or buildings.
 export type DevelopmentType = 'existing' | 'reuse' | 'new' | 'reuse_new' | 'downsize_sell';
 
-// One proposal (or the existing conditions) for a site.
+// Existing conditions (`Site.existing`) or one proposal for a site (`Site.plans`).
 export interface Plan {
 	id: string;
 	name: string;
@@ -153,5 +157,8 @@ export interface Site {
 	mainBuildingFront?: 'clear' | 'none' | 'several';
 	context: SiteContext;
 	congregationProfile?: CongregationProfile;
-	plans: Plan[];
+	// The buildings as they stand, with the site's open spaces and trees: edited on the site view
+	// only. Every plan inherits its buildings (see existing.ts). No slug: it is the site's own URL.
+	existing: Plan;
+	plans: Plan[]; // the alternatives; may be empty
 }

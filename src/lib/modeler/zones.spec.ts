@@ -106,7 +106,7 @@ describe('zone metrics', () => {
 	});
 
 	it('counts housing reuse zones toward a structure that lists housing', () => {
-		const site = { id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, plans: [] } as Site;
+		const site = { id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, existing: { id: 'ec', name: 'Existing conditions', slug: '', structures: [], openSpaces: [], trees: [], annotations: [] }, plans: [] } as Site;
 		const flagged = (structures: Structure[]) =>
 			generateActionSteps(plan(structures), site).find((s) => s.message.includes('without a unit count'))?.message;
 		// Housing listed, no units anywhere: flagged by name
@@ -123,7 +123,7 @@ describe('zone metrics', () => {
 	});
 
 	it('does not suggest change when reuse is proposed', () => {
-		const site = { id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, plans: [] } as Site;
+		const site = { id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, existing: { id: 'ec', name: 'Existing conditions', slug: '', structures: [], openSpaces: [], trees: [], annotations: [] }, plans: [] } as Site;
 		const message = 'No new construction or adaptive reuse proposed';
 		const unchanged = generateActionSteps(plan([structure()]), site);
 		expect(unchanged.some((s) => s.message.startsWith(message))).toBe(true);

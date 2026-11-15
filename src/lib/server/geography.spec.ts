@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { siteWkt } from './geography';
 import type { Site } from '../modeler/types';
 
-const base: Site = { id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, plans: [] };
+const base: Site = { id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, existing: { id: 'ec', name: 'Existing conditions', slug: '', structures: [], openSpaces: [], trees: [], annotations: [] }, plans: [] };
 const origin = { lat: 40.5988823, lng: -75.4962986 };
 
 describe('siteWkt', () => {

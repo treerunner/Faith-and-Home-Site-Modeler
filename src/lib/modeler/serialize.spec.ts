@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_PLAN_NAME, normalizeSite, SiteFormatError } from './serialize';
-import type { Plan, Site } from './types';
+import { storedSite } from './existing';
+import type { Plan, Site, Structure } from './types';
 
 function makePlan(overrides: Partial<Plan> = {}): Plan {
 	return {
@@ -20,11 +21,23 @@ function makePlan(overrides: Partial<Plan> = {}): Plan {
 	};
 }
 
+// A site with one building on the site view and no plans
+function siteWith(structure: Structure): Site {
+	const site = makeSite({ plans: [] });
+	site.existing.structures = [structure];
+	return site;
+}
+
+// Saved and loaded, as the API does
+const roundTrip = (site: Site) => normalizeSite(JSON.parse(JSON.stringify(storedSite(site))));
+
 function makeSite(overrides: Partial<Site> = {}): Site {
 	return {
 		id: 'site1', name: 'Grace Church', mode: 'grid', siteType: 'suburban',
 		context: { buildings: [], roads: [] },
 		congregationProfile: { size: 'small', tenure: 'historic', notes: 'Shared kitchen' },
+		// The plan's Sanctuary is its copy of the site's
+		existing: { id: 'ec', name: 'Existing conditions', slug: '', structures: structuredClone(makePlan().structures), openSpaces: [], trees: [], annotations: [] },
 		plans: [makePlan()],
 		...overrides,
 	};
@@ -33,10 +46,56 @@ function makeSite(overrides: Partial<Site> = {}): Site {
 describe('normalizeSite', () => {
 	it('round trips a full site unchanged', () => {
 		const site = makeSite();
-		expect(normalizeSite(JSON.parse(JSON.stringify(site)))).toEqual(site);
+		expect(roundTrip(site)).toEqual(site);
 	});
 
-	it('wraps a site saved before plans into one plan', () => {
+	it('saves a plan\'s choices, not its copies of the site\'s buildings', () => {
+		const site = makeSite();
+		const zone = { id: 'z', partId: 'p1', points: [[-0.5, -0.5], [0, -0.5], [0, 0.5]] as [number, number][], floors: [1, 2] as [number, number], use: 'housing' as const };
+		Object.assign(site.plans[0].structures[0], { addedStories: 1, roof: 'flat', planRoof: 'flat', reuseZones: [zone] });
+		site.plans[0].structures.push({ ...structuredClone(site.plans[0].structures[0]), id: 's2', status: 'new', addedStories: undefined, planRoof: undefined, reuseZones: undefined });
+		const stored = storedSite(site);
+		expect(stored.plans[0].structures.map((s) => s.id)).toEqual(['s2']);
+		expect(stored.plans[0].existingChoices).toEqual({ s1: { addedStories: 1, roof: 'flat', reuseZones: [zone] } });
+		expect(roundTrip(site).plans[0].structures[0]).toMatchObject({ addedStories: 1, roof: 'flat', reuseZones: [zone] });
+	});
+
+	it('keeps a plan\'s own buildings new, and drops choices on buildings the site no longer has', () => {
+		const site = makeSite({ plans: [] });
+		const raw = JSON.parse(JSON.stringify(storedSite(site)));
+		raw.plans = [{ ...makePlan(), structures: [{ ...makePlan().structures[0], id: 'mine', status: 'existing' }], existingChoices: { gone: { removed: true }, s1: { removed: true, reuseZones: [{ id: 'z', partId: 'nope', points: [[0, 0], [1, 0], [1, 1]], floors: [1, 1], use: 'housing' }] } } }];
+		const plan = normalizeSite(raw).plans[0];
+		expect(plan.structures.map((s) => [s.id, s.status])).toEqual([['s1', 'removed'], ['mine', 'new']]);
+		expect(plan.structures[0].reuseZones).toBeUndefined();
+	});
+
+	it('takes existing conditions from the first plan of a site saved before the site view', () => {
+		const standing = makePlan().structures[0];
+		const legacy = {
+			id: 'old',
+			plans: [
+				{ id: 'a', name: 'Cottages', structures: [{ ...standing, status: 'removed' }, { ...standing, id: 'n1', status: 'new' }], openSpaces: makePlan().openSpaces },
+				{ id: 'b', name: 'Hall', structures: [{ ...standing, id: 'shed', status: 'existing' }] },
+			],
+		};
+		const site = normalizeSite(legacy);
+		expect(site.existing.structures.map((s) => [s.id, s.status])).toEqual([['s1', 'existing'], ['shed', 'existing']]);
+		expect(site.existing.openSpaces).toHaveLength(1);
+		expect(site.plans.map((p) => p.name)).toEqual(['Cottages', 'Hall']);
+		expect(site.plans[0].structures.map((s) => [s.id, s.status])).toEqual([['s1', 'removed'], ['shed', 'existing'], ['n1', 'new']]);
+		// Hall never had the Sanctuary: it's gone in that plan
+		expect(site.plans[1].structures.map((s) => [s.id, s.status])).toEqual([['s1', 'removed'], ['shed', 'existing']]);
+	});
+
+	it('makes an unchanged first "Existing conditions" plan the site view', () => {
+		const standing = makePlan().structures[0];
+		const site = normalizeSite({ id: 'old', plans: [{ id: 'ec1', name: DEFAULT_PLAN_NAME, slug: 'existing-conditions', structures: [standing] }] });
+		expect(site.existing).toMatchObject({ id: 'ec1', name: DEFAULT_PLAN_NAME, slug: '' });
+		expect(site.existing.structures).toHaveLength(1);
+		expect(site.plans).toEqual([]);
+	});
+
+	it('wraps a site saved before plans into the site view', () => {
 		const legacy = {
 			id: 'old', name: 'Old', siteType: 'urban',
 			structures: [{ id: 's1', status: 'existing', parts: [{ id: 'p1', shape: 'square', x: 0, y: 0, w: 6, d: 6 }] }],
@@ -44,12 +103,11 @@ describe('normalizeSite', () => {
 		};
 		const site = normalizeSite(legacy);
 		expect(site.siteType).toBe('urban');
-		expect(site.plans).toHaveLength(1);
-		const plan = site.plans[0];
-		expect(plan).toMatchObject({ id: 'old', name: DEFAULT_PLAN_NAME, slug: 'existing-conditions' });
-		expect(plan.trees).toHaveLength(1);
-		expect(plan.openSpaces).toEqual([]);
-		expect(plan.annotations).toEqual([]);
+		expect(site.plans).toHaveLength(0);
+		expect(site.existing).toMatchObject({ id: 'old', name: DEFAULT_PLAN_NAME, slug: '' });
+		expect(site.existing.structures).toHaveLength(1);
+		expect(site.existing.trees).toHaveLength(1);
+		expect(site.existing.openSpaces).toEqual([]);
 		expect('structures' in site).toBe(false);
 	});
 
@@ -83,24 +141,20 @@ describe('normalizeSite', () => {
 			parcel: [[0, 0], [40, 0], [40, 30], [0, 30]],
 			context: { buildings: [{ polygon: [[50, 50], [60, 50], [60, 60]], height: 7 }], roads: [{ line: [[-100, 0], [100, 0]], kind: 'primary' }] },
 		});
-		expect(normalizeSite(JSON.parse(JSON.stringify(site)))).toEqual(site);
+		expect(roundTrip(site)).toEqual(site);
 	});
 
 	it('keeps poly outlines and requires at least 3 points', () => {
 		const poly = { id: 'p2', shape: 'poly' as const, x: 0, y: 0, w: 30, d: 22, rotation: 25, points: [[-0.5, -0.5], [0.5, -0.5], [0, 0.5]] as [number, number][] };
-		const plan = makePlan({ structures: [{ ...makePlan().structures[0], heightSource: 'default', parts: [poly] }] });
-		expect(normalizeSite(JSON.parse(JSON.stringify(makeSite({ plans: [plan] })))).plans[0].structures[0]).toMatchObject({
-			heightSource: 'default',
-			parts: [poly],
-		});
-		const bad = makePlan({ structures: [{ ...makePlan().structures[0], parts: [{ ...poly, points: [[0, 0]] }] }] });
-		expect(() => normalizeSite(makeSite({ plans: [bad] }))).toThrow('site.plans[0].structures[0].parts[0].points');
+		const site = siteWith({ ...makePlan().structures[0], heightSource: 'default', parts: [poly] });
+		expect(roundTrip(site).existing.structures[0]).toMatchObject({ heightSource: 'default', parts: [poly] });
+		const bad = siteWith({ ...makePlan().structures[0], parts: [{ ...poly, points: [[0, 0]] }] });
+		expect(() => normalizeSite(bad)).toThrow('site.existing.structures[0].parts[0].points');
 	});
 
 	it('drops points from non-poly parts', () => {
 		const rect = { id: 'p3', shape: 'rect' as const, x: 0, y: 0, w: 1, d: 1, rotation: 0, points: [[0, 0], [1, 0], [1, 1]] as [number, number][] };
-		const plan = makePlan({ structures: [{ ...makePlan().structures[0], parts: [rect] }] });
-		expect(normalizeSite(makeSite({ plans: [plan] })).plans[0].structures[0].parts[0].points).toBeUndefined();
+		expect(normalizeSite(siteWith({ ...makePlan().structures[0], parts: [rect] })).existing.structures[0].parts[0].points).toBeUndefined();
 	});
 
 	it('turns a structure saved with the old Reuse status into Existing with a whole-building zone', () => {
@@ -129,14 +183,10 @@ describe('normalizeSite', () => {
 	});
 
 	it('validates reuse zones', () => {
-		const base = makePlan().structures[0];
 		const zone = { id: 'z', partId: 'p1', points: [[-0.5, -0.5], [0, -0.5], [0, 0.5]], floors: [2, 2], use: 'housing' };
-		const ok = makeSite({ plans: [makePlan({ structures: [{ ...base, reuseZones: [zone as never] }] })] });
-		expect(normalizeSite(ok).plans[0].structures[0].reuseZones![0]).toMatchObject({ floors: [2, 2], use: 'housing' });
-		const wrongPart = makeSite({ plans: [makePlan({ structures: [{ ...base, reuseZones: [{ ...zone, partId: 'nope' } as never] }] })] });
-		expect(() => normalizeSite(wrongPart)).toThrow('reuseZones[0].partId');
-		const badFloors = makeSite({ plans: [makePlan({ structures: [{ ...base, reuseZones: [{ ...zone, floors: [3, 2] } as never] }] })] });
-		expect(() => normalizeSite(badFloors)).toThrow('reuseZones[0].floors');
+		const withZone = (z: object) => ({ ...makeSite(), plans: [{ ...makePlan(), existingChoices: { s1: { reuseZones: [z] } } }] });
+		expect(normalizeSite(withZone(zone)).plans[0].structures[0].reuseZones![0]).toMatchObject({ floors: [2, 2], use: 'housing' });
+		expect(() => normalizeSite(withZone({ ...zone, floors: [3, 2] }))).toThrow('existingChoices.s1.reuseZones[0].floors');
 	});
 
 	it('keeps the front answer', () => {
@@ -158,7 +208,6 @@ describe('normalizeSite', () => {
 	it.each([
 		['not an object', 'site'],
 		[{ ...makeSite(), id: 5 }, 'site.id'],
-		[makeSite({ plans: [] }), 'site.plans'],
 		[makeSite({ plans: [plan, { ...plan, slug: 'other' }] }), 'site.plans[1].id'],
 		[makeSite({ plans: [plan, { ...plan, id: 'plan2', slug: 'housing', oldSlugs: [] }] }), 'site.plans[1].slug'],
 		[makeSite({ plans: [{ ...plan, structures: 'nope' as never }] }), 'site.plans[0].structures'],
