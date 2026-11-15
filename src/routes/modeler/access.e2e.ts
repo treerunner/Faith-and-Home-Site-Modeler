@@ -130,7 +130,7 @@ test('members edit, leads invite and delete, outsiders see only public view link
 	const token = newToken();
 	await sql`INSERT INTO invitations (committee_id, email, role, token_hash, expires_at) VALUES (${c}, ${outsider.email}, 'member', ${await hashToken(token)}, now() + interval '1 day')`;
 	await page.goto(`/auth/invite?token=${token}`);
-	await expect(page).toHaveURL(new RegExp(`/committees/${c}$`));
+	await expect(page).toHaveURL(/\/committees\/e2e-[\w-]+$/); // the committee's slug
 	await page.goto(`/modeler/${closed.slug}`);
 	await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
 
@@ -175,6 +175,20 @@ test('the team steps into any committee and alone sets pattern examples', async 
 	await expect(page.getByRole('button', { name: 'Send invitation' })).toBeVisible();
 	await page.goto('/admin');
 	await expect(page.getByRole('link', { name: /E2E help/ })).toBeVisible();
+	// Committees have readable addresses; renaming moves it and the old one redirects
+	await page.getByRole('link', { name: /E2E help/ }).click();
+	await expect(page).toHaveURL(/\/committees\/e2e-[\w-]+$/);
+	const oldUrl = page.url();
+	await page.getByRole('button', { name: 'Edit' }).click();
+	const renamed = `E2E Grace building ${Date.now()}`;
+	await page.getByLabel('Name').fill(renamed);
+	await page.getByLabel('Description').fill('Grace UMC, Allentown: property committee');
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(page).toHaveURL(/\/committees\/e2e-grace-building-\d+$/);
+	await expect(page.getByText('Grace UMC, Allentown: property committee')).toBeVisible();
+	await page.goto(oldUrl);
+	await expect(page).toHaveURL(/\/committees\/e2e-grace-building-\d+$/);
+	await page.goto('/admin');
 	await page.screenshot({ path: 'tests/screenshots/auth-admin.png' });
 	await page.goto('/modeler/sites');
 	await page.getByRole('button', { name: /^E2E team/ }).click(); // the account menu

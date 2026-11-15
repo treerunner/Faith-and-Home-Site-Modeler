@@ -50,6 +50,13 @@
       "when": 1794764348677,
       "tag": "0006_accounts_committees",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794770120229,
+      "tag": "0007_committee_slugs",
+      "breakpoints": true
     }
   ]
 }

@@ -12,8 +12,9 @@
 	let role = $state<'member' | 'lead'>('member');
 	let message = $state('');
 	let error = $state('');
-	let renaming = $state(false);
+	let editing = $state(false);
 	let newName = $state('');
+	let newDescription = $state('');
 
 	// Calls the committee API, then reloads the page's data
 	async function call(url: string, method: string, body?: unknown, done = '') {
@@ -38,9 +39,23 @@
 		if (await call(`/api/committees/${c.id}/members/${me.id}`, 'DELETE')) await goto('/modeler/sites');
 	}
 
-	async function rename(e: SubmitEvent) {
+	// Name and description; a new name can move the page's address (the old one redirects)
+	async function saveDetails(e: SubmitEvent) {
 		e.preventDefault();
-		if (await call(`/api/committees/${c.id}`, 'PATCH', { name: newName })) renaming = false;
+		error = '';
+		const res = await fetch(`/api/committees/${c.id}`, {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ name: newName, description: newDescription }),
+		});
+		const body = await res.json().catch(() => null);
+		if (!res.ok) {
+			error = body?.message ?? 'That didn’t work. Try again.';
+			return;
+		}
+		editing = false;
+		if (body.slug !== c.slug) await goto(`/committees/${body.slug}`, { replaceState: true, invalidateAll: true });
+		else await invalidateAll();
 	}
 
 	const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
@@ -54,17 +69,23 @@
 	<Masthead />
 	<main class="committee-main">
 		<a class="back" href="/modeler/sites">Sites</a>
-		{#if renaming}
-			<form class="rename" onsubmit={rename}>
-				<input class="text-input" aria-label="Committee name" bind:value={newName} required />
-				<button class="btn btn--primary" type="submit">Save</button>
-				<button class="btn" type="button" onclick={() => (renaming = false)}>Cancel</button>
+		{#if editing}
+			<form class="details" onsubmit={saveDetails}>
+				<label class="field-label" for="committee-name">Name</label>
+				<input id="committee-name" class="text-input" bind:value={newName} required />
+				<label class="field-label" for="committee-description">Description</label>
+				<input id="committee-description" class="text-input" placeholder="e.g. Grace UMC, Allentown: property committee" maxlength="200" bind:value={newDescription} />
+				<div class="details-actions">
+					<button class="btn btn--primary" type="submit">Save</button>
+					<button class="btn" type="button" onclick={() => (editing = false)}>Cancel</button>
+				</div>
 			</form>
 		{:else}
 			<h2 class="title">
 				{c.name}
-				{#if c.canManage}<button class="link-btn" onclick={() => { newName = c.name; renaming = true; }}>Rename</button>{/if}
+				{#if c.canManage}<button class="link-btn" onclick={() => { newName = c.name; newDescription = c.description; editing = true; }}>Edit</button>{/if}
 			</h2>
+			{#if c.description}<p class="description">{c.description}</p>{/if}
 		{/if}
 		{#if c.isTeam}<p class="note">The Faith & Home team: members can see and help with every committee's sites.</p>{/if}
 
@@ -151,7 +172,11 @@
 	.row a { color: var(--color-text); }
 	.member-email { margin-left: 0.45rem; }
 	.role { font-size: 0.72rem; color: var(--fh-stone); margin-left: auto; }
-	.invite, .rename { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem; }
+	.invite { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem; }
+	.details { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.5rem 0; max-width: 28rem; }
+	.details-actions { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+	.field-label { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+	.description { margin: -0.2rem 0 0.4rem; font-size: 0.9rem; }
 	.text-input { padding: 0.35rem 0.5rem; border: 1px solid var(--color-border); border-radius: 3px; font: inherit; font-size: 0.85rem; background: #fff; }
 	.btn { padding: 0.35rem 0.75rem; border: 1px solid var(--color-border); border-radius: 3px; background: none; font: inherit; font-size: 0.8rem; cursor: pointer; }
 	.btn--primary { background: var(--fh-dusk); border-color: var(--fh-dusk); color: #fff; }

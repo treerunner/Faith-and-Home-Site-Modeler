@@ -3,7 +3,7 @@
 	import { invalidateAll, goto } from '$app/navigation';
 
 	// The account menu: sign in, or your committees, the team's admin page, and sign out
-	let user = $derived(page.data.user as { email: string; name: string; isTeam: boolean; memberships: { committeeId: string; committeeName: string }[] } | null | undefined);
+	let user = $derived(page.data.user as { email: string; name: string; isTeam: boolean; memberships: { committeeId: string; committeeName: string; committeeSlug: string }[] } | null | undefined);
 	let open = $state(false);
 	let rootEl: HTMLDivElement | undefined = $state();
 
@@ -32,7 +32,7 @@
 					<div class="account__menu" role="menu">
 						<a role="menuitem" href="/modeler/sites" onclick={() => (open = false)}>Sites</a>
 						{#each user.memberships as m (m.committeeId)}
-							<a role="menuitem" class="account__committee" href="/committees/{m.committeeId}" onclick={() => (open = false)}>{m.committeeName}</a>
+							<a role="menuitem" class="account__committee" href="/committees/{m.committeeSlug}" onclick={() => (open = false)}>{m.committeeName}</a>
 						{/each}
 						{#if user.isTeam}<a role="menuitem" href="/admin" onclick={() => (open = false)}>Admin</a>{/if}
 						<button role="menuitem" onclick={signOut}>Sign out</button>

@@ -1,9 +1,31 @@
 import { error } from '@sveltejs/kit';
-import { and, asc, count, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, isNull, ne, sql } from 'drizzle-orm';
 import { db } from './db';
 import { committees, invitations, memberships, settings, sites, users } from './db/schema';
 import { canManageCommittee, type Role } from './access';
 import { invite, type CurrentUser } from './auth';
+import { pickSlug } from '../modeler/slug';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// A committee's URL slug from its name: one no other committee has ever used. A rename keeps the
+// slug when it still fits, otherwise moves it and keeps the old one for redirects.
+async function slugFor(name: string, exceptId?: string, current?: string): Promise<string> {
+	const others = await db
+		.select({ slug: committees.slug, oldSlugs: committees.oldSlugs })
+		.from(committees)
+		.where(exceptId ? ne(committees.id, exceptId) : undefined);
+	const taken = new Set(others.flatMap((c) => [c.slug, ...c.oldSlugs]));
+	return pickSlug(name, taken, [], current);
+}
+
+function cleanName(raw: string): string {
+	const name = raw.trim().slice(0, 120);
+	if (!name) error(400, 'Give the committee a name');
+	return name;
+}
+
+const cleanDescription = (raw: unknown) => (typeof raw === 'string' ? raw.trim().slice(0, 200) : '');
 
 // Committees: who's in them, invitations, and the team's switches
 
@@ -30,27 +52,30 @@ export async function setAllowNewCommittees(user: CurrentUser | null, allow: boo
 // Anyone signed in may start a committee while the team allows it; the team always may
 export async function createCommittee(user: CurrentUser | null, rawName: string): Promise<string> {
 	if (!user) error(401, 'Sign in to start a committee');
-	const name = rawName.trim().slice(0, 120);
-	if (!name) error(400, 'Give the committee a name');
+	const name = cleanName(rawName);
 	if (!user.isTeam && !(await allowNewCommittees())) error(403, 'New committees are by invitation. Ask the Faith & Home team.');
-	const [c] = await db.insert(committees).values({ name, createdBy: user.id }).returning({ id: committees.id });
+	const [c] = await db.insert(committees).values({ name, slug: await slugFor(name), createdBy: user.id }).returning({ id: committees.id });
 	await db.insert(memberships).values({ committeeId: c.id, userId: user.id, role: 'lead' });
 	return c.id;
 }
 
 // The team creates a committee for others and invites its first lead
-export async function createCommitteeFor(user: CurrentUser | null, rawName: string, leadEmail: string, origin: string): Promise<string> {
+export async function createCommitteeFor(user: CurrentUser | null, rawName: string, leadEmail: string, origin: string, description?: unknown): Promise<string> {
 	if (!user?.isTeam) error(403, 'Only the Faith & Home team creates committees for others');
-	const name = rawName.trim().slice(0, 120);
-	if (!name) error(400, 'Give the committee a name');
-	const [c] = await db.insert(committees).values({ name, createdBy: user.id }).returning({ id: committees.id });
+	const name = cleanName(rawName);
+	const [c] = await db
+		.insert(committees)
+		.values({ name, slug: await slugFor(name), description: cleanDescription(description), createdBy: user.id })
+		.returning({ id: committees.id });
 	if (!(await sendInvite(c.id, leadEmail, 'lead', user.id, origin))) error(400, 'That doesn’t look like an email address');
 	return c.id;
 }
 
 export interface CommitteeDetail {
 	id: string;
+	slug: string;
 	name: string;
+	description: string;
 	isTeam: boolean;
 	canManage: boolean;
 	members: { userId: string; email: string; name: string; role: Role }[];
@@ -58,12 +83,25 @@ export interface CommitteeDetail {
 	sites: { id: string; slug: string; name: string; visibility: 'public' | 'members'; updatedAt: Date }[];
 }
 
+// A committee by its slug, an earlier slug, or its id (as in links made before slugs)
+export async function findCommittee(param: string): Promise<{ id: string; slug: string } | null> {
+	const key = param.toLowerCase();
+	const [c] = await db
+		.select({ id: committees.id, slug: committees.slug })
+		.from(committees)
+		.where(UUID.test(param) ? eq(committees.id, param) : sql`${committees.slug} = ${key} OR ${committees.oldSlugs} @> ${JSON.stringify([key])}::jsonb`);
+	return c ?? null;
+}
+
 // A committee's page: its members see it; the team sees any
 export async function getCommittee(id: string, user: CurrentUser | null): Promise<CommitteeDetail> {
 	if (!user) error(401, 'Sign in to see committees');
 	const member = user.memberships.some((m) => m.committeeId === id);
 	if (!member && !user.isTeam) error(404, 'Committee not found');
-	const [c] = await db.select({ id: committees.id, name: committees.name, isTeam: committees.isTeam }).from(committees).where(eq(committees.id, id));
+	const [c] = await db
+		.select({ id: committees.id, slug: committees.slug, name: committees.name, description: committees.description, isTeam: committees.isTeam })
+		.from(committees)
+		.where(eq(committees.id, id));
 	if (!c) error(404, 'Committee not found');
 	const canManage = canManageCommittee(id, user);
 	const [members, pending, siteRows] = await Promise.all([
@@ -93,11 +131,24 @@ function mustManage(id: string, user: CurrentUser | null) {
 	if (!canManageCommittee(id, user)) error(403, 'Only committee leads can do that');
 }
 
-export async function renameCommittee(id: string, user: CurrentUser | null, rawName: string): Promise<void> {
+// Name and description; a new name may move the slug (the old one keeps redirecting)
+export async function updateCommittee(id: string, user: CurrentUser | null, patch: { name?: unknown; description?: unknown }): Promise<{ slug: string }> {
 	mustManage(id, user);
-	const name = rawName.trim().slice(0, 120);
-	if (!name) error(400, 'Give the committee a name');
-	await db.update(committees).set({ name }).where(eq(committees.id, id));
+	const [c] = await db.select({ slug: committees.slug, oldSlugs: committees.oldSlugs }).from(committees).where(eq(committees.id, id));
+	if (!c) error(404, 'Committee not found');
+	const set: Partial<typeof committees.$inferInsert> = {};
+	if (patch.description !== undefined) set.description = cleanDescription(patch.description);
+	if (patch.name !== undefined) {
+		if (typeof patch.name !== 'string') error(400, 'name is text');
+		set.name = cleanName(patch.name);
+		const slug = await slugFor(set.name, id, c.slug);
+		if (slug !== c.slug) {
+			set.slug = slug;
+			set.oldSlugs = [...new Set([...c.oldSlugs, c.slug])].filter((s) => s !== slug);
+		}
+	}
+	if (Object.keys(set).length) await db.update(committees).set(set).where(eq(committees.id, id));
+	return { slug: set.slug ?? c.slug };
 }
 
 export async function inviteMember(id: string, user: CurrentUser | null, email: string, role: unknown, origin: string): Promise<void> {
@@ -147,7 +198,9 @@ export async function listCommittees(user: CurrentUser | null) {
 	return db
 		.select({
 			id: committees.id,
+			slug: committees.slug,
 			name: committees.name,
+			description: committees.description,
 			isTeam: committees.isTeam,
 			createdAt: committees.createdAt,
 			members: sql<number>`(select count(*)::int from ${memberships} where ${memberships.committeeId} = ${committees.id})`,

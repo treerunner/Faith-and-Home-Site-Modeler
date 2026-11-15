@@ -40,7 +40,8 @@ export async function signIn(context: BrowserContext, user: TestUser) {
 }
 
 export async function makeCommittee(name: string): Promise<string> {
-	const [c] = await sql`INSERT INTO committees (name) VALUES (${name}) RETURNING id`;
+	const slug = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	const [c] = await sql`INSERT INTO committees (name, slug) VALUES (${name}, ${slug}) RETURNING id`;
 	return c.id;
 }
 

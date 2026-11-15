@@ -7,6 +7,7 @@
 
 	let name = $state('');
 	let leadEmail = $state('');
+	let description = $state('');
 	let error = $state('');
 	let message = $state('');
 
@@ -25,7 +26,7 @@
 
 	async function create(e: SubmitEvent) {
 		e.preventDefault();
-		if (await call('/api/admin/committees', 'POST', { name, leadEmail }, `${name} created; an invitation went to ${leadEmail}.`)) name = leadEmail = '';
+		if (await call('/api/admin/committees', 'POST', { name, leadEmail, description }, `${name} created; an invitation went to ${leadEmail}.`)) name = leadEmail = description = '';
 	}
 </script>
 
@@ -51,6 +52,7 @@
 			<form class="create" onsubmit={create}>
 				<input class="text-input" aria-label="Committee name" placeholder="Committee name" bind:value={name} required />
 				<input class="text-input" type="email" aria-label="First lead's email" placeholder="First lead's email" bind:value={leadEmail} required />
+				<input class="text-input wide" aria-label="Description" placeholder="Description (optional)" maxlength="200" bind:value={description} />
 				<button class="btn btn--primary" type="submit">Create and invite</button>
 			</form>
 		</section>
@@ -60,8 +62,9 @@
 			<ul class="list">
 				{#each data.committees as c (c.id)}
 					<li class="row">
-						<a href="/committees/{c.id}">{c.name}</a>
+						<a href="/committees/{c.slug}">{c.name}</a>
 						{#if c.isTeam}<span class="tag">Team</span>{/if}
+						{#if c.description}<span class="meta">{c.description}</span>{/if}
 						<span class="meta">{c.members} member{c.members === 1 ? '' : 's'} · {c.sites} site{c.sites === 1 ? '' : 's'}</span>
 					</li>
 				{/each}
@@ -84,6 +87,7 @@
 	.row { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.35rem 0; font-size: 0.85rem; border-bottom: 1px solid #ebe8e1; }
 	.row a { color: var(--color-text); }
 	.row .meta { margin-left: auto; }
+	.wide { flex-basis: 100%; }
 	.tag { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fh-stone); }
 	.text-input { padding: 0.35rem 0.5rem; border: 1px solid var(--color-border); border-radius: 3px; font: inherit; font-size: 0.85rem; background: #fff; }
 	.btn { padding: 0.35rem 0.75rem; border: 1px solid var(--color-border); border-radius: 3px; background: none; font: inherit; font-size: 0.8rem; cursor: pointer; }
