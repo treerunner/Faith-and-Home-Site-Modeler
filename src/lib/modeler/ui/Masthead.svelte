@@ -31,6 +31,7 @@
 				{#if open}
 					<div class="account__menu" role="menu">
 						<a role="menuitem" href="/modeler/sites" onclick={() => (open = false)}>Sites</a>
+						<a role="menuitem" href="/committees" onclick={() => (open = false)}>Committees</a>
 						{#each user.memberships as m (m.committeeId)}
 							<a role="menuitem" class="account__committee" href="/committees/{m.committeeSlug}" onclick={() => (open = false)}>{m.committeeName}</a>
 						{/each}

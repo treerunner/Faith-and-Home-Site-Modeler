@@ -173,7 +173,7 @@ test('the team steps into any committee and alone sets pattern examples', async 
 	await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
 	await page.goto(`/committees/${c}`);
 	await expect(page.getByRole('button', { name: 'Send invitation' })).toBeVisible();
-	await page.goto('/admin');
+	await page.goto('/committees');
 	await expect(page.getByRole('link', { name: /E2E help/ })).toBeVisible();
 	// Committees have readable addresses; renaming moves it and the old one redirects
 	await page.getByRole('link', { name: /E2E help/ }).click();
@@ -188,7 +188,13 @@ test('the team steps into any committee and alone sets pattern examples', async 
 	await expect(page.getByText('Grace UMC, Allentown: property committee')).toBeVisible();
 	await page.goto(oldUrl);
 	await expect(page).toHaveURL(/\/committees\/e2e-grace-building-\d+$/);
+	await page.goto('/committees');
+	await expect(page.getByRole('link', { name: /E2E Grace building/ })).toBeVisible();
+	// Counts: this committee has the one lead and the one site made above
+	await expect(page.getByRole('listitem').filter({ hasText: 'E2E Grace building' })).toContainText('1 member · 1 site');
+	await page.screenshot({ path: 'tests/screenshots/auth-committees.png', fullPage: true });
 	await page.goto('/admin');
+	await expect(page.getByRole('button', { name: 'Create and invite' })).toBeVisible();
 	await page.screenshot({ path: 'tests/screenshots/auth-admin.png' });
 	await page.goto('/modeler/sites');
 	await page.getByRole('button', { name: /^E2E team/ }).click(); // the account menu
@@ -197,5 +203,26 @@ test('the team steps into any committee and alone sets pattern examples', async 
 	// A committee lead can't peg examples
 	const res = await theirs.request.put('/api/patterns/urban-box-adaptive-reuse/example', { headers: { origin: 'http://localhost:4173' }, data: { siteId: site.id, planId: null } });
 	expect(res.status()).toBe(403);
+	await ctx.close();
+});
+
+test('anyone signed in can start a committee from the committees page', async ({ browser }) => {
+	const newcomer = await user('newcomer');
+	const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+	const page = await ctx.newPage();
+	await signIn(ctx, newcomer);
+	await page.goto('/committees');
+	await expect(page.getByText("You're not in a committee yet.")).toBeVisible();
+	await page.getByRole('button', { name: 'Start a committee' }).click();
+	const name = `E2E new committee ${Date.now()}`;
+	await page.getByLabel('Name').fill(name);
+	await page.getByRole('button', { name: 'Start', exact: true }).click();
+	await expect(page).toHaveURL(/\/committees\/e2e-new-committee-\d+$/);
+	await expect(page.getByRole('heading', { name })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Members' }).getByText('Lead')).toBeVisible();
+	const [row] = await sql`SELECT id FROM committees WHERE name = ${name}`;
+	committees.push(row.id);
+	await page.goto('/committees');
+	await expect(page.getByRole('link', { name })).toBeVisible();
 	await ctx.close();
 });

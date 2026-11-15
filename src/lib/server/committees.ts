@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { and, asc, count, desc, eq, gt, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { db } from './db';
 import { committees, invitations, memberships, settings, sites, users } from './db/schema';
 import { canManageCommittee, type Role } from './access';
@@ -50,13 +50,16 @@ export async function setAllowNewCommittees(user: CurrentUser | null, allow: boo
 }
 
 // Anyone signed in may start a committee while the team allows it; the team always may
-export async function createCommittee(user: CurrentUser | null, rawName: string): Promise<string> {
+export async function createCommittee(user: CurrentUser | null, rawName: string, description?: unknown): Promise<{ id: string; slug: string }> {
 	if (!user) error(401, 'Sign in to start a committee');
 	const name = cleanName(rawName);
 	if (!user.isTeam && !(await allowNewCommittees())) error(403, 'New committees are by invitation. Ask the Faith & Home team.');
-	const [c] = await db.insert(committees).values({ name, slug: await slugFor(name), createdBy: user.id }).returning({ id: committees.id });
+	const [c] = await db
+		.insert(committees)
+		.values({ name, slug: await slugFor(name), description: cleanDescription(description), createdBy: user.id })
+		.returning({ id: committees.id, slug: committees.slug });
 	await db.insert(memberships).values({ committeeId: c.id, userId: user.id, role: 'lead' });
-	return c.id;
+	return c;
 }
 
 // The team creates a committee for others and invites its first lead
@@ -192,10 +195,11 @@ export async function removeMember(id: string, user: CurrentUser | null, userId:
 	await db.delete(memberships).where(and(eq(memberships.committeeId, id), eq(memberships.userId, userId)));
 }
 
-// Every committee, for the team's admin page
+// The committees page: your committees, with your role; the team sees every committee
 export async function listCommittees(user: CurrentUser | null) {
-	if (!user?.isTeam) error(403, 'Only the Faith & Home team sees every committee');
-	return db
+	if (!user) error(401, 'Sign in to see committees');
+	const mine = user.memberships.map((m) => m.committeeId);
+	const rows = await db
 		.select({
 			id: committees.id,
 			slug: committees.slug,
@@ -203,9 +207,13 @@ export async function listCommittees(user: CurrentUser | null) {
 			description: committees.description,
 			isTeam: committees.isTeam,
 			createdAt: committees.createdAt,
-			members: sql<number>`(select count(*)::int from ${memberships} where ${memberships.committeeId} = ${committees.id})`,
-			sites: sql<number>`(select count(*)::int from ${sites} where ${sites.committeeId} = ${committees.id})`,
+			// Written out in full: inside a subquery drizzle leaves column names unqualified, so the
+			// committee's "id" would resolve to the inner table's
+			members: sql<number>`(select count(*)::int from "memberships" m where m."committee_id" = "committees"."id")`,
+			sites: sql<number>`(select count(*)::int from "sites" s where s."committee_id" = "committees"."id")`,
 		})
 		.from(committees)
+		.where(user.isTeam ? undefined : mine.length ? inArray(committees.id, mine) : sql`false`)
 		.orderBy(desc(committees.isTeam), asc(committees.name));
+	return rows.map((c) => ({ ...c, role: user.memberships.find((m) => m.committeeId === c.id)?.role ?? null }));
 }
