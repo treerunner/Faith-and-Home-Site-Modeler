@@ -22,10 +22,10 @@
 	const names = $derived(new Map(data.sites.map((s) => [s.id, s.name || 'Untitled'])));
 	// Sites under their committees, most recently updated first
 	const groups = $derived.by(() => {
-		const out = new Map<string, { id: string | null; name: string; sites: typeof data.sites }>();
+		const out = new Map<string, { id: string | null; slug: string; name: string; sites: typeof data.sites }>();
 		for (const s of data.sites) {
 			const key = s.committee?.id ?? '';
-			if (!out.has(key)) out.set(key, { id: s.committee?.id ?? null, name: s.committee?.name ?? 'No committee', sites: [] });
+			if (!out.has(key)) out.set(key, { id: s.committee?.id ?? null, slug: s.committee?.slug ?? '', name: s.committee?.name ?? 'No committee', sites: [] });
 			out.get(key)!.sites.push(s);
 		}
 		return [...out.values()];
@@ -76,7 +76,7 @@
 			{#each groups as g (g.id ?? '')}
 			<section class="committee-group" aria-label={g.name}>
 			<h3 class="committee-heading">
-				{#if g.id}<a href="/committees/{g.id}">{g.name}</a>{:else}{g.name}{/if}
+				{#if g.id}<a href="/committees/{g.slug}">{g.name}</a>{:else}{g.name}{/if}
 			</h3>
 			<ul class="site-list" aria-label="Saved sites">
 				{#each g.sites as site (site.id)}

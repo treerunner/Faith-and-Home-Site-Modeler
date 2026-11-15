@@ -48,6 +48,9 @@ export const committees = pgTable(
 	{
 		id: uuid('id').primaryKey().defaultRandom(),
 		name: text('name').notNull(),
+		slug: text('slug').notNull().unique(), // URL: /committees/<slug>, from the name
+		oldSlugs: jsonb('old_slugs').$type<string[]>().notNull().default([]), // earlier names' slugs, which redirect
+		description: text('description').notNull().default(''), // one optional line, e.g. "Grace UMC, Allentown: property committee"
 		isTeam: boolean('is_team').notNull().default(false),
 		createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

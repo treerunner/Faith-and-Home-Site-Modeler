@@ -21,7 +21,7 @@ export interface SiteSummary {
 	duplicatedFrom: string | null;
 	updatedAt: Date;
 	visibility: 'public' | 'members';
-	committee: { id: string; name: string } | null;
+	committee: { id: string; name: string; slug: string } | null;
 	canDelete: boolean;
 	plans: { name: string; slug: string; developmentType: DevelopmentType | null }[];
 }
@@ -97,6 +97,7 @@ export async function listSites(user: CurrentUser | null): Promise<SiteSummary[]
 			visibility: sites.visibility,
 			committeeId: sites.committeeId,
 			committeeName: committees.name,
+			committeeSlug: committees.slug,
 			data: sites.data,
 		})
 		.from(sites)
@@ -104,9 +105,9 @@ export async function listSites(user: CurrentUser | null): Promise<SiteSummary[]
 		.where(user.isTeam ? undefined : committeeIds.length ? inArray(sites.committeeId, committeeIds) : sql`false`)
 		.orderBy(desc(sites.updatedAt));
 	const planRows = await planRowsFor(rows.map((r) => r.id));
-	return rows.map(({ data, committeeId, committeeName, ...row }) => ({
+	return rows.map(({ data, committeeId, committeeName, committeeSlug, ...row }) => ({
 		...row,
-		committee: committeeId ? { id: committeeId, name: committeeName ?? '' } : null,
+		committee: committeeId ? { id: committeeId, name: committeeName ?? '', slug: committeeSlug ?? '' } : null,
 		canDelete: canDeleteSite({ committeeId, visibility: row.visibility }, user),
 		plans: normalizeSite(siteFromRows(data as unknown as Record<string, unknown>, planRows.get(row.id) ?? [])).plans.map((p) => ({
 			name: p.name,

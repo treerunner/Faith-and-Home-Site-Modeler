@@ -13,7 +13,7 @@ export interface CurrentUser {
 	email: string;
 	name: string;
 	isTeam: boolean;
-	memberships: { committeeId: string; committeeName: string; role: Role }[];
+	memberships: { committeeId: string; committeeName: string; committeeSlug: string; role: Role }[];
 }
 
 export const SESSION_COOKIE = 'fh_session';
@@ -89,7 +89,7 @@ export async function readSession(cookies: Cookies, secure: boolean): Promise<Cu
 		cookies.set(SESSION_COOKIE, token, { path: '/', httpOnly: true, sameSite: 'lax', secure, expires: expiresAt });
 	}
 	const rows = await db
-		.select({ committeeId: memberships.committeeId, committeeName: committees.name, role: memberships.role, isTeam: committees.isTeam })
+		.select({ committeeId: memberships.committeeId, committeeName: committees.name, committeeSlug: committees.slug, role: memberships.role, isTeam: committees.isTeam })
 		.from(memberships)
 		.innerJoin(committees, eq(committees.id, memberships.committeeId))
 		.where(eq(memberships.userId, row.userId));
