@@ -1,4 +1,5 @@
-import { boolean, customType, integer, pgTable, text, timestamp, unique, uuid, jsonb } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { boolean, customType, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid, jsonb } from 'drizzle-orm/pg-core';
 import type { Site } from '../../modeler/types';
 
 // PostGIS geography, written with ST_ functions and not read back by the app (the Site JSON
@@ -21,8 +22,93 @@ export const sites = pgTable('sites', {
 	origin: geography('Point')('origin'),
 	parcel: geography('Geometry')('parcel'),
 	thumbnail: text('thumbnail'), // existing conditions in plan view, a small JPEG data URL captured on save
+	// The committee that owns it. Nullable in the database so older app versions can still save
+	// during a rollout; the app always sets it.
+	committeeId: uuid('committee_id').references(() => committees.id, { onDelete: 'cascade' }),
+	visibility: text('visibility').$type<'public' | 'members'>().notNull().default('public'), // who can open the view link
+	version: integer('version').notNull().default(0), // bumped on each save; a save made from an older version is refused
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ── Accounts and committees ──────────────────────────────────────────────────
+// People sign in by email link (no passwords). Committees own sites; members edit them, leads
+// also manage membership. The Faith & Home team committee (is_team) can do anything anywhere.
+
+export const users = pgTable('users', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	email: text('email').notNull().unique(), // lowercased
+	name: text('name').notNull().default(''),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+});
+
+export const committees = pgTable(
+	'committees',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		name: text('name').notNull(),
+		isTeam: boolean('is_team').notNull().default(false),
+		createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	},
+	(t) => [uniqueIndex('committees_one_team').on(t.isTeam).where(sql`${t.isTeam}`)],
+);
+
+export const memberships = pgTable(
+	'memberships',
+	{
+		committeeId: uuid('committee_id')
+			.notNull()
+			.references(() => committees.id, { onDelete: 'cascade' }),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		role: text('role').$type<'lead' | 'member'>().notNull().default('member'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	},
+	(t) => [primaryKey({ columns: [t.committeeId, t.userId] }), index('memberships_user').on(t.userId)],
+);
+
+// Tokens (invitations, sign-in links, sessions) are stored only as SHA-256 hashes
+export const invitations = pgTable('invitations', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	committeeId: uuid('committee_id')
+		.notNull()
+		.references(() => committees.id, { onDelete: 'cascade' }),
+	email: text('email').notNull(),
+	role: text('role').$type<'lead' | 'member'>().notNull().default('member'),
+	tokenHash: text('token_hash').notNull().unique(),
+	invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const loginTokens = pgTable('login_tokens', {
+	tokenHash: text('token_hash').primaryKey(),
+	email: text('email').notNull(),
+	next: text('next').notNull().default('/modeler/sites'),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	usedAt: timestamp('used_at', { withTimezone: true }),
+});
+
+export const sessions = pgTable(
+	'sessions',
+	{
+		id: text('id').primaryKey(), // hash of the cookie's token
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	},
+	(t) => [index('sessions_user').on(t.userId)],
+);
+
+// App-wide switches the team sets in /admin (allow_new_committees)
+export const settings = pgTable('settings', {
+	key: text('key').primaryKey(),
+	value: jsonb('value').notNull(),
 });
 
 // One row per plan, so the CMS can list, rename and relate plans. `data` is the stored plan

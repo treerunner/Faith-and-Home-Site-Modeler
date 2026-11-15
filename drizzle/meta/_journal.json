@@ -43,6 +43,13 @@
       "when": 1794759314611,
       "tag": "0005_plans_and_patterns",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794764348677,
+      "tag": "0006_accounts_committees",
+      "breakpoints": true
     }
   ]
 }
