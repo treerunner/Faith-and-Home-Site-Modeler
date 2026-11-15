@@ -13,6 +13,7 @@
 		status?: Status;
 		height?: number;   // undefined = plan slab; number = 3D extrusion
 		stories?: number;  // used for floor subdivision lines in 3D
+		raised?: boolean;  // on another building's roof: a dashed outline in plan
 	}
 
 	let {
@@ -23,6 +24,7 @@
 		status = 'existing',
 		height,
 		stories = 1,
+		raised = false,
 	}: Props = $props();
 
 	const SLAB_HEIGHT = 0.1;
@@ -67,6 +69,11 @@
 	$effect(() => {
 		if (dashedLineRef) dashedLineRef.computeLineDistances();
 	});
+	let raisedLineRef: THREE.LineSegments | undefined = $state();
+	let raisedEdges = $derived(!is3D && raised ? new THREE.EdgesGeometry(geo) : null);
+	$effect(() => {
+		if (raisedLineRef) raisedLineRef.computeLineDistances();
+	});
 
 	// In plan mode: same as before. In 3D: face hidden for removed, dashed outline
 	let faceOpacity = $derived(
@@ -98,6 +105,18 @@
 		oncreate={(m) => applyGrain(m, GRAIN_BUILDING)}
 	/>
 </T.Mesh>
+
+<!-- On a roof, plan view outlines it dashed, like an upper floor -->
+{#if raisedEdges}
+	<T.LineSegments
+		bind:ref={raisedLineRef}
+		geometry={raisedEdges}
+		position={[part.x, posY, part.y]}
+		rotation={[0, -(part.rotation * Math.PI) / 180, 0]}
+	>
+		<T.LineDashedMaterial color={EDGE_COLOR} dashSize={0.6} gapSize={0.4} />
+	</T.LineSegments>
+{/if}
 
 <!-- Floor-line edges (3D only) -->
 {#if is3D && edgeGeo}

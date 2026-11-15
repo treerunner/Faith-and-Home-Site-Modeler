@@ -8,6 +8,7 @@
 // a plan holds only its new pieces and its choices: nothing derived is stored.
 
 import type { Plan, ReuseZone, Roof, Site, Structure } from './types';
+import { settleRoofHosts } from './geometry';
 
 // What a plan says about one of the site's pieces
 export interface ExistingChoice {
@@ -109,7 +110,9 @@ export function syncPlan(existing: Plan, plan: Plan): Plan {
 	}
 	// A plan's own pieces are always new; copies of the site's are existing or removed
 	const own = plan.structures.filter((s) => s.status === 'new');
-	return expandPlan(existing, { ...plan, structures: own, existingChoices: choices });
+	const synced = expandPlan(existing, { ...plan, structures: own, existingChoices: choices });
+	// A plan's rooftop piece on a building the site deleted comes down to the ground
+	return { ...synced, structures: settleRoofHosts(synced.structures) };
 }
 
 export function storedSite(site: Site): StoredSite {

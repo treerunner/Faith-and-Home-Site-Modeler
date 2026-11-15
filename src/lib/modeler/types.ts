@@ -56,6 +56,7 @@ export interface Structure {
 	provenance: 'user' | 'osm' | 'overture';
 	heightSource?: 'data' | 'default'; // where stories came from for prefilled buildings; cleared once edited
 	groupId?: string; // shared with other structures that move together
+	onRoofOf?: string; // the structure it rests on (a rooftop drum, a rooftop apartment); absent: on the ground
 	reuseZones?: ReuseZone[]; // existing structures only
 	// In a plan, on the site's existing pieces (see existing.ts): floors added on top of `stories`,
 	// and a roof chosen by the plan over the site's

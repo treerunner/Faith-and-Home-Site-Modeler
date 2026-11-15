@@ -14,7 +14,7 @@
 	import ReuseZoneMesh from './ReuseZoneMesh.svelte';
 	import TerrainSurface from './TerrainSurface.svelte';
 	import { partOutline } from '../geo';
-	import { addedStories, partTotalHeight } from '../geometry';
+	import { addedStories, partTotalHeight, roofBase, roofLevel } from '../geometry';
 	import { buildingFooting } from '../terrain';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
@@ -86,10 +86,25 @@
 	let footings = $derived.by(() => {
 		const out = new Map<string, { base: number; floor: number }>();
 		const model = store.ground ? store.terrain : null;
-		if (model) for (const s of store.plan.structures) if (s.parts.length) out.set(s.id, buildingFooting(model, s.parts.map(partOutline)));
+		// Rooftop pieces don't touch the ground: no footing, no plinth
+		if (model) for (const s of store.plan.structures) if (s.parts.length && !s.onRoofOf) out.set(s.id, buildingFooting(model, s.parts.map(partOutline)));
 		return out;
 	});
-	const baseFor = (s: Structure | undefined) => (s ? (footings.get(s.id)?.floor ?? 0) : 0);
+	// Where a structure's floors start. A rooftop piece starts on its host's roof in 3D; in plan
+	// it draws just above its host, so it shows and is picked first.
+	const PLAN_ROOF_STEP = 0.15;
+	function groundOf(s: Structure): Structure {
+		const all = store.plan.structures;
+		let g = s;
+		for (let i = 0; i < all.length && g.onRoofOf; i++) g = all.find((h) => h.id === g.onRoofOf) ?? g;
+		return g;
+	}
+	const baseFor = (s: Structure | undefined) => {
+		if (!s) return 0;
+		if (!s.onRoofOf) return footings.get(s.id)?.floor ?? 0;
+		if (store.viewMode !== '3d') return roofLevel(s, store.plan.structures) * PLAN_ROOF_STEP;
+		return (footings.get(groundOf(s).id)?.floor ?? 0) + roofBase(s, store.plan.structures);
+	};
 
 	// Cutting: the building being cut is highlighted, with a dashed line from the first click
 	let cutting = $derived(store.mode.type === 'cutting' ? store.mode : null);
@@ -329,6 +344,7 @@
 			cloning={store.mode.type === 'dragging' && store.mode.cloning === true && store.mode.companions.some((c) => c.id === part.id)}
 			height={store.viewMode === '3d' ? (struct ? struct.stories * struct.floorHeight : 3.5) : undefined}
 			stories={struct?.stories ?? 1}
+			raised={!!struct?.onRoofOf}
 		/>
 		<!-- A plan's stories on top of an existing building are new construction -->
 		{#if store.viewMode === '3d' && struct && addedStories(struct) > 0}
