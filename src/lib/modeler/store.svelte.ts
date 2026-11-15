@@ -1,7 +1,7 @@
 import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, ReuseZone, Roof, Site, Structure, Terrain, Tree, Use } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
-import { putSite } from './api';
+import { ApiError, putSite } from './api';
 import { terrainModel, terrainSurface, type TerrainModel, type TerrainSurface } from './terrain';
 import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
 import {
@@ -126,7 +126,17 @@ class ModelerStore {
 	isPersisted = $state(false); // a database row exists for site.id
 	siteSlug = $state(''); // URL key, assigned by the server on save
 	activePlanId = $state('');
-	saveState = $state<'idle' | 'saving' | 'error'>('idle');
+	// After a failed save: a plain error, someone else saved first (conflict), not signed in
+	// (signin), or a committee to choose (committee)
+	saveState = $state<'idle' | 'saving' | 'error' | 'conflict' | 'signin' | 'committee'>('idle');
+	saveMessage = $state('');
+	// The viewer's rights on a saved site, and the version the next save is made from
+	rights = $state<{ canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string } | null }>({
+		canDelete: false,
+		visibility: 'public',
+		committee: null,
+	});
+	version = $state(0);
 
 	readonly #undoStack: Site[] = [];
 	readonly #redoStack: Site[] = [];
@@ -148,8 +158,13 @@ class ModelerStore {
 		this.#reset(site, '', site.existing.id, false);
 	}
 
-	loadSite(site: Site, siteSlug: string, planId: string, readOnly: boolean) {
+	loadSite(site: Site, siteSlug: string, planId: string, readOnly: boolean, rights?: { canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string } | null; version: number }) {
 		this.#reset(site, siteSlug, planId, readOnly);
+		if (rights) {
+			const { version, ...rest } = rights;
+			this.rights = rest;
+			this.version = version;
+		}
 	}
 
 	#reset(site: Site, siteSlug: string, planId: string, readOnly: boolean) {
@@ -164,6 +179,9 @@ class ModelerStore {
 		this.isPersisted = siteSlug !== '';
 		this.readOnly = readOnly;
 		this.saveState = 'idle';
+		this.saveMessage = '';
+		this.version = 0;
+		this.rights = { canDelete: false, visibility: 'public', committee: null };
 		this.showAnalysis = false;
 		this.#selectPlan(planId);
 	}
@@ -254,31 +272,41 @@ class ModelerStore {
 
 	// Upserts the site. Edits made while a save is in flight stay dirty. A thumbnail of what's on
 	// screen (an image data URL) is saved with the plan being viewed.
-	save(thumbnail?: string | null): Promise<boolean> {
+	// A new site needs a committee: the one chosen, or the user's only one (the server decides).
+	save(thumbnail?: string | null, committeeId?: string): Promise<boolean> {
 		if (this.readOnly) return Promise.resolve(false);
-		this.#inflightSave ??= this.#doSave(thumbnail ?? null).finally(() => {
+		this.#inflightSave ??= this.#doSave(thumbnail ?? null, committeeId).finally(() => {
 			this.#inflightSave = null;
 		});
 		return this.#inflightSave;
 	}
 
-	async #doSave(thumbnail: string | null): Promise<boolean> {
+	async #doSave(thumbnail: string | null, committeeId?: string): Promise<boolean> {
 		assignPlanSlugs(this.site); // renamed plans get new slugs; old ones are kept for redirects
 		this.#syncPlans();
 		const json = JSON.stringify($state.snapshot(this.site));
 		const planId = this.onSite ? null : this.plan.id;
-		const stored = JSON.stringify({ ...storedSite($state.snapshot(this.site) as Site), ...(thumbnail ? { thumbnail: { planId, image: thumbnail } } : {}) });
+		const stored = JSON.stringify({
+			...storedSite($state.snapshot(this.site) as Site),
+			...(thumbnail ? { thumbnail: { planId, image: thumbnail } } : {}),
+			...(this.isPersisted ? { baseVersion: this.version } : {}),
+			...(committeeId ? { committeeId } : {}),
+		});
 		this.saveState = 'saving';
+		this.saveMessage = '';
 		try {
 			const ref = await putSite(stored, this.site.id);
 			this.siteSlug = ref.slug;
+			this.version = ref.version;
 			this.#savedJson = json;
 			this.isPersisted = true;
 			this.saveState = 'idle';
 			return true;
 		} catch (e) {
 			console.error(e);
-			this.saveState = 'error';
+			const status = e instanceof ApiError ? e.status : 0;
+			this.saveState = status === 409 ? 'conflict' : status === 401 ? 'signin' : status === 400 && !this.isPersisted ? 'committee' : 'error';
+			this.saveMessage = e instanceof ApiError ? e.message : '';
 			return false;
 		}
 	}

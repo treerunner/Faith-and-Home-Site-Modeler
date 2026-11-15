@@ -1,4 +1,4 @@
 import { listSites } from '#lib/server/sites';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => ({ sites: await listSites() });
+export const load: PageServerLoad = async ({ locals }) => ({ sites: await listSites(locals.user) });

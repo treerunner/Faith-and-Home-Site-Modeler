@@ -7,8 +7,8 @@
 	let { data }: PageProps = $props();
 
 	$effect.pre(() => {
-		const { site, siteSlug, planId } = data;
-		untrack(() => store.loadSite(site, siteSlug, planId, true));
+		const { site, siteSlug, planId, rights } = data;
+		untrack(() => store.loadSite(site, siteSlug, planId, true, rights));
 	});
 </script>
 
