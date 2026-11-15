@@ -3,13 +3,24 @@ export interface SiteRef {
 	id: string;
 	slug: string;
 	name: string;
+	version: number; // the saved version; the next save is made from it
 }
 
 // Browser-side calls to /api/sites. The server validates with normalizeSite.
 
+// A failed API call, with its status and the server's message
+export class ApiError extends Error {
+	constructor(readonly status: number, message: string) {
+		super(message);
+	}
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
 	const res = await fetch(url, init);
-	if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${url} failed: ${res.status}`);
+	if (!res.ok) {
+		const message = ((await res.json().catch(() => null)) as { message?: string } | null)?.message;
+		throw new ApiError(res.status, message ?? `${init?.method ?? 'GET'} ${url} failed: ${res.status}`);
+	}
 	return (res.status === 204 ? undefined : await res.json()) as T;
 }
 

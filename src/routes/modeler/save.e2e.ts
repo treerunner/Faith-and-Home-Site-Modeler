@@ -152,6 +152,7 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 
 	// Share copies the plan's view-only link; view mode can switch plans but not edit
 	await page.getByRole('button', { name: 'Share' }).click();
+	await page.getByRole('button', { name: 'Copy view link' }).click();
 	await expect(page.getByText('Link copied')).toBeVisible();
 	const link = await page.evaluate(() => navigator.clipboard.readText());
 	expect(link).toMatch(urlIs(`${renamed}/housing-on-lot/view`));

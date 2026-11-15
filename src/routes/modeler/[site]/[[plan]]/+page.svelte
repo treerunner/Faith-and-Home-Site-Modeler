@@ -7,7 +7,7 @@
 	let { data }: PageProps = $props();
 
 	$effect.pre(() => {
-		const { site, siteSlug, planId } = data;
+		const { site, siteSlug, planId, rights } = data;
 		untrack(() => {
 			// The store already holds this site after a save from /modeler or a plan switch: keep
 			// its undo history. Dirty means the user chose to leave without saving, so reload.
@@ -15,7 +15,7 @@
 				store.switchPlan(planId);
 				return;
 			}
-			store.loadSite(site, siteSlug, planId, false);
+			store.loadSite(site, siteSlug, planId, false, rights);
 		});
 	});
 </script>
