@@ -6,9 +6,10 @@
 
 	interface Props {
 		part: Part;
+		corners?: boolean; // outlines move by their points instead
 	}
 
-	let { part }: Props = $props();
+	let { part, corners: showCorners = true }: Props = $props();
 
 	const SIZE = 2.0; // handle cube side in meters (~16 px at default zoom)
 	const Y = 0.3; // height above grid
@@ -43,7 +44,7 @@
 	let rotHandleY = $derived(corners.rot.y);
 </script>
 
-{#each handles as h (h.id)}
+{#each showCorners ? handles : [] as h (h.id)}
 	<T.Mesh
 		position={[h.x, Y, h.y]}
 		userData={{ handle: h.id, partId: part.id }}

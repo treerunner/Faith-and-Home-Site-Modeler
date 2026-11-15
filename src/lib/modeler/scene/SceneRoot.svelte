@@ -6,6 +6,7 @@
 	import PartMesh from './PartMesh.svelte';
 	import RoofMesh from './RoofMesh.svelte';
 	import ResizeHandles from './ResizeHandles.svelte';
+	import OutlineHandles from './OutlineHandles.svelte';
 	import OpenSpacePolygon from './OpenSpacePolygon.svelte';
 	import TreeMesh from './TreeMesh.svelte';
 	import ContextLayer from './ContextLayer.svelte';
@@ -14,7 +15,7 @@
 	import ReuseZoneMesh from './ReuseZoneMesh.svelte';
 	import TerrainSurface from './TerrainSurface.svelte';
 	import { partOutline } from '../geo';
-	import { addedStories, partTotalHeight } from '../geometry';
+	import { addedStories, partTotalHeight, roofBase, roofLevel } from '../geometry';
 	import { buildingFooting } from '../terrain';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
@@ -86,10 +87,25 @@
 	let footings = $derived.by(() => {
 		const out = new Map<string, { base: number; floor: number }>();
 		const model = store.ground ? store.terrain : null;
-		if (model) for (const s of store.plan.structures) if (s.parts.length) out.set(s.id, buildingFooting(model, s.parts.map(partOutline)));
+		// Rooftop pieces don't touch the ground: no footing, no plinth
+		if (model) for (const s of store.plan.structures) if (s.parts.length && !s.onRoofOf) out.set(s.id, buildingFooting(model, s.parts.map(partOutline)));
 		return out;
 	});
-	const baseFor = (s: Structure | undefined) => (s ? (footings.get(s.id)?.floor ?? 0) : 0);
+	// Where a structure's floors start. A rooftop piece starts on its host's roof in 3D; in plan
+	// it draws just above its host, so it shows and is picked first.
+	const PLAN_ROOF_STEP = 0.15;
+	function groundOf(s: Structure): Structure {
+		const all = store.plan.structures;
+		let g = s;
+		for (let i = 0; i < all.length && g.onRoofOf; i++) g = all.find((h) => h.id === g.onRoofOf) ?? g;
+		return g;
+	}
+	const baseFor = (s: Structure | undefined) => {
+		if (!s) return 0;
+		if (!s.onRoofOf) return footings.get(s.id)?.floor ?? 0;
+		if (store.viewMode !== '3d') return roofLevel(s, store.plan.structures) * PLAN_ROOF_STEP;
+		return (footings.get(groundOf(s).id)?.floor ?? 0) + roofBase(s, store.plan.structures);
+	};
 
 	// Cutting: the building being cut is highlighted, with a dashed line from the first click
 	let cutting = $derived(store.mode.type === 'cutting' ? store.mode : null);
@@ -126,7 +142,7 @@
 
 	// Open spaces, parcels and reuse zones are traced point by point and share the vertex markers
 	let drawingMode = $derived(
-		store.mode.type === 'drawingOpenSpace' || store.mode.type === 'drawingParcel' || store.mode.type === 'drawingZone'
+		store.mode.type === 'drawingOpenSpace' || store.mode.type === 'drawingParcel' || store.mode.type === 'drawingZone' || store.mode.type === 'drawingStructure'
 			? store.mode
 			: null,
 	);
@@ -137,6 +153,18 @@
 				? [...store.mode.points, store.mode.cursorPoint]
 				: store.mode.points
 			: null,
+	);
+
+	// Drawing a structure's outline: the line so far, and where the next point would snap
+	let structureDraft = $derived(
+		store.mode.type === 'drawingStructure'
+			? store.mode.cursorPoint
+				? [...store.mode.points, store.mode.cursorPoint]
+				: store.mode.points
+			: null,
+	);
+	let snapRing = $derived(
+		(store.mode.type === 'drawingStructure' || store.mode.type === 'draggingVertex') && store.mode.snap ? store.mode.snap.point : null,
 	);
 
 	let parcelDraft = $derived(
@@ -283,6 +311,16 @@
 	{/each}
 {/if}
 
+{#if structureDraft && structureDraft.length >= 2}
+	<ParcelLine polygon={structureDraft} highlight />
+{/if}
+{#if snapRing}
+	<T.Mesh position={[snapRing[0], 0.4, snapRing[1]]} rotation={[-Math.PI / 2, 0, 0]}>
+		<T.RingGeometry args={[0.7, 1, 24]} />
+		<T.MeshBasicMaterial color={COLORS.selection} />
+	</T.Mesh>
+{/if}
+
 <!-- Drawing a parcel: the outline so far, closing to the cursor -->
 {#if parcelDraft && parcelDraft.length >= 2}
 	<ParcelLine polygon={parcelDraft} highlight fill />
@@ -329,6 +367,7 @@
 			cloning={store.mode.type === 'dragging' && store.mode.cloning === true && store.mode.companions.some((c) => c.id === part.id)}
 			height={store.viewMode === '3d' ? (struct ? struct.stories * struct.floorHeight : 3.5) : undefined}
 			stories={struct?.stories ?? 1}
+			raised={!!struct?.onRoofOf}
 		/>
 		<!-- A plan's stories on top of an existing building are new construction -->
 		{#if store.viewMode === '3d' && struct && addedStories(struct) > 0}
@@ -380,7 +419,10 @@
 
 <!-- A plan's copies of the site's buildings can't be moved or reshaped -->
 {#if store.selectedPart && store.viewMode === 'plan' && !store.readOnly && !(store.selectedStructure && store.isLocked(store.selectedStructure.id))}
-	<ResizeHandles part={store.selectedPart} />
+	<ResizeHandles part={store.selectedPart} corners={store.selectedPart.shape !== 'poly'} />
+	{#if store.selectedPart.shape === 'poly'}
+		<OutlineHandles part={store.selectedPart} />
+	{/if}
 {/if}
 
 {#each store.plan.trees as tree (tree.id)}

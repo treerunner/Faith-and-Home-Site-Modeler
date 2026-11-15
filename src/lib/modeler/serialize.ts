@@ -2,6 +2,7 @@ import type { Annotation, ContextSource, OpenSpace, Part, Plan, ReuseZone, Site,
 import { slugify } from './slug';
 import { CONTEXT_HALF_SIZE, wholePartZone } from './geo';
 import { choicesOf, expandPlan, type ExistingChoice, type ExistingChoices } from './existing';
+import { settleRoofHosts } from './geometry';
 
 // Validates a Site read from the database or posted to the API, and fills
 // defaults for fields added after older sites were saved. Throws on bad input.
@@ -138,6 +139,7 @@ function parseStructure(v: unknown, path: string): Structure {
 		provenance: oneOf(o.provenance ?? 'user', PROVENANCES, `${path}.provenance`),
 		heightSource: optional(o.heightSource, (h) => oneOf(h, ['data', 'default'] as const, `${path}.heightSource`)),
 		groupId: optional(o.groupId, (g) => str(g, `${path}.groupId`)),
+		onRoofOf: optional(o.onRoofOf, (g) => str(g, `${path}.onRoofOf`)),
 		reuseZones: reuseZones?.length ? reuseZones : undefined,
 		addedStories: optional(o.addedStories, (n) => num(n, `${path}.addedStories`)) || undefined,
 		planRoof: optional(o.planRoof, (v) => oneOf(v, ROOFS, `${path}.planRoof`)),
@@ -378,6 +380,9 @@ export function normalizeSite(raw: unknown): Site {
 		if (legacy.length === 0) fail('site.plans', 'expected at least one plan');
 		({ existing, plans } = migrateToSiteView(legacy));
 	}
+	// Rooftop pieces whose host is missing go back to the ground
+	existing.structures = settleRoofHosts(existing.structures);
+	plans = plans.map((p) => ({ ...p, structures: settleRoofHosts(p.structures) }));
 	const ids = new Set<string>([existing.id]);
 	const slugs = new Set<string>();
 	plans.forEach((p, i) => {

@@ -1,4 +1,5 @@
 import type { OpenSpace, Part } from './types';
+import type { Snap } from './geo';
 
 export type ResizeHandle = 'nw' | 'ne' | 'se' | 'sw';
 
@@ -23,6 +24,8 @@ export type InteractionMode =
 			startAngle: number;
 			startRotation: number;
 	  }
+	| { type: 'drawingStructure'; points: [number, number][]; cursorPoint?: [number, number]; snap?: Snap }
+	| { type: 'draggingVertex'; partId: string; index: number; outline: [number, number][]; snap?: Snap }
 	| {
 			type: 'drawingOpenSpace';
 			kind: OpenSpace['kind'];

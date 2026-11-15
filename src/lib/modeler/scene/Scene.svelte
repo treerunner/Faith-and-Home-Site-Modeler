@@ -11,9 +11,10 @@
 		onpointerup: (e: PointerEvent) => void;
 		onpointerdown: (e: PointerEvent) => void;
 		onwheel: (e: WheelEvent) => void;
+		ondblclick: (e: MouseEvent) => void;
 	}
 
-	let { ondragover, ondrop, ondragleave, onpointermove, onpointerup, onpointerdown, onwheel }: Props =
+	let { ondragover, ondrop, ondragleave, onpointermove, onpointerup, onpointerdown, onwheel, ondblclick }: Props =
 		$props();
 
 	// Attached by hand: Svelte makes wheel listeners passive, and zooming must preventDefault
@@ -45,6 +46,7 @@
 	{onpointermove}
 	{onpointerup}
 	{onpointerdown}
+	{ondblclick}
 >
 	<Canvas shadows>
 		<SceneRoot />

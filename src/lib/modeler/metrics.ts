@@ -13,8 +13,9 @@ export function structureFootprint(structure: Structure): number {
 	return structure.parts.reduce((sum, p) => sum + partFootprint(p), 0);
 }
 
+// Ground the buildings take; rooftop pieces take none
 export function siteFootprint(plan: Plan): number {
-	return plan.structures.reduce((sum, s) => sum + structureFootprint(s), 0);
+	return plan.structures.reduce((sum, s) => sum + (s.onRoofOf ? 0 : structureFootprint(s)), 0);
 }
 
 // Every floor of every building, with the floors reuse zones add on top
@@ -294,7 +295,8 @@ export function planBuildings(plan: Plan): Structure[][] {
 		for (let j = i + 1; j < structures.length; j++) {
 			const a = structures[i];
 			const b = structures[j];
-			const joined = (a.groupId && a.groupId === b.groupId) || buildingDistance([a], [b]) <= TOUCH_TOLERANCE;
+			const joined =
+				(a.groupId && a.groupId === b.groupId) || a.onRoofOf === b.id || b.onRoofOf === a.id || buildingDistance([a], [b]) <= TOUCH_TOLERANCE;
 			if (joined) parent[find(i)] = find(j);
 		}
 	}
@@ -309,12 +311,14 @@ export function planBuildings(plan: Plan): Structure[][] {
 export function inferBuildingType(plan: Plan, site?: Pick<Site, 'mainBuildingFront'>): BuildingType | null {
 	const buildings = planBuildings(plan);
 	if (buildings.length === 0) return null;
-	const area = (b: Structure[]) => b.reduce((sum, s) => sum + structureFootprint(s), 0);
+	// What stands on the ground decides: a drum or cupola on the roof doesn't make an Object or a Box-Plus
+	const grounded = (b: Structure[]) => b.filter((s) => !s.onRoofOf);
+	const area = (b: Structure[]) => grounded(b).reduce((sum, s) => sum + structureFootprint(s), 0);
 	const [main, ...others] = [...buildings].sort((a, b) => area(b) - area(a));
 	const nearby = others.filter((b) => area(b) >= MIN_CLUSTER_BUILDING && buildingDistance(main, b) <= CLUSTER_DISTANCE);
 	if (nearby.length >= 2) return 'cluster';
 	if (site?.mainBuildingFront === 'none' || site?.mainBuildingFront === 'several') return 'object';
-	const parts = main.flatMap((s) => s.parts);
+	const parts = grounded(main).flatMap((s) => s.parts);
 	if (parts.some((p) => p.shape === 'tri' || p.shape === 'circle')) return 'object';
 	if (parts.length >= 2) return 'box_plus';
 	return 'box';

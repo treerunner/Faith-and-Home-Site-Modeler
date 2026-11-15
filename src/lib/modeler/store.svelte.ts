@@ -16,7 +16,13 @@ import {
 	CONTEXT_HALF_SIZE,
 	fitFootprint,
 	GROUND_HALF,
+	asPoly,
+	outlinePart,
+	partOutline,
 	pointInPolygon,
+	snapPoint,
+	withOutline,
+	type Snap,
 	storiesFromTags,
 	suggestSiteType,
 } from './geo';
@@ -25,7 +31,7 @@ import { contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } fr
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
 import { freshStructures, storedSite, syncPlan } from './existing';
-import { totalStories } from './geometry';
+import { partTotalHeight, restsOn, roofBase, totalStories } from './geometry';
 
 const PART_DEFAULTS: Record<PaletteShape, { w: number; d: number }> = {
 	rect: { w: 10, d: 6 },
@@ -281,7 +287,8 @@ class ModelerStore {
 			m.type === 'selected' ||
 			m.type === 'dragging' ||
 			m.type === 'resizing' ||
-			m.type === 'rotating'
+			m.type === 'rotating' ||
+			m.type === 'draggingVertex'
 		) {
 			return m.partId;
 		}
@@ -560,6 +567,153 @@ class ModelerStore {
 		}
 	}
 
+	// ── Drawn outlines and point editing ─────────────────────────────────────
+
+	// What drawn points snap to: the other structures' outlines and the parcel
+	#snapTargets(exceptPartId?: string): [number, number][][] {
+		const outlines = this.plan.structures.flatMap((s) => s.parts.filter((p) => p.id !== exceptPartId).map(partOutline));
+		return this.site.parcel ? [...outlines, this.site.parcel] : outlines;
+	}
+
+	#snap(x: number, y: number, radius: number, exceptPartId?: string): { point: [number, number]; snap: Snap } {
+		const snap = radius > 0 ? snapPoint([x, y], this.#snapTargets(exceptPartId), radius) : null;
+		return { point: snap ? snap.point : [x, y], snap };
+	}
+
+	startDrawingStructure() {
+		this.mode = { type: 'drawingStructure', points: [] };
+	}
+
+	// A click while drawing an outline: closes it on the first point, else adds a point.
+	// `radius` is the snap distance in meters (0 turns snapping off).
+	addStructureVertex(x: number, y: number, radius = 0) {
+		if (this.mode.type !== 'drawingStructure') return;
+		const { points } = this.mode;
+		const first = points[0];
+		if (points.length >= 3 && Math.hypot(x - first[0], y - first[1]) < Math.max(radius, 0.5)) {
+			this.finishStructure();
+			return;
+		}
+		const { point } = this.#snap(x, y, radius);
+		this.mode = { type: 'drawingStructure', points: [...points, point], cursorPoint: point };
+	}
+
+	updateStructureCursor(x: number, y: number, radius = 0) {
+		if (this.mode.type !== 'drawingStructure') return;
+		const { point, snap } = this.#snap(x, y, radius);
+		this.mode = { ...this.mode, cursorPoint: point, snap: snap ?? undefined };
+	}
+
+	// Closes the drawn outline into a structure, placed like a dropped shape
+	finishStructure() {
+		if (this.mode.type !== 'drawingStructure' || this.mode.points.length < 3) return;
+		const fitted = outlinePart(this.mode.points);
+		this.#pushUndo();
+		const part: Part = { id: crypto.randomUUID(), ...fitted };
+		const s: Structure = {
+			id: crypto.randomUUID(),
+			label: 'Structure',
+			status: this.onSite ? 'existing' : 'new',
+			uses: [],
+			stories: 1,
+			floorHeight: 3.5,
+			roof: 'flat',
+			parts: [part],
+			provenance: 'user',
+		};
+		this.plan.structures.push(s);
+		this.#settleOnRoof(s);
+		if (!s.onRoofOf) {
+			const target = this.#findTouchingStructure(s);
+			if (target) this.#groupStructures(s.id, target.id);
+		}
+		this.activeStructureId = s.id;
+		this.mode = { type: 'selected', partId: part.id };
+	}
+
+	// Starts moving one point of an outline; with `insert`, a new point goes in after `index`
+	// (dragged from an edge's midpoint)
+	startDraggingVertex(partId: string, index: number, insert = false) {
+		const part = this.#findPart(partId);
+		if (!part || part.shape === 'circle' || this.#lockedPart(partId)) return;
+		this.#pushUndo();
+		this.#gestureDidMutate = insert;
+		const outline = partOutline(part).map((p) => [p[0], p[1]] as [number, number]);
+		this.#reshapeFrom = this.#reshapeBase(partId);
+		if (insert) {
+			const a = outline[index], b = outline[(index + 1) % outline.length];
+			outline.splice(index + 1, 0, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+			index += 1;
+		}
+		this.#reshape(partId, outline, this.#reshapeFrom);
+		this.mode = { type: 'draggingVertex', partId, index, outline };
+	}
+
+	updateDragVertex(x: number, y: number, radius = 0) {
+		if (this.mode.type !== 'draggingVertex') return;
+		const { partId, index, outline } = this.mode;
+		const { point, snap } = this.#snap(x, y, radius, partId);
+		const next = outline.map((p, i) => (i === index ? point : p));
+		this.#reshape(partId, next, this.#reshapeFrom);
+		this.mode = { ...this.mode, snap: snap ?? undefined };
+		this.#gestureDidMutate = true;
+	}
+
+	endDragVertex() {
+		if (this.mode.type !== 'draggingVertex') return;
+		if (!this.#gestureDidMutate) this.#undoStack.pop();
+		this.mode = { type: 'selected', partId: this.mode.partId };
+	}
+
+	removeVertex(partId: string, index: number) {
+		const part = this.#findPart(partId);
+		if (!part || part.shape === 'circle' || this.#lockedPart(partId)) return;
+		const outline = partOutline(part);
+		if (outline.length <= 3) return;
+		this.#pushUndo();
+		this.#reshape(partId, outline.filter((_, i) => i !== index));
+	}
+
+	// Turns a rectangle, square or triangle into an outline with the same corners
+	editPoints(structureId: string) {
+		const s = this.plan.structures.find((x) => x.id === structureId);
+		if (!s || this.isLocked(structureId) || !s.parts.some((p) => p.shape !== 'poly' && p.shape !== 'circle')) return;
+		this.#pushUndo();
+		s.parts = s.parts.map((p) => asPoly(p));
+		if (s.roof === 'gable') s.roof = 'flat'; // gables need rectangles, as the roof menu says
+	}
+
+	// Gives a part a new outline. Its reuse zones stay where they are on the ground, clipped to the
+	// new outline; on the site, each plan's zones on it do the same.
+	// A drag reshapes from where it started, so zones aren't re-clipped step by step
+	#reshapeFrom: { s: Structure; part: Part; zones: ReuseZone[] | undefined }[] = [];
+
+	#reshapeBase(partId: string) {
+		const lists = [this.plan.structures, ...(this.onSite ? this.site.plans.map((p) => p.structures) : [])];
+		return lists.flatMap((list) =>
+			list.filter((s) => s.parts.some((p) => p.id === partId)).map((s) => ({ s, part: copy(s.parts.find((p) => p.id === partId)!), zones: copy(s.reuseZones) })),
+		);
+	}
+
+	#reshape(partId: string, outline: [number, number][], from = this.#reshapeBase(partId)) {
+		for (const { s, part: before, zones } of from) {
+			const after = withOutline(before, outline);
+			s.parts = s.parts.map((p) => (p.id === partId ? after : p));
+			if (s.roof === 'gable') s.roof = 'flat';
+			if (zones) {
+				const next = zones.flatMap((z) =>
+					z.partId !== partId ? [z] : clipToPart(zoneOutline(z, before), after).map((points, k) => ({ ...z, id: k ? crypto.randomUUID() : z.id, points })),
+				);
+				s.reuseZones = next.length ? next : undefined;
+			}
+		}
+	}
+
+	// What rested on a deleted building comes down to the ground
+	#landRiders(id: string) {
+		for (const r of this.plan.structures) if (r.onRoofOf === id) r.onRoofOf = undefined;
+	}
+
 	// Each plan's copy of a site piece
 	#planCopies(structureId: string): Structure[] {
 		return this.site.plans.flatMap((p) => p.structures.filter((s) => s.id === structureId));
@@ -597,8 +751,33 @@ class ModelerStore {
 			provenance: 'user',
 		};
 		this.plan.structures.push(s);
+		this.#settleOnRoof(s);
 		this.activeStructureId = s.id;
 		this.mode = { type: 'selected', partId: part.id };
+	}
+
+	// A piece whose center lands on another building's footprint sits on its roof (buildings can't
+	// overlap on the ground); on open ground it sits on the ground. The highest roof under it wins.
+	#settleOnRoof(s: Structure) {
+		if (!s.parts.length) return;
+		const center: [number, number] = [
+			s.parts.reduce((a, p) => a + p.x, 0) / s.parts.length,
+			s.parts.reduce((a, p) => a + p.y, 0) / s.parts.length,
+		];
+		const all = this.plan.structures;
+		const top = (h: Structure) => roofBase(h, all) + partTotalHeight(h);
+		const host = all
+			.filter((h) => h.id !== s.id && h.status !== 'removed' && !restsOn(all, h.id, s.id))
+			.filter((h) => h.parts.some((p) => pointInPolygon(center, partOutline(p))))
+			.sort((a, b) => top(b) - top(a))[0];
+		s.onRoofOf = host?.id;
+		// A rooftop piece moves with its host, not as part of its group
+		if (host && s.groupId) {
+			const groupId = s.groupId;
+			s.groupId = undefined;
+			const rest = all.filter((x) => x.groupId === groupId);
+			if (rest.length === 1) rest[0].groupId = undefined;
+		}
 	}
 
 	addStructure() {
@@ -637,7 +816,7 @@ class ModelerStore {
 	updateStructure(
 		id: string,
 		patch: Partial<
-			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof' | 'useWeights' | 'dwellings' | 'basement' | 'addedStories'>
+			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof' | 'useWeights' | 'dwellings' | 'basement' | 'addedStories' | 'onRoofOf'>
 		>,
 	) {
 		const s = this.plan.structures.find((s) => s.id === id);
@@ -648,7 +827,17 @@ class ModelerStore {
 			const { status, roof, addedStories } = patch;
 			if (status === 'new' || (status === undefined && roof === undefined && addedStories === undefined)) return;
 			this.#pushUndo();
-			if (status) s.status = status;
+			if (status) {
+				s.status = status;
+				// The site's rooftop pieces on it go, or stay, with it
+				const all = this.plan.structures;
+				for (const r of all) {
+					if (r.id !== id && this.isLocked(r.id) && restsOn(all, r.id, id)) {
+						r.status = status;
+						if (status !== 'existing') r.reuseZones = undefined;
+					}
+				}
+			}
 			if (roof) {
 				s.roof = roof;
 				s.planRoof = roof === base.roof ? undefined : roof;
@@ -660,9 +849,14 @@ class ModelerStore {
 			return;
 		}
 		// Status follows from where a piece is drawn: the site's stand, a plan's are proposed
-		const { status: _status, addedStories: _added, ...rest } = patch;
+		const { status: _status, addedStories: _added, onRoofOf, ...rest } = patch;
 		this.#pushUndo();
 		Object.assign(s, rest);
+		if ('onRoofOf' in patch) {
+			const all = this.plan.structures;
+			const ok = onRoofOf && onRoofOf !== id && all.some((h) => h.id === onRoofOf) && !restsOn(all, onRoofOf, id);
+			s.onRoofOf = ok ? onRoofOf : undefined;
+		}
 		// Prefilled heights are marked until someone confirms them by editing
 		if (patch.stories !== undefined || patch.floorHeight !== undefined) s.heightSource = undefined;
 		// Reuse happens in existing buildings only, and within their floors
@@ -677,6 +871,7 @@ class ModelerStore {
 		if (idx === -1) return;
 		const groupId = this.plan.structures[idx].groupId;
 		this.plan.structures.splice(idx, 1);
+		this.#landRiders(id);
 		// If only one structure remains in the group, remove its orphaned groupId
 		if (groupId) {
 			const remaining = this.plan.structures.filter((s) => s.groupId === groupId);
@@ -820,7 +1015,10 @@ class ModelerStore {
 				: structure
 					? [structure]
 					: [];
-		const companions = groupMembers.flatMap((s) =>
+		// Whatever rests on the moving building rides along
+		const all = this.plan.structures;
+		const riders = all.filter((r) => !groupMembers.includes(r) && groupMembers.some((g) => restsOn(all, r.id, g.id)));
+		const companions = [...groupMembers, ...riders].flatMap((s) =>
 			s.parts.map((p) => ({ id: p.id, initialX: p.x, initialY: p.y })),
 		);
 		this.mode = { type: 'dragging', partId: id, offsetX, offsetY, companions, cloning };
@@ -869,7 +1067,8 @@ class ModelerStore {
 				s.parts.some((p) => p.id === partId),
 			);
 			if (draggedStructure) {
-				const target = this.#findTouchingStructure(draggedStructure);
+				this.#settleOnRoof(draggedStructure);
+				const target = draggedStructure.onRoofOf ? undefined : this.#findTouchingStructure(draggedStructure);
 				if (target) this.#groupStructures(draggedStructure.id, target.id);
 			}
 		}
@@ -889,7 +1088,7 @@ class ModelerStore {
 	#findTouchingStructure(draggedStructure: Structure): Structure | undefined {
 		const draggedAABBs = draggedStructure.parts.map((p) => getPartAABB(p));
 		for (const other of this.plan.structures) {
-			if (other.id === draggedStructure.id) continue;
+			if (other.id === draggedStructure.id || other.onRoofOf) continue; // rooftop pieces don't join ground groups
 			for (const otherPart of other.parts) {
 				const otherAABB = getPartAABB(otherPart);
 				for (const draggedAABB of draggedAABBs) {
@@ -1033,6 +1232,7 @@ class ModelerStore {
 			this.#pushUndo();
 			const wasActive = this.activeStructureId === owner.id;
 			this.plan.structures.splice(this.plan.structures.indexOf(owner), 1);
+			this.#landRiders(owner.id);
 			if (wasActive) this.activeStructureId = this.plan.structures[0]?.id ?? '';
 		}
 		this.mode = { type: 'idle' };

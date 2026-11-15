@@ -3,7 +3,8 @@
 	import PlanSwitcher from './PlanSwitcher.svelte';
 	import { syncUrl } from './SiteBar.svelte';
 	import { choicesOn } from '../existing';
-	import { totalStories } from '../geometry';
+	import { restsOn, totalStories } from '../geometry';
+	import { partOutline, pointInPolygon } from '../geo';
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM, fmtSqft } from '../units';
 	import type { BuildingType, CongregationProfile, DevelopmentType, Roof, Site, Status, Structure, Use } from '../types';
@@ -16,6 +17,17 @@
 		{ value: 'existing', label: 'Existing' },
 		{ value: 'removed', label: 'To be removed' },
 	];
+
+	// Buildings a piece could sit on: those its center is over (and its current host)
+	function roofHosts(s: Structure): Structure[] {
+		if (!s.parts.length) return [];
+		const all = store.plan.structures;
+		const center: [number, number] = [s.parts.reduce((a, p) => a + p.x, 0) / s.parts.length, s.parts.reduce((a, p) => a + p.y, 0) / s.parts.length];
+		return all.filter(
+			(h) => h.id !== s.id && !restsOn(all, h.id, s.id) && (h.id === s.onRoofOf || h.parts.some((p) => pointInPolygon(center, partOutline(p)))),
+		);
+	}
+	const hostOf = (s: Structure) => (s.onRoofOf ? store.plan.structures.find((h) => h.id === s.onRoofOf) : undefined);
 
 	// Site settings and the site's buildings are edited on the site view
 	function editOnSite() {
@@ -413,6 +425,8 @@
 				{#each structures as s (s.id)}
 					{@const isOpen = expandedId === s.id}
 					{@const locked = store.isLocked(s.id)}
+					{@const hosts = roofHosts(s)}
+					{@const host = hostOf(s)}
 					<li class="struct-item" class:struct-item--open={isOpen}>
 						<button
 							class="struct-row"
@@ -477,6 +491,24 @@
 								{/if}
 								{/if}
 								<fieldset class="ro-wrap" disabled={locked}>
+								{#if hosts.length}
+									<label class="field-label" for="struct-on-{s.id}">Sits on</label>
+									<select
+										id="struct-on-{s.id}"
+										class="select-input"
+										value={s.onRoofOf ?? ''}
+										onchange={(e) => store.updateStructure(s.id, { onRoofOf: (e.target as HTMLSelectElement).value || undefined })}
+									>
+										<option value="">Ground</option>
+										{#each hosts as h (h.id)}<option value={h.id}>Roof of {h.label}</option>{/each}
+									</select>
+								{/if}
+								{#if host}
+									<p class="field-hint site-note">On the roof of {host.label}; it doesn't add to lot coverage.</p>
+									{#if host.status === 'removed' && s.status !== 'removed'}
+										<p class="field-hint confirm-hint">Sits on a building marked to be removed.</p>
+									{/if}
+								{/if}
 								<label class="field-label" for="struct-label-{s.id}">Label</label>
 								<input
 									id="struct-label-{s.id}"
@@ -686,6 +718,9 @@
 									{/if}
 									<div class="action-row">
 										<button class="split-btn" onclick={() => store.startCutting(s.id)} title="Cut into pieces, like additions">Cut</button>
+										{#if s.parts.some((p) => p.shape === 'rect' || p.shape === 'square' || p.shape === 'tri')}
+											<button class="split-btn" onclick={() => store.editPoints(s.id)} title="Move its corners one by one, to line up with other buildings">Edit points</button>
+										{/if}
 										{#if s.groupId}
 											<button class="split-btn" onclick={() => store.ungroupStructure(s.id)}>
 												Ungroup
