@@ -185,7 +185,8 @@
 			type="text"
 			aria-label="Site name"
 			placeholder="Untitled Site"
-			disabled={store.readOnly}
+			disabled={store.readOnly || !store.onSite}
+			title={store.onSite ? undefined : 'The site name is edited on the site view'}
 			value={store.site.name}
 			oninput={(e) => store.updateSiteName((e.target as HTMLInputElement).value)}
 		/>

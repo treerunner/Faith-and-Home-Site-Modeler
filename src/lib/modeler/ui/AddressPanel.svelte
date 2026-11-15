@@ -103,7 +103,7 @@
 	<!-- The address and neighborhood belong to the site; plans show them -->
 	{#if !store.onSite}
 		<p class="address__current">{store.site.address ?? 'No address'}</p>
-		<button class="address__link address__edit" onclick={() => { store.switchPlan(store.site.existing.id); syncUrl(); }}>Edit on site</button>
+		<p class="address__note">Set for the site. <button class="address__link address__edit" onclick={() => { store.switchPlan(store.site.existing.id); syncUrl(); }}>Edit on site</button></p>
 	{:else if store.site.address}
 		<p class="address__current">{store.site.address}</p>
 		{#if confirmingClear}
@@ -275,10 +275,7 @@
 	.address__btn--danger { border-color: #c8a090; color: #9a3a2a; }
 	.address__btn--danger:hover { background: #fdf0ee; }
 
-	.address__link.address__edit {
-		margin-left: 0;
-		font-size: 0.72rem;
-	}
+	.address__link.address__edit { margin-left: 0; }
 
 	.address__link {
 		border: none;

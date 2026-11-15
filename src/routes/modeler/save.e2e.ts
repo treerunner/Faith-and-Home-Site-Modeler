@@ -128,10 +128,14 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 	await save(page);
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
-	// Renaming the site moves every plan URL; old site URLs redirect
+	// The site is renamed on the site view only; that moves every plan URL, and old site URLs redirect
+	await expect(page.getByLabel('Site name')).toBeDisabled();
+	await chooseSite(page);
 	await page.getByLabel('Site name').fill(`E2E site ${stamp} Grace`);
 	await save(page);
 	const renamed = `${site}-grace`;
+	await expect(page).toHaveURL(urlIs(renamed));
+	await page.goto(`${site}/housing-on-lot-copy`);
 	await expect(page).toHaveURL(urlIs(`${renamed}/housing-on-lot-copy`));
 	await page.goto(`${site}/housing-on-lot`);
 	await expect(page).toHaveURL(urlIs(`${renamed}/housing-on-lot`));

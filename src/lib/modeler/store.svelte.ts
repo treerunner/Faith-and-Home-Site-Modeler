@@ -1296,6 +1296,7 @@ class ModelerStore {
 	}
 
 	updateSiteName(name: string) {
+		if (!this.onSite) return; // the site's name is edited on the site view
 		this.#pushUndo();
 		this.site.name = name;
 	}
