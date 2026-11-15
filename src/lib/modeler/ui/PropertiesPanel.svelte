@@ -875,6 +875,9 @@
 		user-select: none;
 	}
 
+	/* Sections keep their height and the panel scrolls; a flex column would squeeze them instead */
+	.props-panel > :global(*) { flex-shrink: 0; }
+
 	.site-name-row {
 		padding: 0.5rem 0.6rem 0.15rem;
 		background: var(--color-surface);
@@ -928,6 +931,7 @@
 	.textarea-input {
 		resize: vertical;
 		min-height: 60px;
+		field-sizing: content; /* grows with the notes, so all of it reads */
 		font-family: inherit;
 		line-height: 1.4;
 	}
