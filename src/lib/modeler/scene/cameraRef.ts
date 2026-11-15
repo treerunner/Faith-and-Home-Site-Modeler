@@ -34,6 +34,7 @@ export type HitResult =
 	| { kind: 'rotate'; partId: string; x: number; y: number }
 	| { kind: 'openSpace'; openSpaceId: string; x: number; y: number }
 	| { kind: 'osVertex'; openSpaceId: string; vertexIndex: number }
+	| { kind: 'vertex'; partId: string; index: number; insert: boolean }
 	| { kind: 'tree'; treeId: string; x: number; y: number }
 	| { kind: 'ground'; x: number; y: number };
 
@@ -89,6 +90,12 @@ export function hitTest(clientX: number, clientY: number): HitResult | null {
 			const ud = hit.object.userData as Record<string, unknown>;
 			if (ud.rotateHandle === true && typeof ud.partId === 'string') {
 				return { kind: 'rotate', partId: ud.partId, x: hit.point.x, y: hit.point.z };
+			}
+			if (typeof ud.vertexPartId === 'string' && typeof ud.vertexIndex === 'number') {
+				return { kind: 'vertex', partId: ud.vertexPartId, index: ud.vertexIndex, insert: false };
+			}
+			if (typeof ud.vertexPartId === 'string' && typeof ud.insertAfter === 'number') {
+				return { kind: 'vertex', partId: ud.vertexPartId, index: ud.insertAfter, insert: true };
 			}
 			if (typeof ud.handle === 'string' && typeof ud.partId === 'string') {
 				return { kind: 'resize', partId: ud.partId, handle: ud.handle };

@@ -16,8 +16,13 @@ import {
 	CONTEXT_HALF_SIZE,
 	fitFootprint,
 	GROUND_HALF,
+	asPoly,
+	outlinePart,
 	partOutline,
 	pointInPolygon,
+	snapPoint,
+	withOutline,
+	type Snap,
 	storiesFromTags,
 	suggestSiteType,
 } from './geo';
@@ -282,7 +287,8 @@ class ModelerStore {
 			m.type === 'selected' ||
 			m.type === 'dragging' ||
 			m.type === 'resizing' ||
-			m.type === 'rotating'
+			m.type === 'rotating' ||
+			m.type === 'draggingVertex'
 		) {
 			return m.partId;
 		}
@@ -558,6 +564,148 @@ class ModelerStore {
 			snap.parts.slice(1).forEach((part, i) => {
 				list.push({ ...before, id: newIds[i], parts: [part], reuseZones: zonesOn(part) });
 			});
+		}
+	}
+
+	// ── Drawn outlines and point editing ─────────────────────────────────────
+
+	// What drawn points snap to: the other structures' outlines and the parcel
+	#snapTargets(exceptPartId?: string): [number, number][][] {
+		const outlines = this.plan.structures.flatMap((s) => s.parts.filter((p) => p.id !== exceptPartId).map(partOutline));
+		return this.site.parcel ? [...outlines, this.site.parcel] : outlines;
+	}
+
+	#snap(x: number, y: number, radius: number, exceptPartId?: string): { point: [number, number]; snap: Snap } {
+		const snap = radius > 0 ? snapPoint([x, y], this.#snapTargets(exceptPartId), radius) : null;
+		return { point: snap ? snap.point : [x, y], snap };
+	}
+
+	startDrawingStructure() {
+		this.mode = { type: 'drawingStructure', points: [] };
+	}
+
+	// A click while drawing an outline: closes it on the first point, else adds a point.
+	// `radius` is the snap distance in meters (0 turns snapping off).
+	addStructureVertex(x: number, y: number, radius = 0) {
+		if (this.mode.type !== 'drawingStructure') return;
+		const { points } = this.mode;
+		const first = points[0];
+		if (points.length >= 3 && Math.hypot(x - first[0], y - first[1]) < Math.max(radius, 0.5)) {
+			this.finishStructure();
+			return;
+		}
+		const { point } = this.#snap(x, y, radius);
+		this.mode = { type: 'drawingStructure', points: [...points, point], cursorPoint: point };
+	}
+
+	updateStructureCursor(x: number, y: number, radius = 0) {
+		if (this.mode.type !== 'drawingStructure') return;
+		const { point, snap } = this.#snap(x, y, radius);
+		this.mode = { ...this.mode, cursorPoint: point, snap: snap ?? undefined };
+	}
+
+	// Closes the drawn outline into a structure, placed like a dropped shape
+	finishStructure() {
+		if (this.mode.type !== 'drawingStructure' || this.mode.points.length < 3) return;
+		const fitted = outlinePart(this.mode.points);
+		this.#pushUndo();
+		const part: Part = { id: crypto.randomUUID(), ...fitted };
+		const s: Structure = {
+			id: crypto.randomUUID(),
+			label: 'Structure',
+			status: this.onSite ? 'existing' : 'new',
+			uses: [],
+			stories: 1,
+			floorHeight: 3.5,
+			roof: 'flat',
+			parts: [part],
+			provenance: 'user',
+		};
+		this.plan.structures.push(s);
+		this.#settleOnRoof(s);
+		if (!s.onRoofOf) {
+			const target = this.#findTouchingStructure(s);
+			if (target) this.#groupStructures(s.id, target.id);
+		}
+		this.activeStructureId = s.id;
+		this.mode = { type: 'selected', partId: part.id };
+	}
+
+	// Starts moving one point of an outline; with `insert`, a new point goes in after `index`
+	// (dragged from an edge's midpoint)
+	startDraggingVertex(partId: string, index: number, insert = false) {
+		const part = this.#findPart(partId);
+		if (!part || part.shape === 'circle' || this.#lockedPart(partId)) return;
+		this.#pushUndo();
+		this.#gestureDidMutate = insert;
+		const outline = partOutline(part).map((p) => [p[0], p[1]] as [number, number]);
+		this.#reshapeFrom = this.#reshapeBase(partId);
+		if (insert) {
+			const a = outline[index], b = outline[(index + 1) % outline.length];
+			outline.splice(index + 1, 0, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+			index += 1;
+		}
+		this.#reshape(partId, outline, this.#reshapeFrom);
+		this.mode = { type: 'draggingVertex', partId, index, outline };
+	}
+
+	updateDragVertex(x: number, y: number, radius = 0) {
+		if (this.mode.type !== 'draggingVertex') return;
+		const { partId, index, outline } = this.mode;
+		const { point, snap } = this.#snap(x, y, radius, partId);
+		const next = outline.map((p, i) => (i === index ? point : p));
+		this.#reshape(partId, next, this.#reshapeFrom);
+		this.mode = { ...this.mode, snap: snap ?? undefined };
+		this.#gestureDidMutate = true;
+	}
+
+	endDragVertex() {
+		if (this.mode.type !== 'draggingVertex') return;
+		if (!this.#gestureDidMutate) this.#undoStack.pop();
+		this.mode = { type: 'selected', partId: this.mode.partId };
+	}
+
+	removeVertex(partId: string, index: number) {
+		const part = this.#findPart(partId);
+		if (!part || part.shape === 'circle' || this.#lockedPart(partId)) return;
+		const outline = partOutline(part);
+		if (outline.length <= 3) return;
+		this.#pushUndo();
+		this.#reshape(partId, outline.filter((_, i) => i !== index));
+	}
+
+	// Turns a rectangle, square or triangle into an outline with the same corners
+	editPoints(structureId: string) {
+		const s = this.plan.structures.find((x) => x.id === structureId);
+		if (!s || this.isLocked(structureId) || !s.parts.some((p) => p.shape !== 'poly' && p.shape !== 'circle')) return;
+		this.#pushUndo();
+		s.parts = s.parts.map((p) => asPoly(p));
+		if (s.roof === 'gable') s.roof = 'flat'; // gables need rectangles, as the roof menu says
+	}
+
+	// Gives a part a new outline. Its reuse zones stay where they are on the ground, clipped to the
+	// new outline; on the site, each plan's zones on it do the same.
+	// A drag reshapes from where it started, so zones aren't re-clipped step by step
+	#reshapeFrom: { s: Structure; part: Part; zones: ReuseZone[] | undefined }[] = [];
+
+	#reshapeBase(partId: string) {
+		const lists = [this.plan.structures, ...(this.onSite ? this.site.plans.map((p) => p.structures) : [])];
+		return lists.flatMap((list) =>
+			list.filter((s) => s.parts.some((p) => p.id === partId)).map((s) => ({ s, part: copy(s.parts.find((p) => p.id === partId)!), zones: copy(s.reuseZones) })),
+		);
+	}
+
+	#reshape(partId: string, outline: [number, number][], from = this.#reshapeBase(partId)) {
+		for (const { s, part: before, zones } of from) {
+			const after = withOutline(before, outline);
+			s.parts = s.parts.map((p) => (p.id === partId ? after : p));
+			if (s.roof === 'gable') s.roof = 'flat';
+			if (zones) {
+				const next = zones.flatMap((z) =>
+					z.partId !== partId ? [z] : clipToPart(zoneOutline(z, before), after).map((points, k) => ({ ...z, id: k ? crypto.randomUUID() : z.id, points })),
+				);
+				s.reuseZones = next.length ? next : undefined;
+			}
 		}
 	}
 

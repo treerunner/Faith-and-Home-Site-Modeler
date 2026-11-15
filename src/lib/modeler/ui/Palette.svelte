@@ -64,7 +64,20 @@
 		{/each}
 	</ul>
 
-	<div class="palette-hint">Drag a shape onto the canvas to place it</div>
+	<!-- Or draw a structure point by point, to line it up with existing edges -->
+	<button
+		class="os-tile outline-tile"
+		class:os-tile--active={store.mode.type === 'drawingStructure'}
+		aria-pressed={store.mode.type === 'drawingStructure'}
+		onclick={() => store.startDrawingStructure()}
+	>
+		<svg viewBox="0 0 28 28" width="18" height="18" aria-hidden="true">
+			<polygon points="3,25 3,9 13,3 25,9 25,25 15,25 15,17 9,17 9,25" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+		</svg>
+		Draw outline
+	</button>
+
+	<div class="palette-hint">Drag a shape onto the canvas, or draw an outline point by point</div>
 
 	<h2 class="palette-heading palette-heading--section">Open Spaces</h2>
 	<ul class="os-list" role="list">
@@ -231,6 +244,8 @@
 		font-size: 0.85rem;
 		line-height: 1;
 	}
+
+	.outline-tile { margin-top: 0.5rem; }
 
 	.palette-hint {
 		font-size: 0.65rem;

@@ -97,6 +97,11 @@
 			return;
 		}
 
+		if (store.mode.type === 'drawingStructure') {
+			if (pos) beginPress(e, () => store.addStructureVertex(pos.x, pos.y, snapRadius(e)));
+			return;
+		}
+
 		if (store.mode.type === 'choosingParcel') {
 			beginPress(e, () => {
 				const id = pos && store.parcelAt(pos.x, pos.y);
@@ -148,6 +153,13 @@
 			if (ownerStructure) store.setActiveStructure(ownerStructure.id);
 			rendererEl?.setPointerCapture(e.pointerId);
 			store.startDragging(partId, result.x - part.x, result.y - part.y, cloning);
+		} else if (result.kind === 'vertex') {
+			// Alt-click removes a point; otherwise drag it, or drag a new one out of an edge
+			if (e.altKey && !result.insert) store.removeVertex(result.partId, result.index);
+			else {
+				rendererEl?.setPointerCapture(e.pointerId);
+				store.startDraggingVertex(result.partId, result.index, result.insert);
+			}
 		} else if (result.kind === 'resize') {
 			rendererEl?.setPointerCapture(e.pointerId);
 			store.startResizing(result.partId, result.handle as ResizeHandle);
@@ -171,6 +183,13 @@
 				store.selectTree(null);
 			});
 		}
+	}
+
+	// Drawn points snap to existing corners and edges within about 10 px, at any zoom; Alt turns it off
+	const SNAP_PX = 10;
+	function snapRadius(e: { altKey: boolean }): number {
+		if (e.altKey) return 0;
+		return (SNAP_PX * store.planView.height) / (rendererEl?.clientHeight || 1);
 	}
 
 	function handlePointerMove(e: PointerEvent) {
@@ -198,6 +217,10 @@
 			store.updateRotation(pos.x, pos.y, e.shiftKey);
 		} else if (store.mode.type === 'drawingOpenSpace') {
 			store.updateOpenSpaceCursor(pos.x, pos.y);
+		} else if (store.mode.type === 'drawingStructure') {
+			store.updateStructureCursor(pos.x, pos.y, snapRadius(e));
+		} else if (store.mode.type === 'draggingVertex') {
+			store.updateDragVertex(pos.x, pos.y, snapRadius(e));
 		} else if (store.mode.type === 'choosingParcel') {
 			store.hoverParcel(store.parcelAt(pos.x, pos.y));
 		} else if (store.mode.type === 'drawingParcel') {
@@ -224,6 +247,7 @@
 		else if (store.mode.type === 'rotating') store.endRotation();
 		else if (store.mode.type === 'draggingOpenSpace') store.endDragOpenSpace();
 		else if (store.mode.type === 'draggingOsVertex') store.endDragOsVertex();
+		else if (store.mode.type === 'draggingVertex') store.endDragVertex();
 		else if (store.mode.type === 'draggingTree') store.endDragTree();
 	}
 
@@ -233,10 +257,11 @@
 			if (store.mode.type === 'drawingParcel' && store.setup?.context.parcels.length) store.mode = { type: 'choosingParcel' };
 			else if (store.mode.type === 'drawingParcel' || store.mode.type === 'choosingParcel') store.finishSetup();
 			else if (store.mode.type === 'cutting' || store.mode.type === 'drawingZone') store.selectStructure(store.mode.structureId);
-			else if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree') store.cancelPlacing();
+			else if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree' || store.mode.type === 'drawingStructure') store.cancelPlacing();
 			else if (store.selectedOpenSpaceId) store.selectOpenSpace(null);
 			else if (store.selectedTreeId) store.selectTree(null);
 		}
+		if (e.key === 'Enter' && store.mode.type === 'drawingStructure') store.finishStructure();
 		if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === document.body && !store.readOnly) {
 			if (store.selectedPartId) store.deletePart(store.selectedPartId);
 			else if (store.selectedOpenSpaceId) store.deleteOpenSpace(store.selectedOpenSpaceId);
@@ -297,6 +322,15 @@
 			</div>
 		{/if}
 
+		{#if store.mode.type === 'drawingStructure'}
+			<div class="drawing-hint">
+				{#if store.mode.points.length < 3}
+					Click to place points. Points snap to corners and edges; hold Alt to place freely. Esc to cancel.
+				{:else}
+					Click the first point, or press Enter, to finish. Esc to cancel.
+				{/if}
+			</div>
+		{/if}
 		{#if store.mode.type === 'drawingOpenSpace'}
 			<div class="drawing-hint">
 				{#if store.mode.points.length === 0}

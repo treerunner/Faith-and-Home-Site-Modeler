@@ -6,6 +6,7 @@
 	import PartMesh from './PartMesh.svelte';
 	import RoofMesh from './RoofMesh.svelte';
 	import ResizeHandles from './ResizeHandles.svelte';
+	import OutlineHandles from './OutlineHandles.svelte';
 	import OpenSpacePolygon from './OpenSpacePolygon.svelte';
 	import TreeMesh from './TreeMesh.svelte';
 	import ContextLayer from './ContextLayer.svelte';
@@ -141,7 +142,7 @@
 
 	// Open spaces, parcels and reuse zones are traced point by point and share the vertex markers
 	let drawingMode = $derived(
-		store.mode.type === 'drawingOpenSpace' || store.mode.type === 'drawingParcel' || store.mode.type === 'drawingZone'
+		store.mode.type === 'drawingOpenSpace' || store.mode.type === 'drawingParcel' || store.mode.type === 'drawingZone' || store.mode.type === 'drawingStructure'
 			? store.mode
 			: null,
 	);
@@ -152,6 +153,18 @@
 				? [...store.mode.points, store.mode.cursorPoint]
 				: store.mode.points
 			: null,
+	);
+
+	// Drawing a structure's outline: the line so far, and where the next point would snap
+	let structureDraft = $derived(
+		store.mode.type === 'drawingStructure'
+			? store.mode.cursorPoint
+				? [...store.mode.points, store.mode.cursorPoint]
+				: store.mode.points
+			: null,
+	);
+	let snapRing = $derived(
+		(store.mode.type === 'drawingStructure' || store.mode.type === 'draggingVertex') && store.mode.snap ? store.mode.snap.point : null,
 	);
 
 	let parcelDraft = $derived(
@@ -298,6 +311,16 @@
 	{/each}
 {/if}
 
+{#if structureDraft && structureDraft.length >= 2}
+	<ParcelLine polygon={structureDraft} highlight />
+{/if}
+{#if snapRing}
+	<T.Mesh position={[snapRing[0], 0.4, snapRing[1]]} rotation={[-Math.PI / 2, 0, 0]}>
+		<T.RingGeometry args={[0.7, 1, 24]} />
+		<T.MeshBasicMaterial color={COLORS.selection} />
+	</T.Mesh>
+{/if}
+
 <!-- Drawing a parcel: the outline so far, closing to the cursor -->
 {#if parcelDraft && parcelDraft.length >= 2}
 	<ParcelLine polygon={parcelDraft} highlight fill />
@@ -396,7 +419,10 @@
 
 <!-- A plan's copies of the site's buildings can't be moved or reshaped -->
 {#if store.selectedPart && store.viewMode === 'plan' && !store.readOnly && !(store.selectedStructure && store.isLocked(store.selectedStructure.id))}
-	<ResizeHandles part={store.selectedPart} />
+	<ResizeHandles part={store.selectedPart} corners={store.selectedPart.shape !== 'poly'} />
+	{#if store.selectedPart.shape === 'poly'}
+		<OutlineHandles part={store.selectedPart} />
+	{/if}
 {/if}
 
 {#each store.plan.trees as tree (tree.id)}

@@ -530,3 +530,63 @@ export function offsetPolygon(polygon: Pt[], d: number): Pt[] {
 		return [p[0] + bx * miter, p[1] + by * miter] as Pt;
 	});
 }
+
+// ── Drawn outlines and point editing ─────────────────────────────────────────
+
+// A part from a drawn outline, kept exactly as points (even a rectangle, so its points stay
+// editable), framed by its smallest rectangle; unlike fitFootprint, which rounds map data
+export function outlinePart(points: Pt[]): FittedPart {
+	const ring = openRing(points);
+	const r = minAreaRect(ring);
+	const base = { x: r.x, y: r.y, w: Math.max(r.w, 0.1), d: Math.max(r.d, 0.1), rotation: r.rotation };
+	const frame = { id: '', shape: 'poly', ...base } as Part;
+	return { shape: 'poly', ...base, points: toPartPoints(ring, frame) };
+}
+
+// A part reshaped to new outline points, keeping its rotation: its box is refit around them
+export function withOutline(part: Part, outline: Pt[]): Part {
+	const θ = (part.rotation * Math.PI) / 180;
+	const c = Math.cos(θ), s = Math.sin(θ);
+	const local = outline.map(([x, y]): Pt => [(x - part.x) * c + (y - part.y) * s, -(x - part.x) * s + (y - part.y) * c]);
+	const xs = local.map((p) => p[0]), ys = local.map((p) => p[1]);
+	const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+	const w = Math.max(maxX - minX, 0.1), d = Math.max(maxY - minY, 0.1);
+	const [cx, cy] = [(minX + maxX) / 2, (minY + maxY) / 2];
+	const frame: Part = { ...part, shape: 'poly', x: part.x + cx * c - cy * s, y: part.y + cx * s + cy * c, w, d };
+	return { ...frame, points: toPartPoints(outline, frame), ridgeAxis: undefined };
+}
+
+// A rectangle, square or triangle as an outline with the same corners, so its points can move
+export function asPoly(part: Part): Part {
+	if (part.shape === 'poly' || part.shape === 'circle') return part;
+	return { ...part, shape: 'poly', points: toPartPoints(partOutline(part), part), ridgeAxis: undefined };
+}
+
+export type Snap = { point: Pt; kind: 'corner' | 'edge' } | null;
+
+// The nearest corner of the target outlines within `radius`, else the nearest point on one of
+// their edges, else nothing: drawn points land exactly on existing lines
+export function snapPoint(p: Pt, targets: Pt[][], radius: number): Snap {
+	let best: Snap = null;
+	let bestD = radius;
+	for (const ring of targets) {
+		for (const q of ring) {
+			const dist = Math.hypot(q[0] - p[0], q[1] - p[1]);
+			if (dist <= bestD) [best, bestD] = [{ point: q, kind: 'corner' }, dist];
+		}
+	}
+	if (best) return best;
+	for (const ring of targets) {
+		for (let i = 0; i < ring.length; i++) {
+			const a = ring[i], b = ring[(i + 1) % ring.length];
+			const dx = b[0] - a[0], dy = b[1] - a[1];
+			const len2 = dx * dx + dy * dy;
+			if (!len2) continue;
+			const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2));
+			const q: Pt = [a[0] + t * dx, a[1] + t * dy];
+			const dist = Math.hypot(q[0] - p[0], q[1] - p[1]);
+			if (dist <= bestD) [best, bestD] = [{ point: q, kind: 'edge' }, dist];
+		}
+	}
+	return best;
+}
