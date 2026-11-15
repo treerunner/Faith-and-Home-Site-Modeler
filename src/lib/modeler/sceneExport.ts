@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getRenderer, getPerspCamera, planCamera, mainScene } from './scene/cameraRef';
 import type { Plan } from './types';
+import { FH } from './colors';
 
 const PAD = 8;
 
@@ -109,4 +110,36 @@ export function exportPNG(filename = 'site-model.png', credit: string | null = n
 	a.href = dataURL;
 	a.download = filename;
 	a.click();
+}
+
+const THUMB_WIDTH = 480;
+
+// A small picture of what's on screen, saved with the plan for its pattern-page card: the
+// tight plan crop in plan view, the orbit view as it stands in 3D. A JPEG data URL, ~30 KB.
+export async function captureThumbnail(plan: Plan, is3D: boolean): Promise<string | null> {
+	const renderer = getRenderer();
+	if (!renderer || !mainScene) return null;
+	let source: string | null;
+	if (is3D) {
+		const camera = getPerspCamera();
+		if (!camera) return null;
+		renderer.render(mainScene, camera);
+		source = renderer.domElement.toDataURL('image/png');
+	} else {
+		source = capturePlanImage(plan);
+	}
+	if (!source) return null;
+	const img = new Image();
+	img.src = source;
+	await img.decode();
+	const out = document.createElement('canvas');
+	out.width = THUMB_WIDTH;
+	out.height = Math.round((img.height / img.width) * THUMB_WIDTH);
+	const ctx = out.getContext('2d');
+	if (!ctx) return null;
+	// Plan view renders on a clear canvas over the page's linen; JPEG has no transparency
+	ctx.fillStyle = FH.linen;
+	ctx.fillRect(0, 0, out.width, out.height);
+	ctx.drawImage(img, 0, 0, out.width, out.height);
+	return out.toDataURL('image/jpeg', 0.8);
 }

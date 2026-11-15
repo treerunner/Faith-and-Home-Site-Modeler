@@ -1,5 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// The example test saves a site to the DATABASE_URL database; it's deleted afterwards, which
+// clears the pattern's example (the reference goes null).
+const created: string[] = [];
+test.afterAll(async ({ request, baseURL }) => {
+	const sites: { id: string; name: string }[] = await (await request.get('/api/sites')).json();
+	for (const s of sites.filter((s) => created.includes(s.name))) {
+		expect((await request.delete(`/api/sites/${s.id}`, { headers: { origin: baseURL! } })).status()).toBe(204);
+	}
+});
+
 // A new site's plan view: 100 m tall, centered on the origin
 async function clickSite(page: Page, x: number, y: number) {
 	const box = (await page.locator('.canvas-area canvas').boundingBox())!;
@@ -102,4 +112,39 @@ test('the pattern library lists every pattern and the masthead links to it', asy
 	await expect(page.getByRole('heading', { name: 'Rural cluster, cottage housing' })).toBeVisible();
 	await page.goto('/patterns/no-such-pattern');
 	await expect(page.getByText('Pattern not found')).toBeVisible();
+});
+
+test('a modeled plan becomes its pattern\'s example, with a thumbnail and a link to the model', async ({ page }) => {
+	await page.goto('/modeler');
+	const name = `E2E example ${Date.now()}`;
+	created.push(name);
+	await page.getByLabel('Site name').fill(name);
+
+	// Urban Box-Plus with reuse, in a plan
+	await page.getByLabel('Drag to place Square').dragTo(page.locator('.canvas-area canvas'));
+	await page.getByRole('button', { name: 'Cut', exact: true }).click();
+	await clickSite(page, 1, -10);
+	await clickSite(page, 1, 10);
+	await page.getByRole('group', { name: 'Site type' }).getByRole('button', { name: 'Urban', exact: true }).click();
+	await page.getByRole('button', { name: 'New plan' }).click();
+	const first = page.locator('.struct-row').first();
+	if ((await first.getAttribute('aria-expanded')) !== 'true') await first.click();
+	await page.getByRole('button', { name: 'Reuse whole building' }).click();
+
+	// Peg it from the analysis: it saves, then sets the example
+	await page.getByRole('button', { name: 'Analysis' }).click();
+	const yours = page.getByRole('region', { name: 'Your pattern' });
+	await yours.getByRole('button', { name: "Use this plan as the pattern's example" }).click();
+	await expect(yours.getByText("This plan is the pattern's example.")).toBeVisible();
+	await page.keyboard.press('Escape');
+
+	await page.goto('/patterns/urban-box-plus-adaptive-reuse');
+	const example = page.getByRole('region', { name: 'Example' });
+	await expect(example.getByText(name)).toBeVisible();
+	await expect(example.getByText('New plan')).toBeVisible();
+	await expect(example.locator('img')).toHaveAttribute('src', /^data:image\/jpeg/);
+	await page.screenshot({ path: 'tests/screenshots/pattern-example.png', fullPage: true });
+	await example.getByRole('link').click();
+	await expect(page).toHaveURL(/\/modeler\/e2e-example-\d+\/new-plan\/view$/);
+	await expect(page.getByText('View only')).toBeVisible();
 });

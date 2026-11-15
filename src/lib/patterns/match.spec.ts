@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { cellLabel, conditionText, coverage, isComplete, nearestPattern, patternForCell, selectVariant, siteCell, type CompleteCell } from './match';
-import { getPatterns, type Cells, type Pattern, type Variant } from './catalog';
+import { cellLabel, conditionText, coverage, isComplete, nearestPattern, overlaps, patternForCell, selectVariant, siteCell, type CompleteCell } from './match';
+import { type Cells, type Pattern, type Variant } from './catalog';
+import { SEED_PATTERNS } from './seed';
 import type { Part, Plan, ReuseZone, Site, Structure } from '../modeler/types';
 
 let n = 0;
@@ -107,7 +108,7 @@ describe('selectVariant', () => {
 
 describe('coverage', () => {
 	it('lists all 60 cells with their pattern', async () => {
-		const patterns = await getPatterns();
+		const patterns = SEED_PATTERNS;
 		const cells = coverage(patterns);
 		expect(cells).toHaveLength(60);
 		const urbanBoxReuse = cells.find((c) => c.cell.siteType === 'urban' && c.cell.buildingType === 'box' && c.cell.developmentType === 'reuse');
@@ -119,5 +120,16 @@ describe('coverage', () => {
 describe('conditionText', () => {
 	it('reads conditions in plain words', () => {
 		expect(conditionText({ partnering: ['open'], capacity: ['some_staff', 'staffed'] })).toBe('open to partners; some staff or dedicated staff');
+	});
+});
+
+describe('overlaps', () => {
+	it('finds cells claimed by more than one pattern', () => {
+		expect(overlaps(SEED_PATTERNS)).toEqual([]);
+		const [a] = SEED_PATTERNS;
+		const clash = { ...a, slug: 'clash', name: 'Clash' };
+		const found = overlaps([a, clash]);
+		expect(found.length).toBe(a.cells.buildingTypes.length * a.cells.siteTypes.length * a.cells.developmentTypes.length);
+		expect(found[0].patterns.map((p) => p.slug)).toEqual([a.slug, 'clash']);
 	});
 });

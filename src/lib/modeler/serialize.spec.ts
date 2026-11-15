@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_PLAN_NAME, normalizeSite, SiteFormatError } from './serialize';
+import { DEFAULT_PLAN_NAME, normalizeSite, planUuid, SiteFormatError } from './serialize';
 import { storedSite } from './existing';
 import type { Plan, Site, Structure } from './types';
 
 function makePlan(overrides: Partial<Plan> = {}): Plan {
 	return {
-		id: 'plan1', name: 'Housing on the lot', slug: 'housing-on-the-lot', oldSlugs: ['housing'],
+		id: '0b6f1d2e-4c3a-4e1f-9a2b-7c8d9e0f1a2b', name: 'Housing on the lot', slug: 'housing-on-the-lot', oldSlugs: ['housing'],
 		structures: [
 			{
 				id: 's1', label: 'Sanctuary', status: 'existing', uses: ['worship', 'housing'],
@@ -37,7 +37,7 @@ function makeSite(overrides: Partial<Site> = {}): Site {
 		context: { buildings: [], roads: [] },
 		congregationProfile: { size: 'small', tenure: 'historic', notes: 'Shared kitchen' },
 		// The plan's Sanctuary is its copy of the site's
-		existing: { id: 'ec', name: 'Existing conditions', slug: '', structures: structuredClone(makePlan().structures), openSpaces: [], trees: [], annotations: [] },
+		existing: { id: 'a1b2c3d4-0000-4000-8000-000000000001', name: 'Existing conditions', slug: '', structures: structuredClone(makePlan().structures), openSpaces: [], trees: [], annotations: [] },
 		plans: [makePlan()],
 		...overrides,
 	};
@@ -90,7 +90,7 @@ describe('normalizeSite', () => {
 	it('makes an unchanged first "Existing conditions" plan the site view', () => {
 		const standing = makePlan().structures[0];
 		const site = normalizeSite({ id: 'old', plans: [{ id: 'ec1', name: DEFAULT_PLAN_NAME, slug: 'existing-conditions', structures: [standing] }] });
-		expect(site.existing).toMatchObject({ id: 'ec1', name: DEFAULT_PLAN_NAME, slug: '' });
+		expect(site.existing).toMatchObject({ id: planUuid('ec1'), name: DEFAULT_PLAN_NAME, slug: '' });
 		expect(site.existing.structures).toHaveLength(1);
 		expect(site.plans).toEqual([]);
 	});
@@ -217,5 +217,14 @@ describe('normalizeSite', () => {
 	])('rejects invalid input (%#)', (input, path) => {
 		expect(() => normalizeSite(input)).toThrow(SiteFormatError);
 		expect(() => normalizeSite(input)).toThrow(path);
+	});
+});
+
+describe('planUuid', () => {
+	it('keeps uuids and turns older ids into the same uuid every time', () => {
+		expect(planUuid('0B6F1D2E-4C3A-4E1F-9A2B-7C8D9E0F1A2B')).toBe('0b6f1d2e-4c3a-4e1f-9a2b-7c8d9e0f1a2b');
+		expect(planUuid('p')).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+		expect(planUuid('p')).toBe(planUuid('p'));
+		expect(planUuid('p')).not.toBe(planUuid('q'));
 	});
 });
