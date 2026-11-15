@@ -149,7 +149,7 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 
 **M5. Save and share.** (Done) Persist to Railway Postgres via Drizzle ORM, shareable read-only links, duplicate a site to make scenarios. No auth yet; edit and ownership rules come with the platform work.
 
-**M5.5. Sites and plans.** (Done) Split the Site into site and plans as described above: schema and migration, nested URLs, plan switcher, duplicate plan, plans on the sites list. Do before M6 so parcel and context land at the site level.
+**M5.5. Sites and plans.** (Done) Split the Site into site and plans as described above: schema and migration, nested URLs, plan switcher, duplicate plan, plans on the sites list. Do before M6 so parcel and context land at the site level. Revised in November 2026 after use: the site view is existing conditions (site settings, Social, and the buildings as they stand, edited only there), and plans are alternatives that inherit the site's buildings live. A plan can mark a building to be removed, add reuse zones, add stories or change its roof, but not move, reshape or cut it. Open spaces and trees are copied into each plan. The sites list groups each site's plans under its existing conditions.
 
 **M6. Address mode.** (Done) Address search with suggestions, neighbors as foam and roads printed on the board, choose or draw the parcel, prefill its buildings into the current plan with marked heights, site type suggested from the neighborhood, PostGIS origin and parcel. See data notes.
 

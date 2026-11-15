@@ -14,6 +14,7 @@
 	import ReuseZoneMesh from './ReuseZoneMesh.svelte';
 	import TerrainSurface from './TerrainSurface.svelte';
 	import { partOutline } from '../geo';
+	import { addedStories, partTotalHeight } from '../geometry';
 	import { buildingFooting } from '../terrain';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
@@ -66,7 +67,7 @@
 	let partHeightMap = $derived<Map<string, number>>(
 		new Map(
 			store.plan.structures.flatMap((s) =>
-				s.parts.map((p) => [p.id, s.stories * s.floorHeight] as [string, number]),
+				s.parts.map((p) => [p.id, partTotalHeight(s)] as [string, number]),
 			),
 		),
 	);
@@ -326,14 +327,26 @@
 			selected={store.selectedPartId === part.id || cutPartIds.has(part.id)}
 			status={partStatusMap.get(part.id) ?? 'existing'}
 			cloning={store.mode.type === 'dragging' && store.mode.cloning === true && store.mode.companions.some((c) => c.id === part.id)}
-			height={store.viewMode === '3d' ? (partHeightMap.get(part.id) ?? 3.5) : undefined}
+			height={store.viewMode === '3d' ? (struct ? struct.stories * struct.floorHeight : 3.5) : undefined}
 			stories={struct?.stories ?? 1}
 		/>
+		<!-- A plan's stories on top of an existing building are new construction -->
+		{#if store.viewMode === '3d' && struct && addedStories(struct) > 0}
+			<T.Group position.y={struct.stories * struct.floorHeight}>
+				<PartMesh
+					{part}
+					selected={store.selectedPartId === part.id}
+					status="new"
+					height={addedStories(struct) * struct.floorHeight}
+					stories={addedStories(struct)}
+				/>
+			</T.Group>
+		{/if}
 		{#if store.viewMode === '3d' && struct && struct.roof !== 'flat'}
 			<RoofMesh
 				{part}
 				roof={struct.roof}
-				status={struct.status}
+				status={addedStories(struct) > 0 ? 'new' : struct.status}
 				totalHeight={partHeightMap.get(part.id) ?? 3.5}
 			/>
 		{/if}
@@ -365,7 +378,8 @@
 	<PartMesh part={ghostPart} selected={false} ghost />
 {/if}
 
-{#if store.selectedPart && store.viewMode === 'plan' && !store.readOnly}
+<!-- A plan's copies of the site's buildings can't be moved or reshaped -->
+{#if store.selectedPart && store.viewMode === 'plan' && !store.readOnly && !(store.selectedStructure && store.isLocked(store.selectedStructure.id))}
 	<ResizeHandles part={store.selectedPart} />
 {/if}
 

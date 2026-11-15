@@ -1,7 +1,16 @@
 import type { Part, Structure } from './types';
 
+// A structure's floors, with any a plan adds on top of an existing building it keeps
+export function addedStories(s: Structure): number {
+	return s.status === 'removed' ? 0 : (s.addedStories ?? 0);
+}
+
+export function totalStories(s: Structure): number {
+	return s.stories + addedStories(s);
+}
+
 export function partTotalHeight(s: Structure): number {
-	return s.stories * s.floorHeight;
+	return totalStories(s) * s.floorHeight;
 }
 
 export function roofHeight(part: Part): number {

@@ -53,16 +53,21 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="plan-switcher" bind:this={rootEl} onkeydown={handleKeyDown}>
 	<div class="plan-row">
-		<span class="plan-eyebrow">Plan</span>
-		<input
-			class="plan-name-input"
-			type="text"
-			aria-label="Plan name"
-			placeholder="Untitled plan"
-			value={store.plan.name}
-			disabled={store.readOnly}
-			oninput={(e) => store.renamePlan((e.target as HTMLInputElement).value)}
-		/>
+		<!-- The site view is existing conditions; plans are the alternatives under it -->
+		<span class="plan-eyebrow">{store.onSite ? 'Site' : 'Plan'}</span>
+		{#if store.onSite}
+			<span class="plan-name-fixed">{store.plan.name}</span>
+		{:else}
+			<input
+				class="plan-name-input"
+				type="text"
+				aria-label="Plan name"
+				placeholder="Untitled plan"
+				value={store.plan.name}
+				disabled={store.readOnly}
+				oninput={(e) => store.renamePlan((e.target as HTMLInputElement).value)}
+			/>
+		{/if}
 		<button
 			class="plan-menu-btn"
 			aria-label="Choose plan"
@@ -77,18 +82,28 @@
 
 	{#if open}
 		<div class="plan-menu">
-			<ul class="plan-list" aria-label="Plans">
-				{#each store.site.plans as p (p.id)}
-					<li>
-						<button
-							class="plan-item"
-							class:plan-item--active={p.id === store.plan.id}
-							aria-current={p.id === store.plan.id ? 'true' : undefined}
-							onclick={() => choose(p.id)}
-						>{p.name || 'Untitled plan'}</button>
-					</li>
-				{/each}
-			</ul>
+			<button
+				class="plan-item plan-item--site"
+				class:plan-item--active={store.onSite}
+				aria-current={store.onSite ? 'true' : undefined}
+				onclick={() => choose(store.site.existing.id)}
+			>{store.site.existing.name}<span class="plan-item-tag">Site</span></button>
+			{#if store.site.plans.length}
+				<ul class="plan-list" aria-label="Plans">
+					{#each store.site.plans as p (p.id)}
+						<li>
+							<button
+								class="plan-item"
+								class:plan-item--active={p.id === store.plan.id}
+								aria-current={p.id === store.plan.id ? 'true' : undefined}
+								onclick={() => choose(p.id)}
+							>{p.name || 'Untitled plan'}</button>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="plan-empty">No plans yet. A plan starts from existing conditions.</p>
+			{/if}
 
 			{#if !store.readOnly}
 				<div class="plan-actions">
@@ -99,9 +114,9 @@
 							<button class="menu-btn" onclick={() => (confirmingDelete = false)}>Cancel</button>
 						</div>
 					{:else}
-						<button class="menu-btn" onclick={newPlan} title="Start from the existing buildings">New plan</button>
-						<button class="menu-btn" onclick={duplicate} title="Copy this plan">Duplicate</button>
-						{#if store.site.plans.length > 1}
+						<button class="menu-btn" onclick={newPlan} title="Start from existing conditions">New plan</button>
+						{#if !store.onSite}
+							<button class="menu-btn" onclick={duplicate} title="Copy this plan">Duplicate</button>
 							<button class="menu-btn menu-btn--quiet" onclick={() => (confirmingDelete = true)}>Delete plan</button>
 						{/if}
 					{/if}
@@ -144,6 +159,14 @@
 		padding: 0;
 		outline: none;
 		caret-color: var(--color-selection);
+	}
+
+	.plan-name-fixed {
+		flex: 1;
+		min-width: 0;
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-text);
 	}
 
 	.plan-name-input:focus { border-bottom-color: var(--color-selection); }
@@ -202,6 +225,33 @@
 	}
 
 	.plan-item:hover { background: var(--fh-linen); }
+
+	.plan-item--site {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		margin-bottom: 0.2rem;
+		padding-bottom: 0.35rem;
+		border-bottom: 1px solid var(--color-border);
+		border-radius: 3px 3px 0 0;
+	}
+
+	/* Plans hang under the site */
+	.plan-list .plan-item { padding-left: 0.9rem; }
+
+	.plan-item-tag {
+		font-size: 0.58rem;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--fh-stone);
+	}
+
+	.plan-empty {
+		margin: 0.2rem 0.4rem 0.1rem;
+		font-size: 0.68rem;
+		color: var(--fh-stone);
+	}
 
 	.plan-item--active {
 		font-weight: 600;

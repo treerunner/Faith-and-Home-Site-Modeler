@@ -74,3 +74,15 @@ test('the scale bar follows the zoom', async ({ page }) => {
 	const viewMeters = 100 * 1.25 ** 4;
 	expect(bar.width).toBeCloseTo(((feet / 3.28084) / viewMeters) * canvas.height, 0);
 });
+
+test('the Social tab scrolls to the end, and long notes show in full', async ({ page }) => {
+	await page.goto('/modeler');
+	await page.getByRole('tab', { name: 'Social' }).click();
+	const notes = page.getByLabel('Notes');
+	await notes.fill(Array.from({ length: 12 }, (_, i) => `Line ${i + 1} of the congregation notes, long enough to wrap.`).join('\n'));
+	await page.locator('.props-panel').evaluate((el) => (el.scrollTop = el.scrollHeight));
+	// The box grows with its text, and the panel scrolls to its bottom edge
+	expect(await notes.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+	const [box, panel] = [await notes.boundingBox(), await page.locator('.props-panel').boundingBox()];
+	expect(box!.y + box!.height).toBeLessThanOrEqual(panel!.y + panel!.height);
+});

@@ -3,14 +3,24 @@ import { store } from './store.svelte';
 import { zoneOutline } from './geo';
 import { polygonArea } from './metrics';
 
-// A 20 x 10 m, 3-story existing building centered on the origin
+// A 20 x 10 m, 3-story existing building centered on the origin, drawn on the site; reuse is
+// proposed in a plan, so this opens one and returns the plan's copy
 function placeBuilding() {
 	store.placePart('rect', 0, 0);
 	const s = store.plan.structures.at(-1)!;
 	s.parts[0].w = 20;
 	s.parts[0].d = 10;
 	store.updateStructure(s.id, { stories: 3, uses: ['worship'] });
-	return s;
+	store.newPlan();
+	return store.plan.structures.find((c) => c.id === s.id)!;
+}
+
+// Makes a change on the site view, then comes back to the plan
+function onSite(change: () => void) {
+	const planId = store.plan.id;
+	store.switchPlan(store.site.existing.id);
+	change();
+	store.switchPlan(planId);
 }
 
 const zonesOf = (id: string) => store.plan.structures.find((s) => s.id === id)?.reuseZones ?? [];
@@ -54,10 +64,11 @@ describe('reuse zones in the store', () => {
 		const z = zonesOf(s.id)[0];
 		store.updateZone(z.id, { floors: [0, 9] });
 		expect(zonesOf(s.id)[0].floors).toEqual([1, 3]); // no basement, 3 stories
-		store.updateStructure(s.id, { basement: true });
+		onSite(() => store.updateStructure(s.id, { basement: true }));
 		store.updateZone(z.id, { floors: [0, 1] });
 		expect(zonesOf(s.id)[0].floors).toEqual([0, 1]);
-		store.updateStructure(s.id, { stories: 2 });
+		onSite(() => store.updateStructure(s.id, { stories: 2 }));
+		expect(zonesOf(s.id)[0].floors).toEqual([0, 1]);
 		store.updateZone(z.id, { floors: [2, 3] });
 		expect(zonesOf(s.id)[0].floors).toEqual([2, 2]);
 	});
@@ -78,10 +89,11 @@ describe('reuse zones in the store', () => {
 		expect(zonesOf(s.id)[0].dwellings).toBeUndefined();
 	});
 
-	it('moves zones to the pieces when the building is cut', () => {
+	it('moves a plan\'s zones to the pieces when the site cuts the building', () => {
 		const s = placeBuilding();
 		store.addWholeBuildingReuse(s.id);
-		store.cutStructure(s.id, [5, -20], [5, 20]); // 15 m and 5 m pieces
+		expect(store.cutStructure(s.id, [5, -20], [5, 20])).toBeNull(); // plans can't cut the site's buildings
+		onSite(() => store.cutStructure(s.id, [5, -20], [5, 20])); // 15 m and 5 m pieces
 		const [original, piece] = store.plan.structures;
 		const area = (st: typeof original) => st.reuseZones!.reduce((sum, z) => sum + polygonArea(zoneOutline(z, st.parts.find((p) => p.id === z.partId)!)), 0);
 		expect(area(original)).toBeCloseTo(150);
@@ -89,13 +101,17 @@ describe('reuse zones in the store', () => {
 		expect(piece.reuseZones![0].partId).toBe(piece.parts[0].id);
 	});
 
-	it('gives a cloned building its own zones on its own parts', () => {
+	it('can\'t clone the site\'s buildings in a plan', () => {
 		const s = placeBuilding();
+		expect(store.duplicateStructure(s.parts[0].id)).toBeNull();
+		expect(store.plan.structures).toHaveLength(1);
+	});
+
+	it('isn\'t offered on the site view', () => {
+		store.placePart('rect', 0, 0);
+		const s = store.plan.structures[0];
 		store.addWholeBuildingReuse(s.id);
-		store.duplicateStructure(s.parts[0].id);
-		const clone = store.plan.structures.at(-1)!;
-		expect(clone.reuseZones![0].partId).toBe(clone.parts[0].id);
-		expect(clone.reuseZones![0].id).not.toBe(zonesOf(s.id)[0].id);
+		expect(s.reuseZones).toBeUndefined();
 	});
 
 	it('starts a New plan with nothing reused', () => {

@@ -37,7 +37,7 @@ function makeSite(overrides: Partial<SitePlan> = {}): SitePlan {
 	return {
 		id: 'site1',
 		name: 'Test',
-		mode: 'grid', slug: 'plan', plans: [],
+		mode: 'grid', slug: 'plan', plans: [], existing: { id: 'ec', name: 'Existing conditions', slug: '', structures: [], openSpaces: [], trees: [], annotations: [] },
 		structures: [makeStructure()],
 		openSpaces: [],
 		trees: [],

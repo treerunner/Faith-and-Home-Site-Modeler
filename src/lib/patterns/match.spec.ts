@@ -9,7 +9,7 @@ const structure = (parts: Part[], overrides: Partial<Structure> = {}): Structure
 	id: `s${n++}`, label: 'S', status: 'existing', uses: [], stories: 2, floorHeight: 3.5, roof: 'flat', parts, provenance: 'user', ...overrides,
 });
 const plan = (structures: Structure[], overrides: Partial<Plan> = {}): Plan => ({ id: 'p', name: 'P', slug: 'p', structures, openSpaces: [], trees: [], annotations: [], ...overrides });
-const site = (overrides: Partial<Site> = {}): Site => ({ id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, plans: [], ...overrides });
+const site = (overrides: Partial<Site> = {}): Site => ({ id: 's', name: 'S', mode: 'grid', context: { buildings: [], roads: [] }, existing: { id: 'ec', name: 'Existing conditions', slug: '', structures: [], openSpaces: [], trees: [], annotations: [] }, plans: [], ...overrides });
 
 // A nave with a touching wing (Box-Plus); the wing's whole footprint reused as housing
 function boxPlusWithHousingReuse(): Plan {

@@ -67,7 +67,7 @@ test('cut a building into pieces: Box-Plus, with an override that persists', asy
 	await expect(typePill(page, 'Object')).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.getByText('Inferred: Box-Plus.')).toBeVisible();
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
-	await expect(page).toHaveURL(/\/modeler\/e2e-split-\d+\/existing-conditions$/);
+	await expect(page).toHaveURL(/\/modeler\/e2e-split-\d+$/);
 	await page.reload();
 	await expect(typePill(page, 'Object')).toHaveAttribute('aria-pressed', 'true');
 	await page.getByRole('button', { name: 'Use inferred' }).click();

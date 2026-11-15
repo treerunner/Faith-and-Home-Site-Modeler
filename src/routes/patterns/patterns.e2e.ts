@@ -15,12 +15,18 @@ test('the analysis names the cell, its pattern and variant, and opens the patter
 	await page.getByRole('button', { name: 'Cut', exact: true }).click();
 	await clickSite(page, 1, -10);
 	await clickSite(page, 1, 10);
-	await page.getByRole('button', { name: 'Reuse whole building' }).click();
 	await page.getByRole('group', { name: 'Site type' }).getByRole('button', { name: 'Urban', exact: true }).click();
 
 	// Open to partners picks the housing partner variant
 	await page.getByRole('tab', { name: 'Social' }).click();
 	await page.getByRole('group', { name: 'Would you partner with a housing or community organization?' }).getByRole('button', { name: 'Open' }).click();
+
+	// Reuse is proposed in a plan
+	await page.getByRole('button', { name: 'New plan' }).click();
+	await page.getByRole('tab', { name: 'Spatial' }).click();
+	const first = page.locator('.struct-row').first();
+	if ((await first.getAttribute('aria-expanded')) !== 'true') await first.click();
+	await page.getByRole('button', { name: 'Reuse whole building' }).click();
 
 	await page.getByRole('button', { name: 'Analysis' }).click();
 	const yours = page.getByRole('region', { name: 'Your pattern' });
@@ -49,14 +55,19 @@ test('an uncovered cell shows the closest written pattern and what differs', asy
 	await page.goto('/modeler');
 	const yours = page.getByRole('region', { name: 'Your pattern' });
 
-	// A new triangular church on a suburban site: an Object, which no new-development pattern covers
+	// A new triangular church on a suburban site: an Object, which no new-development pattern covers.
+	// Drawn in a plan, it's proposed.
+	await page.getByRole('button', { name: 'New plan' }).click();
 	await page.getByLabel('Drag to place Triangle').dragTo(page.locator('.canvas-area canvas'));
-	await page.getByRole('group', { name: 'Status' }).getByRole('button', { name: 'New', exact: true }).click();
 	await page.getByRole('button', { name: 'Analysis' }).click();
 	await expect(yours).toContainText('Choose a site type to place the site in the pattern matrix.');
 	await page.keyboard.press('Escape');
 
+	// Site type is set on the site, and every plan has it
+	await page.locator('.section--site-type').first().getByRole('button', { name: 'Edit on site' }).click();
 	await page.getByRole('group', { name: 'Site type' }).getByRole('button', { name: 'Suburban', exact: true }).click();
+	await page.getByRole('button', { name: 'Choose plan' }).click();
+	await page.getByRole('list', { name: 'Plans' }).getByRole('button', { name: 'New plan' }).click();
 	await page.getByRole('button', { name: 'Analysis' }).click();
 	await expect(yours.locator('.pattern-cell')).toHaveText('Suburban · Object · New development');
 	await expect(yours).toContainText('No pattern written for this combination yet.');

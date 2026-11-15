@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { store } from '../store.svelte';
 	import PlanSwitcher from './PlanSwitcher.svelte';
+	import { syncUrl } from './SiteBar.svelte';
+	import { choicesOn } from '../existing';
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM, fmtSqft } from '../units';
 	import type { BuildingType, CongregationProfile, DevelopmentType, Roof, Site, Status, Structure, Use } from '../types';
@@ -8,11 +10,37 @@
 
 	let sidebarTab = $derived(store.sidebarTab);
 
+	// In a plan, what happens to one of the site's buildings
 	const STATUS_OPTIONS: { value: Status; label: string }[] = [
 		{ value: 'existing', label: 'Existing' },
-		{ value: 'new', label: 'New' },
-		{ value: 'removed', label: 'Removed' },
+		{ value: 'removed', label: 'To be removed' },
 	];
+
+	// Site settings and the site's buildings are edited on the site view
+	function editOnSite() {
+		store.switchPlan(store.site.existing.id);
+		syncUrl();
+	}
+
+	// Deleting a site building drops what plans say about it, so that is confirmed first
+	let confirmDeleteId = $state('');
+	function deleteWarning(id: string): string {
+		if (!store.onSite) return '';
+		const c = choicesOn(store.site, id);
+		const parts = [
+			c.removed && `marked to be removed in ${c.removed} plan${c.removed === 1 ? '' : 's'}`,
+			c.zones && `reuse zones in ${c.zones} plan${c.zones === 1 ? '' : 's'}`,
+			c.added && `added stories in ${c.added} plan${c.added === 1 ? '' : 's'}`,
+		].filter(Boolean);
+		return parts.length ? `This building has ${parts.join(', ')}. Deleting it drops them.` : '';
+	}
+	function deleteStructure(id: string) {
+		if (confirmDeleteId !== id && deleteWarning(id)) confirmDeleteId = id;
+		else {
+			confirmDeleteId = '';
+			store.deleteStructure(id);
+		}
+	}
 
 	const USE_OPTIONS: { value: Use; label: string }[] = [
 		{ value: 'worship', label: 'Worship' },
@@ -157,7 +185,8 @@
 			type="text"
 			aria-label="Site name"
 			placeholder="Untitled Site"
-			disabled={store.readOnly}
+			disabled={store.readOnly || !store.onSite}
+			title={store.onSite ? undefined : 'The site name is edited on the site view'}
 			value={store.site.name}
 			oninput={(e) => store.updateSiteName((e.target as HTMLInputElement).value)}
 		/>
@@ -185,7 +214,10 @@
 		{@const profile = store.site.congregationProfile ?? {}}
 		<div class="section section--props">
 			<h2 class="panel-heading">Congregation</h2>
-			<fieldset class="ro-wrap" disabled={store.readOnly}>
+			{#if !store.onSite}
+				<p class="field-hint site-note">Set for the site. <button class="link-btn" onclick={editOnSite}>Edit on site</button></p>
+			{/if}
+			<fieldset class="ro-wrap" disabled={store.readOnly || !store.onSite}>
 
 			<fieldset class="fieldset">
 				<legend class="field-label">Size</legend>
@@ -272,7 +304,10 @@
 	{#if sidebarTab === 'spatial'}
 	<div class="section section--site-type">
 		<h2 class="panel-heading">Site type</h2>
-		<fieldset class="ro-wrap" disabled={store.readOnly}>
+		{#if !store.onSite}
+			<p class="field-hint site-note">Set for the site. <button class="link-btn" onclick={editOnSite}>Edit on site</button></p>
+		{/if}
+		<fieldset class="ro-wrap" disabled={store.readOnly || !store.onSite}>
 			<div class="pill-group" role="group" aria-label="Site type">
 				{#each SITE_TYPES as t (t.value)}
 					{@const on = store.site.siteType === t.value}
@@ -306,7 +341,7 @@
 					>{BUILDING_TYPE_LABELS[t]}</button>
 				{/each}
 			</div>
-			<fieldset class="fieldset front-question">
+			<fieldset class="fieldset front-question" disabled={!store.onSite}>
 				<legend class="field-label culture-question">Does the main building have a clear front?</legend>
 				<div class="pill-group">
 					{#each FRONT_OPTIONS as opt (opt.value)}
@@ -336,6 +371,9 @@
 
 	<div class="section section--site-type">
 		<h2 class="panel-heading">Development type</h2>
+		{#if store.onSite}
+			<p class="field-hint site-type-hint">Existing conditions: what stands today. Each plan proposes the rest.</p>
+		{:else}
 		<fieldset class="ro-wrap" disabled={store.readOnly}>
 			<div class="pill-group" role="group" aria-label="Development type">
 				{#each DEVELOPMENT_TYPES as t (t)}
@@ -360,6 +398,7 @@
 				<p class="field-hint site-type-hint">Add structures to infer a type</p>
 			{/if}
 		</fieldset>
+		{/if}
 	</div>
 
 	<div class="section">
@@ -371,6 +410,7 @@
 			<ul class="struct-list" role="list">
 				{#each structures as s (s.id)}
 					{@const isOpen = expandedId === s.id}
+					{@const locked = store.isLocked(s.id)}
 					<li class="struct-item" class:struct-item--open={isOpen}>
 						<button
 							class="struct-row"
@@ -384,23 +424,19 @@
 							{#if s.groupId}
 								<span class="group-badge" title="Grouped — moves with linked structures">⚭</span>
 							{/if}
+							{#if s.status === 'existing' && s.addedStories}
+								<span class="added-badge" title="Stories added in this plan">+{s.addedStories}</span>
+							{/if}
 							<span class="status-chip" style="background:{statusColor(s.status)}" aria-label={s.status}></span>
 						</button>
 
 						{#if isOpen}
 							<div class="struct-props">
 								<fieldset class="ro-wrap" disabled={store.readOnly}>
-								<label class="field-label" for="struct-label-{s.id}">Label</label>
-								<input
-									id="struct-label-{s.id}"
-									class="text-input"
-									type="text"
-									value={s.label}
-									oninput={(e) => store.updateStructure(s.id, { label: (e.target as HTMLInputElement).value })}
-								/>
-
+								{#if locked}
+									<p class="field-hint site-note">Shape, height and uses are set on the site. <button class="link-btn" onclick={editOnSite}>Edit on site</button></p>
 								<fieldset class="fieldset">
-									<legend class="field-label">Status</legend>
+									<legend class="field-label">In this plan</legend>
 									<div class="pill-group">
 										{#each STATUS_OPTIONS as opt (opt.value)}
 											<button
@@ -414,7 +450,7 @@
 									{#if confirmStatus?.id === s.id}
 										{@const n = s.reuseZones?.length ?? 0}
 										<p class="field-hint confirm-hint">
-											Reuse happens in existing buildings. This drops its {n} reuse zone{n === 1 ? '' : 's'}.
+											Reuse happens in buildings that stay. This drops its {n} reuse zone{n === 1 ? '' : 's'}.
 											<span class="action-row">
 												<button class="delete-btn" onclick={() => { store.updateStructure(s.id, { status: confirmStatus!.status }); confirmStatus = null; }}>Change</button>
 												<button class="split-btn" onclick={() => (confirmStatus = null)}>Cancel</button>
@@ -422,6 +458,31 @@
 										</p>
 									{/if}
 								</fieldset>
+								{#if s.status === 'existing'}
+									<div class="field-group">
+										<label class="field-label" for="struct-added-{s.id}">Added stories</label>
+										<input
+											id="struct-added-{s.id}"
+											class="num-input"
+											type="number"
+											min="0"
+											max="20"
+											value={s.addedStories ?? 0}
+											oninput={(e) => store.updateStructure(s.id, { addedStories: Number((e.target as HTMLInputElement).value) })}
+										/>
+										<span class="field-hint">New construction on top of its {s.stories}</span>
+									</div>
+								{/if}
+								{/if}
+								<fieldset class="ro-wrap" disabled={locked}>
+								<label class="field-label" for="struct-label-{s.id}">Label</label>
+								<input
+									id="struct-label-{s.id}"
+									class="text-input"
+									type="text"
+									value={s.label}
+									oninput={(e) => store.updateStructure(s.id, { label: (e.target as HTMLInputElement).value })}
+								/>
 
 								<fieldset class="fieldset">
 									<legend class="field-label">Uses</legend>
@@ -529,6 +590,7 @@
 									Basement
 									<span class="field-hint basement-hint">+1 below-grade floor to GFA</span>
 								</label>
+								</fieldset>
 
 								<label class="field-label" for="struct-roof-{s.id}">Roof</label>
 								<select
@@ -545,7 +607,7 @@
 									{/each}
 								</select>
 
-								{#if s.status === 'existing'}
+								{#if locked && s.status === 'existing'}
 									{@const zones = s.reuseZones ?? []}
 									<div class="reuse-section" aria-label="Reuse">
 										<span class="field-label">Reuse</span>
@@ -603,15 +665,23 @@
 										</div>
 									</div>
 								{/if}
-								<div class="action-row">
-									<button class="split-btn" onclick={() => store.startCutting(s.id)} title="Cut into pieces, like additions">Cut</button>
-									{#if s.groupId}
-										<button class="split-btn" onclick={() => store.ungroupStructure(s.id)}>
-											Ungroup
-										</button>
+								{#if !locked}
+									{#if confirmDeleteId === s.id}
+										<p class="field-hint confirm-hint">{deleteWarning(s.id)}</p>
 									{/if}
-									<button class="delete-btn" onclick={() => store.deleteStructure(s.id)}>Delete</button>
-								</div>
+									<div class="action-row">
+										<button class="split-btn" onclick={() => store.startCutting(s.id)} title="Cut into pieces, like additions">Cut</button>
+										{#if s.groupId}
+											<button class="split-btn" onclick={() => store.ungroupStructure(s.id)}>
+												Ungroup
+											</button>
+										{/if}
+										<button class="delete-btn" onclick={() => deleteStructure(s.id)}>{confirmDeleteId === s.id ? 'Delete anyway' : 'Delete'}</button>
+										{#if confirmDeleteId === s.id}
+											<button class="split-btn" onclick={() => (confirmDeleteId = '')}>Cancel</button>
+										{/if}
+									</div>
+								{/if}
 								</fieldset>
 							</div>
 						{/if}
@@ -763,6 +833,15 @@
 		cursor: pointer;
 	}
 	.site-type-hint { display: block; margin-top: 0.35rem; }
+	.site-note { display: block; margin: 0 0 0.4rem; }
+	.added-badge {
+		font-size: 0.62rem;
+		font-weight: 600;
+		padding: 0 0.25rem;
+		border-radius: 3px;
+		background: var(--color-new);
+		color: var(--fh-black);
+	}
 	.height-hint { display: block; margin: 0.15rem 0 0.35rem; }
 	.height-hint--confirm { color: #9a5a10; }
 
@@ -795,6 +874,9 @@
 		overflow-y: auto;
 		user-select: none;
 	}
+
+	/* Sections keep their height and the panel scrolls; a flex column would squeeze them instead */
+	.props-panel > :global(*) { flex-shrink: 0; }
 
 	.site-name-row {
 		padding: 0.5rem 0.6rem 0.15rem;
@@ -849,6 +931,7 @@
 	.textarea-input {
 		resize: vertical;
 		min-height: 60px;
+		field-sizing: content; /* grows with the notes, so all of it reads */
 		font-family: inherit;
 		line-height: 1.4;
 	}

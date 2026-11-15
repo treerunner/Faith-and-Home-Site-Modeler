@@ -1,4 +1,4 @@
-import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, ReuseZone, Site, Structure, Terrain, Tree, Use } from './types';
+import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, ReuseZone, Roof, Site, Structure, Terrain, Tree, Use } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
 import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
 import { putSite } from './api';
@@ -24,6 +24,7 @@ import { partFootprint, polygonArea } from './metrics';
 import { contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } from './view';
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
+import { freshStructures, storedSite, syncPlan } from './existing';
 
 const PART_DEFAULTS: Record<PaletteShape, { w: number; d: number }> = {
 	rect: { w: 10, d: 6 },
@@ -61,15 +62,14 @@ function makePlan(name: string, content: Partial<Plan> = {}): Plan {
 }
 
 function makeSite(): Site {
-	const site: Site = {
+	return {
 		id: crypto.randomUUID(),
 		name: '',
 		mode: 'grid',
 		context: { buildings: [], roads: [] },
-		plans: [makePlan(DEFAULT_PLAN_NAME)],
+		existing: makePlan(DEFAULT_PLAN_NAME),
+		plans: [],
 	};
-	assignPlanSlugs(site);
-	return site;
 }
 
 class ModelerStore {
@@ -135,7 +135,7 @@ class ModelerStore {
 	// Start a blank, unsaved site (the /modeler route).
 	newSite() {
 		const site = makeSite();
-		this.#reset(site, '', site.plans[0].id, false);
+		this.#reset(site, '', site.existing.id, false);
 	}
 
 	loadSite(site: Site, siteSlug: string, planId: string, readOnly: boolean) {
@@ -160,13 +160,41 @@ class ModelerStore {
 
 	// ── Plans ────────────────────────────────────────────────────────────────
 
-	// The plan being viewed and edited. Falls back to the first plan if the id is stale.
+	// The site view: existing conditions, where the site and its buildings are edited
+	get onSite(): boolean {
+		return this.plan === this.site.existing;
+	}
+
+	// What's being viewed and edited: existing conditions on the site view, or a plan. Falls back
+	// to the site view if the id is stale.
 	get plan(): Plan {
-		return this.site.plans.find((p) => p.id === this.activePlanId) ?? this.site.plans[0];
+		return this.site.plans.find((p) => p.id === this.activePlanId) ?? this.site.existing;
+	}
+
+	// In a plan, the site's pieces can't be moved, reshaped, cut or deleted: only marked to be
+	// removed, reused, raised or given another roof (see existing.ts)
+	isLocked(structureId: string): boolean {
+		return !this.onSite && this.site.existing.structures.some((s) => s.id === structureId);
+	}
+
+	#lockedPart(partId: string): boolean {
+		const owner = this.plan.structures.find((s) => s.parts.some((p) => p.id === partId));
+		return !!owner && this.isLocked(owner.id);
+	}
+
+	// Plans pick up what changed on the site, keeping their choices
+	#syncPlans() {
+		const existing = copy(this.site.existing);
+		this.site.plans.forEach((p, i) => {
+			const now = copy(p);
+			const next = syncPlan(existing, now);
+			if (JSON.stringify(next) !== JSON.stringify(now)) this.site.plans[i] = next;
+		});
 	}
 
 	// Plan switches, adds and deletes clear history, so undo never restores a plan that's gone
 	#selectPlan(id: string) {
+		this.#syncPlans();
 		this.activePlanId = id;
 		this.mode = { type: 'idle' };
 		this.activeStructureId = '';
@@ -175,10 +203,11 @@ class ModelerStore {
 	}
 
 	switchPlan(id: string) {
-		if (id !== this.plan.id && this.site.plans.some((p) => p.id === id)) this.#selectPlan(id);
+		if (id !== this.plan.id && (id === this.site.existing.id || this.site.plans.some((p) => p.id === id))) this.#selectPlan(id);
 	}
 
 	renamePlan(name: string) {
+		if (this.onSite) return; // existing conditions keep their name
 		this.#pushUndo();
 		this.plan.name = name;
 	}
@@ -189,28 +218,26 @@ class ModelerStore {
 		this.#selectPlan(plan.id);
 	}
 
-	// A fresh proposal: the buildings as they stand today, without proposed ones.
+	// A fresh proposal: the site's buildings as they stand, and copies of its open spaces and
+	// trees, which plans reshape freely
 	newPlan() {
-		const current = copy(this.plan);
-		const structures = current.structures
-			.filter((s) => s.status !== 'new')
-			// A fresh proposal starts from the buildings as they stand: nothing reused yet
-			.map((s) => ({ ...s, status: 'existing' as const, reuseZones: undefined }));
+		const existing = copy(this.site.existing);
 		this.#addPlan(
-			makePlan('New plan', { structures, openSpaces: current.openSpaces, trees: current.trees }),
+			makePlan('New plan', { structures: freshStructures(existing), openSpaces: existing.openSpaces, trees: existing.trees }),
 		);
 	}
 
 	duplicatePlan() {
+		if (this.onSite) return this.newPlan();
 		const current = copy(this.plan);
 		this.#addPlan({ ...current, id: crypto.randomUUID(), name: `${current.name} copy`, slug: '', oldSlugs: undefined });
 	}
 
+	// Plans only: existing conditions are the site
 	deletePlan(id: string) {
-		if (this.site.plans.length <= 1) return;
 		const idx = this.site.plans.findIndex((p) => p.id === id);
 		if (idx === -1) return;
-		const stayOn = this.plan.id === id ? this.site.plans[idx === 0 ? 1 : idx - 1].id : this.plan.id;
+		const stayOn = this.plan.id === id ? (this.site.plans[idx - 1] ?? this.site.plans[idx + 1] ?? this.site.existing).id : this.plan.id;
 		this.site.plans.splice(idx, 1);
 		this.#selectPlan(stayOn);
 	}
@@ -226,10 +253,12 @@ class ModelerStore {
 
 	async #doSave(): Promise<boolean> {
 		assignPlanSlugs(this.site); // renamed plans get new slugs; old ones are kept for redirects
+		this.#syncPlans();
 		const json = JSON.stringify($state.snapshot(this.site));
+		const stored = JSON.stringify(storedSite($state.snapshot(this.site) as Site));
 		this.saveState = 'saving';
 		try {
-			const ref = await putSite(json, this.site.id);
+			const ref = await putSite(stored, this.site.id);
 			this.siteSlug = ref.slug;
 			this.#savedJson = json;
 			this.isPersisted = true;
@@ -322,7 +351,7 @@ class ModelerStore {
 	// No #pushUndo() here — startDragging captures the state including the clone.
 	duplicateStructure(partId: string): string | null {
 		const srcStructure = this.plan.structures.find((s) => s.parts.some((p) => p.id === partId));
-		if (!srcStructure) return null;
+		if (!srcStructure || this.isLocked(srcStructure.id)) return null;
 		const snapshot = copy(srcStructure);
 		const partIndex = snapshot.parts.findIndex((p) => p.id === partId);
 		const newParts = snapshot.parts.map((p) => ({ ...p, id: crypto.randomUUID() }));
@@ -351,12 +380,13 @@ class ModelerStore {
 
 	addWholeBuildingReuse(structureId: string) {
 		const s = this.plan.structures.find((s) => s.id === structureId);
-		if (!s || s.status !== 'existing') return;
+		if (!s || s.status !== 'existing' || this.onSite) return;
 		this.#pushUndo();
 		this.#newZones(s, s.parts.map((p) => ({ partId: p.id, points: wholePartZone(p) })));
 	}
 
 	startDrawingZone(structureId: string) {
+		if (this.onSite) return; // reuse is proposed in plans
 		this.mode = { type: 'drawingZone', structureId, points: [] };
 	}
 
@@ -413,6 +443,7 @@ class ModelerStore {
 	// ── Cutting ──────────────────────────────────────────────────────────────
 
 	startCutting(structureId: string) {
+		if (this.isLocked(structureId)) return;
 		this.mode = { type: 'cutting', structureId };
 	}
 
@@ -436,74 +467,103 @@ class ModelerStore {
 	// its own stories, roof, status and uses (additions often differ). Returns the kept part's id,
 	// or null if the line misses.
 	cutStructure(id: string, a: [number, number], b: [number, number]): string | null {
+		if (this.isLocked(id)) return null;
 		const structure = this.plan.structures.find((s) => s.id === id);
 		if (!structure) return null;
 		const cuts = structure.parts.map((part) => ({ part, pieces: splitPart(part, a, b) }));
 		if (!cuts.some((c) => c.pieces)) return null;
 		this.#pushUndo();
 
-		// Zones on cut parts, in site coordinates, to re-clip against the pieces below
 		const cutPartIds = new Set(cuts.filter((c) => c.pieces).map((c) => c.part.id));
-		const movingZones = (structure.reuseZones ?? [])
-			.filter((z) => cutPartIds.has(z.partId))
-			.map((z) => ({ zone: copy(z), outline: zoneOutline(z, structure.parts.find((p) => p.id === z.partId)!) }));
-		const zonesFor = (parts: Part[], keep: ReuseZone[] = []): ReuseZone[] | undefined => {
-			const zones = [
-				...keep,
-				...parts.flatMap((part) =>
-					movingZones.flatMap(({ zone, outline }) =>
-						clipToPart(outline, part).map((points) => ({ ...zone, id: crypto.randomUUID(), partId: part.id, points })),
-					),
-				),
-			];
-			return zones.length ? zones : undefined;
-		};
-		const keptZones = (structure.reuseZones ?? []).filter((z) => !cutPartIds.has(z.partId));
-
 		const kept = cuts.filter((c) => !c.pieces).map((c) => c.part);
 		const pieces: Part[] = cuts
 			.flatMap((c) => c.pieces ?? [])
 			.map((g) => ({ id: crypto.randomUUID(), ...g }))
 			.sort((p, q) => partFootprint(q) - partFootprint(p));
 		const [largest, ...rest] = pieces;
+		const restIds = rest.map(() => crypto.randomUUID());
 		const groupId = structure.groupId ?? crypto.randomUUID();
 		// Gables need rectangles; irregular pieces fall back to flat, as the roof menu does
-		const roofFor = (parts: Part[]) =>
-			structure.roof === 'gable' && parts.some((p) => p.shape !== 'rect' && p.shape !== 'square') ? 'flat' : structure.roof;
+		const roofFor = (roof: Roof, parts: Part[]) =>
+			roof === 'gable' && parts.some((p) => p.shape !== 'rect' && p.shape !== 'square') ? 'flat' : roof;
 
-		structure.parts = [...kept, largest];
-		structure.groupId = groupId;
-		structure.reuseZones = zonesFor([largest], keptZones);
-		const template = copy(structure);
-		structure.roof = roofFor(structure.parts);
-		rest.forEach((part, i) => {
-			this.plan.structures.push({
-				...template,
-				id: crypto.randomUUID(),
-				label: `${template.label} ${i + 2}`,
-				parts: [part],
-				roof: roofFor([part]),
-				dwellings: undefined, // stays with the original piece
-				reuseZones: zonesFor([part]),
+		// Cuts one copy of the structure: its zones on cut parts are re-clipped onto the pieces.
+		// On the site, every plan's copy is cut the same way, so its choices carry to each piece.
+		const cutCopy = (target: Structure) => {
+			const original = copy(target);
+			const movingZones = (original.reuseZones ?? [])
+				.filter((z) => cutPartIds.has(z.partId))
+				.map((z) => ({ zone: z, outline: zoneOutline(z, original.parts.find((p) => p.id === z.partId)!) }));
+			const zonesFor = (parts: Part[], keep: ReuseZone[] = []): ReuseZone[] | undefined => {
+				const zones = [
+					...keep,
+					...parts.flatMap((part) =>
+						movingZones.flatMap(({ zone, outline }) =>
+							clipToPart(outline, part).map((points) => ({ ...zone, id: crypto.randomUUID(), partId: part.id, points })),
+						),
+					),
+				];
+				return zones.length ? zones : undefined;
+			};
+			const list = this.#listOf(target);
+			target.parts = [...kept.map((p) => copy(p)), copy(largest)];
+			target.groupId = groupId;
+			target.reuseZones = zonesFor([largest], (original.reuseZones ?? []).filter((z) => !cutPartIds.has(z.partId)));
+			target.roof = roofFor(original.roof, target.parts);
+			if (target.planRoof) target.planRoof = roofFor(target.planRoof, target.parts);
+			rest.forEach((part, i) => {
+				list.push({
+					...copy(original),
+					id: restIds[i],
+					label: `${original.label} ${i + 2}`,
+					parts: [copy(part)],
+					groupId,
+					roof: roofFor(original.roof, [part]),
+					planRoof: original.planRoof ? roofFor(original.planRoof, [part]) : undefined,
+					dwellings: undefined, // stays with the original piece
+					reuseZones: zonesFor([part]),
+				});
 			});
-		});
+		};
+		const planCopies = this.onSite ? this.#planCopies(id) : [];
+		cutCopy(structure);
+		planCopies.forEach(cutCopy);
 		return largest.id;
 	}
 
 	splitStructure(id: string) {
+		if (this.isLocked(id)) return;
 		this.#pushUndo();
 		const structure = this.plan.structures.find((s) => s.id === id);
 		if (!structure || structure.parts.length <= 1) return;
 		const snap = copy(structure);
-		const zonesOn = (part: Part) => {
-			const zones = snap.reuseZones?.filter((z) => z.partId === part.id);
-			return zones?.length ? zones : undefined;
-		};
-		structure.parts = [snap.parts[0]];
-		structure.reuseZones = zonesOn(snap.parts[0]);
-		for (const part of snap.parts.slice(1)) {
-			this.plan.structures.push({ ...snap, id: crypto.randomUUID(), parts: [part], reuseZones: zonesOn(part) });
+		const newIds = snap.parts.slice(1).map(() => crypto.randomUUID());
+		// On the site, each plan's copy splits the same way and keeps its choices on every piece
+		const targets = this.onSite ? [structure, ...this.#planCopies(id)] : [structure];
+		for (const target of targets) {
+			const before = copy(target);
+			const zonesOn = (part: Part) => {
+				const zones = before.reuseZones?.filter((z) => z.partId === part.id);
+				return zones?.length ? zones : undefined;
+			};
+			const list = this.#listOf(target);
+			target.parts = [snap.parts[0]];
+			target.reuseZones = zonesOn(snap.parts[0]);
+			snap.parts.slice(1).forEach((part, i) => {
+				list.push({ ...before, id: newIds[i], parts: [part], reuseZones: zonesOn(part) });
+			});
 		}
+	}
+
+	// Each plan's copy of a site piece
+	#planCopies(structureId: string): Structure[] {
+		return this.site.plans.flatMap((p) => p.structures.filter((s) => s.id === structureId));
+	}
+
+	// The structure list that holds a structure: the current plan's, or a plan's on the site view
+	#listOf(structure: Structure): Structure[] {
+		if (this.plan.structures.includes(structure)) return this.plan.structures;
+		return this.site.plans.find((p) => p.structures.includes(structure))?.structures ?? this.plan.structures;
 	}
 
 	placePart(shape: PaletteShape, x: number, y: number) {
@@ -522,7 +582,8 @@ class ModelerStore {
 		const s: Structure = {
 			id: crypto.randomUUID(),
 			label: 'Structure',
-			status: 'existing',
+			// Drawn on the site, a building stands; drawn in a plan, it's proposed
+			status: this.onSite ? 'existing' : 'new',
 			uses: [],
 			stories: 1,
 			floorHeight: 3.5,
@@ -540,7 +601,7 @@ class ModelerStore {
 		const s: Structure = {
 			id: crypto.randomUUID(),
 			label: 'Structure',
-			status: 'existing',
+			status: this.onSite ? 'existing' : 'new',
 			uses: [],
 			stories: 1,
 			floorHeight: 3.5,
@@ -571,13 +632,30 @@ class ModelerStore {
 	updateStructure(
 		id: string,
 		patch: Partial<
-			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof' | 'useWeights' | 'dwellings' | 'basement'>
+			Pick<Structure, 'label' | 'status' | 'uses' | 'stories' | 'floorHeight' | 'roof' | 'useWeights' | 'dwellings' | 'basement' | 'addedStories'>
 		>,
 	) {
-		this.#pushUndo();
 		const s = this.plan.structures.find((s) => s.id === id);
 		if (!s) return;
-		Object.assign(s, patch);
+		if (this.isLocked(id)) {
+			// A plan decides what happens to a site piece: removed, raised, re-roofed. The rest is the site's.
+			const base = this.site.existing.structures.find((b) => b.id === id)!;
+			const { status, roof, addedStories } = patch;
+			if (status === 'new' || (status === undefined && roof === undefined && addedStories === undefined)) return;
+			this.#pushUndo();
+			if (status) s.status = status;
+			if (roof) {
+				s.roof = roof;
+				s.planRoof = roof === base.roof ? undefined : roof;
+			}
+			if (addedStories !== undefined) s.addedStories = Math.max(0, Math.round(addedStories)) || undefined;
+			if (s.status !== 'existing') s.reuseZones = undefined;
+			return;
+		}
+		// Status follows from where a piece is drawn: the site's stand, a plan's are proposed
+		const { status: _status, addedStories: _added, ...rest } = patch;
+		this.#pushUndo();
+		Object.assign(s, rest);
 		// Prefilled heights are marked until someone confirms them by editing
 		if (patch.stories !== undefined || patch.floorHeight !== undefined) s.heightSource = undefined;
 		// Reuse happens in existing buildings only, and within their floors
@@ -586,6 +664,7 @@ class ModelerStore {
 	}
 
 	deleteStructure(id: string) {
+		if (this.isLocked(id)) return;
 		this.#pushUndo();
 		const idx = this.plan.structures.findIndex((s) => s.id === id);
 		if (idx === -1) return;
@@ -720,6 +799,10 @@ class ModelerStore {
 	}
 
 	startDragging(id: string, offsetX: number, offsetY: number, cloning = false) {
+		if (this.#lockedPart(id)) {
+			this.mode = { type: 'selected', partId: id };
+			return;
+		}
 		this.#pushUndo();
 		this.#gestureDidMutate = false;
 		const structure = this.plan.structures.find((s) => s.parts.some((p) => p.id === id));
@@ -813,7 +896,8 @@ class ModelerStore {
 	#groupStructures(id1: string, id2: string) {
 		const s1 = this.plan.structures.find((s) => s.id === id1);
 		const s2 = this.plan.structures.find((s) => s.id === id2);
-		if (!s1 || !s2) return;
+		// A plan's addition touching a site piece is one building by touch alone; the site's groups stay the site's
+		if (!s1 || !s2 || this.isLocked(id1) || this.isLocked(id2)) return;
 		if (s1.groupId !== undefined && s1.groupId === s2.groupId) return;
 		const groupId = s1.groupId ?? s2.groupId ?? crypto.randomUUID();
 		s1.groupId = groupId;
@@ -821,6 +905,7 @@ class ModelerStore {
 	}
 
 	ungroupStructure(id: string) {
+		if (this.isLocked(id)) return;
 		this.#pushUndo();
 		const structure = this.plan.structures.find((s) => s.id === id);
 		if (!structure?.groupId) return;
@@ -833,7 +918,7 @@ class ModelerStore {
 
 	startResizing(id: string, handle: ResizeHandle) {
 		const part = this.#findPart(id);
-		if (!part) return;
+		if (!part || this.#lockedPart(id)) return;
 		this.#pushUndo();
 		this.#gestureDidMutate = false;
 		// anchor = corner opposite the dragged handle, rotated to world space
@@ -894,7 +979,7 @@ class ModelerStore {
 
 	startRotating(id: string, mouseX: number, mouseY: number) {
 		const part = this.#findPart(id);
-		if (!part) return;
+		if (!part || this.#lockedPart(id)) return;
 		this.#pushUndo();
 		this.#gestureDidMutate = false;
 		const startAngle = Math.atan2(mouseY - part.y, mouseX - part.x) * (180 / Math.PI);
@@ -927,6 +1012,7 @@ class ModelerStore {
 	}
 
 	rotatePart(id: string, delta: number) {
+		if (this.#lockedPart(id)) return;
 		this.#pushUndo();
 		this.#mutPart(id, (p) => {
 			p.rotation = ((p.rotation + delta) % 360 + 360) % 360;
@@ -936,7 +1022,7 @@ class ModelerStore {
 	deletePart(id: string) {
 		// Delete the entire structure that owns this part (1 part = 1 structure)
 		const owner = this.plan.structures.find((s) => s.parts.some((p) => p.id === id));
-		if (owner) {
+		if (owner && !this.isLocked(owner.id)) {
 			this.#pushUndo();
 			const wasActive = this.activeStructureId === owner.id;
 			this.plan.structures.splice(this.plan.structures.indexOf(owner), 1);
@@ -972,6 +1058,7 @@ class ModelerStore {
 
 	// The current plan's development type: undefined goes back to the inferred one
 	setDevelopmentTypeOverride(type: DevelopmentType | undefined) {
+		if (this.onSite) return; // existing conditions are what they are
 		this.#pushUndo();
 		this.plan.developmentTypeOverride = type;
 	}
@@ -1141,7 +1228,7 @@ class ModelerStore {
 		this.fitPlan();
 	}
 
-	// Adds the parcel's buildings to the current plan as existing structures. They leave the
+	// Adds the parcel's buildings to existing conditions. They leave the
 	// foam context, since the model now has them as chipboard.
 	prefillBuildings() {
 		const prefill = this.setup?.prefill;
@@ -1151,7 +1238,7 @@ class ModelerStore {
 		for (const b of prefill) {
 			const { stories, floorHeight, source } = storiesFromTags(b.tags);
 			const kind = b.tags.building;
-			this.plan.structures.push({
+			this.site.existing.structures.push({
 				id: crypto.randomUUID(),
 				label: b.name ?? (kind && kind !== 'yes' ? titleCase(kind) : 'Structure'),
 				status: 'existing',
@@ -1209,6 +1296,7 @@ class ModelerStore {
 	}
 
 	updateSiteName(name: string) {
+		if (!this.onSite) return; // the site's name is edited on the site view
 		this.#pushUndo();
 		this.site.name = name;
 	}

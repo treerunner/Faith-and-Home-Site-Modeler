@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { syncUrl } from './SiteBar.svelte';
 	import { store } from '../store.svelte';
 	import { fetchContext, fetchGeocode, fetchSuggestions, type Suggestion } from '../address';
 
@@ -99,7 +100,11 @@
 <section class="address" aria-label="Address">
 	<h2 class="address__heading">Address</h2>
 
-	{#if store.site.address}
+	<!-- The address and neighborhood belong to the site; plans show them -->
+	{#if !store.onSite}
+		<p class="address__current">{store.site.address ?? 'No address'}</p>
+		<p class="address__note">Set for the site. <button class="address__link address__edit" onclick={() => { store.switchPlan(store.site.existing.id); syncUrl(); }}>Edit on site</button></p>
+	{:else if store.site.address}
 		<p class="address__current">{store.site.address}</p>
 		{#if confirmingClear}
 			<p class="address__note">Clear the address and neighborhood? Structures stay.</p>
@@ -269,6 +274,8 @@
 
 	.address__btn--danger { border-color: #c8a090; color: #9a3a2a; }
 	.address__btn--danger:hover { background: #fdf0ee; }
+
+	.address__link.address__edit { margin-left: 0; }
 
 	.address__link {
 		border: none;

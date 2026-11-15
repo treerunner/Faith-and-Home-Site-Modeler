@@ -16,17 +16,22 @@ async function clickSite(page: Page, x: number, y: number) {
 	await page.mouse.click(box.x + box.width / 2 + x * s, box.y + box.height / 2 + y * s);
 }
 
-const statusPills = (page: Page) => page.getByRole('group', { name: 'Status' }).getByRole('button');
+const statusPills = (page: Page) => page.getByRole('group', { name: 'In this plan' }).getByRole('button');
 const zoneUnits = (page: Page) => page.locator('.zone-props').getByLabel('Housing units');
 
 test('reuse part of an existing building: zones, floors, housing units', async ({ page }) => {
 	await page.goto('/modeler');
 	const canvas = page.locator('.canvas-area canvas');
 	await page.getByLabel('Drag to place Square').dragTo(canvas);
-	await page.getByLabel('Stories').fill('3');
+	await page.getByLabel('Stories', { exact: true }).fill('3');
+	// Reuse is proposed in a plan, on a building the site has
+	await expect(page.getByRole('button', { name: 'Reuse whole building' })).toHaveCount(0);
+	await page.getByRole('button', { name: 'New plan' }).click();
+	// Still open from the site view
+	await expect(page.getByRole('button', { name: 'Collapse Structure' })).toBeVisible();
 
-	// Status is what stands; reuse is its own section
-	await expect(statusPills(page)).toHaveText(['Existing', 'New', 'Removed']);
+	// The plan keeps the building or removes it; reuse is its own section
+	await expect(statusPills(page)).toHaveText(['Existing', 'To be removed']);
 
 	// Whole building
 	await page.getByRole('button', { name: 'Reuse whole building' }).click();
@@ -59,9 +64,9 @@ test('reuse part of an existing building: zones, floors, housing units', async (
 	await expect(page.getByText('2 adaptive reuse')).toBeVisible();
 	await page.keyboard.press('Escape');
 
-	// Changing the building to New asks first, because its zone would go
-	await statusPills(page).filter({ hasText: 'New' }).click();
-	await expect(page.getByText('Reuse happens in existing buildings. This drops its 1 reuse zone.')).toBeVisible();
+	// Removing the building asks first, because its zone would go
+	await statusPills(page).filter({ hasText: 'To be removed' }).click();
+	await expect(page.getByText('Reuse happens in buildings that stay. This drops its 1 reuse zone.')).toBeVisible();
 	await page.getByRole('button', { name: 'Cancel' }).click();
 	await expect(page.locator('.zone-row')).toHaveCount(1);
 });
@@ -84,7 +89,9 @@ test('a site saved with the old Reuse status opens as Existing with a reuse zone
 	expect(res.ok()).toBe(true);
 	const { slug } = await res.json();
 
-	await page.goto(`/modeler/${slug}`);
+	// The old plan proposed reuse, so it stays a plan, renamed: existing conditions are the site
+	await page.goto(`/modeler/${slug}/existing-conditions`);
+	await expect(page).toHaveURL(new RegExp(`/modeler/${slug}/plan-1$`));
 	await page.getByRole('button', { name: 'Expand Old school' }).click();
 	await expect(statusPills(page).filter({ hasText: 'Existing' })).toHaveClass(/pill--active/);
 	await expect(page.locator('.zone-row')).toHaveText(/Floors 1–2\s*Housing/);
