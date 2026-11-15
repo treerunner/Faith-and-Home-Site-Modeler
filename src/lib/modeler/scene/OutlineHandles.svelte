@@ -5,7 +5,8 @@
 	import { partOutline } from '../geo';
 
 	// Point handles for an outline in plan view: one at every point to drag it, and a smaller one
-	// at each edge's midpoint that drags out a new point. Alt-click a point to remove it.
+	// at each edge's midpoint that drags out a new point. Double-click a point to remove it; hold
+	// Alt to drag without snapping.
 
 	interface Props {
 		part: Part;

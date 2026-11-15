@@ -36,14 +36,43 @@ test('draw a structure point by point, snapped to its neighbor, then move its po
 	await page.mouse.down();
 	await page.mouse.move(at(16, -3).x, at(16, -3).y, { steps: 5 });
 	await page.mouse.up();
-	// Zoomed in, with its point handles showing
-	for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Zoom in' }).click();
-	await page.waitForTimeout(300);
-	await page.screenshot({ path: 'tests/screenshots/draw-outline.png' });
 	expect(await footprint(page)).not.toBe(before);
+
+	// Near the square's corner a point snaps back onto it; with Alt held it can overhang
+	const drag = async (from: [number, number], to: [number, number], free = false) => {
+		await page.mouse.click(at(8, 0).x, at(8, 0).y); // select the addition
+		await page.waitForTimeout(150); // its point handles appear
+		await page.mouse.move(at(...from).x, at(...from).y);
+		if (free) await page.keyboard.down('Alt');
+		await page.mouse.down();
+		await page.mouse.move(at(...to).x, at(...to).y, { steps: 5 });
+		await page.mouse.up();
+		if (free) await page.keyboard.up('Alt');
+	};
+	const grown = await footprint(page);
+	await drag([3, 3], [3.3, 3.2]);
+	expect(await footprint(page)).toBe(grown);
+	await drag([3, 3], [2.4, 3.6], true);
+	expect(await footprint(page)).not.toBe(grown);
+
+	await expect(page.locator('.struct-item')).toHaveCount(2);
+	await expect(page.getByLabel('Sits on')).toHaveCount(0); // still on the ground, beside the square
+
+	// Double-click a point to remove it
+	const overhang = await footprint(page);
+	await page.mouse.click(at(8, 0).x, at(8, 0).y);
+	await page.waitForTimeout(150);
+	await page.mouse.dblclick(at(12, 3).x, at(12, 3).y);
+	expect(await footprint(page)).not.toBe(overhang);
 
 	// The square's corners can be moved too, once it's an outline
 	await page.getByRole('button', { name: 'Expand Structure' }).first().click();
 	await page.getByRole('button', { name: 'Edit points' }).click();
 	await expect(page.getByRole('button', { name: 'Edit points' })).toHaveCount(0);
+
+	// Zoomed in, with the addition's point handles showing
+	await page.mouse.click(at(8, 0).x, at(8, 0).y);
+	for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Zoom in' }).click();
+	await page.waitForTimeout(300);
+	await page.screenshot({ path: 'tests/screenshots/draw-outline.png' });
 });

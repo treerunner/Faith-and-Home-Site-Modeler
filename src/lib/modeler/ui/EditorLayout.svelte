@@ -154,12 +154,9 @@
 			rendererEl?.setPointerCapture(e.pointerId);
 			store.startDragging(partId, result.x - part.x, result.y - part.y, cloning);
 		} else if (result.kind === 'vertex') {
-			// Alt-click removes a point; otherwise drag it, or drag a new one out of an edge
-			if (e.altKey && !result.insert) store.removeVertex(result.partId, result.index);
-			else {
-				rendererEl?.setPointerCapture(e.pointerId);
-				store.startDraggingVertex(result.partId, result.index, result.insert);
-			}
+			// Drag a point, or a new one out of an edge's midpoint (Alt held: no snapping)
+			rendererEl?.setPointerCapture(e.pointerId);
+			store.startDraggingVertex(result.partId, result.index, result.insert);
 		} else if (result.kind === 'resize') {
 			rendererEl?.setPointerCapture(e.pointerId);
 			store.startResizing(result.partId, result.handle as ResizeHandle);
@@ -183,6 +180,13 @@
 				store.selectTree(null);
 			});
 		}
+	}
+
+	// Double-click a point to remove it
+	function handleDoubleClick(e: MouseEvent) {
+		if (store.readOnly || store.viewMode !== 'plan') return;
+		const result = hitTest(e.clientX, e.clientY);
+		if (result?.kind === 'vertex' && !result.insert) store.removeVertex(result.partId, result.index);
 	}
 
 	// Drawn points snap to existing corners and edges within about 10 px, at any zoom; Alt turns it off
@@ -285,6 +289,7 @@
 			onpointermove={handlePointerMove}
 			onpointerup={handlePointerUp}
 			onpointerdown={handlePointerDown}
+			ondblclick={handleDoubleClick}
 		/>
 		<OpenSpaceLabels />
 		<Attribution />
