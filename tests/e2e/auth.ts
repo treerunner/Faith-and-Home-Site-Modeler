@@ -5,6 +5,9 @@ import { hashToken, newToken } from '../../src/lib/server/tokens';
 // Test accounts, made directly in the .env database: a user, their committee memberships and a
 // session, then the session cookie in the browser. No test-only route in the app.
 
+// The one Node global used here (the project has no Node types)
+declare const process: { env: Record<string, string | undefined>; loadEnvFile(path: string): void };
+
 if (!process.env.DATABASE_URL) process.loadEnvFile('.env');
 export const sql = postgres(process.env.DATABASE_URL!, { max: 2 });
 

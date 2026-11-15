@@ -20,6 +20,7 @@
 	import { addedStories, totalStories } from '../geometry';
 	import { capturePlanImage } from '../sceneExport';
 	import { saveSite } from './SiteBar.svelte';
+	import { page } from '$app/state';
 	import { planUrl } from '../api';
 	import { fmtSqft, AVG_UNIT_SQFT } from '../units';
 	import {
@@ -231,7 +232,7 @@
 								{/if}
 								{#if isExample}
 									<p class="pattern-variant peg-note">This plan is the pattern's example.</p>
-								{:else if !store.readOnly}
+								{:else if !store.readOnly && (page.data.user as { isTeam?: boolean } | null)?.isTeam}
 									<button class="peg-btn" onclick={pegExample} disabled={pegState === 'saving'}>
 										{pegState === 'saving' ? 'Saving' : "Use this plan as the pattern's example"}
 									</button>

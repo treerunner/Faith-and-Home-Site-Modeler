@@ -131,7 +131,8 @@ class ModelerStore {
 	saveState = $state<'idle' | 'saving' | 'error' | 'conflict' | 'signin' | 'committee'>('idle');
 	saveMessage = $state('');
 	// The viewer's rights on a saved site, and the version the next save is made from
-	rights = $state<{ canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string } | null }>({
+	rights = $state<{ canEdit: boolean; canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string } | null }>({
+		canEdit: true,
 		canDelete: false,
 		visibility: 'public',
 		committee: null,
@@ -152,13 +153,19 @@ class ModelerStore {
 		return JSON.stringify(this.site) !== this.#savedJson;
 	}
 
+	// An unsaved sketch brought back after signing in to save it: unsaved, so still dirty
+	restoreUnsaved(site: Site) {
+		this.#reset(site, '', site.existing.id, false);
+		this.#savedJson = '';
+	}
+
 	// Start a blank, unsaved site (the /modeler route).
 	newSite() {
 		const site = makeSite();
 		this.#reset(site, '', site.existing.id, false);
 	}
 
-	loadSite(site: Site, siteSlug: string, planId: string, readOnly: boolean, rights?: { canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string } | null; version: number }) {
+	loadSite(site: Site, siteSlug: string, planId: string, readOnly: boolean, rights?: { canEdit: boolean; canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string } | null; version: number }) {
 		this.#reset(site, siteSlug, planId, readOnly);
 		if (rights) {
 			const { version, ...rest } = rights;
@@ -181,7 +188,7 @@ class ModelerStore {
 		this.saveState = 'idle';
 		this.saveMessage = '';
 		this.version = 0;
-		this.rights = { canDelete: false, visibility: 'public', committee: null };
+		this.rights = { canEdit: true, canDelete: false, visibility: 'public', committee: null };
 		this.showAnalysis = false;
 		this.#selectPlan(planId);
 	}

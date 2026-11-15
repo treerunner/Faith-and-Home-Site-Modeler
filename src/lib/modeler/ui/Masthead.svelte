@@ -1,6 +1,47 @@
+<script lang="ts">
+	import { page } from '$app/state';
+	import { invalidateAll, goto } from '$app/navigation';
+
+	// The account menu: sign in, or your committees, the team's admin page, and sign out
+	let user = $derived(page.data.user as { email: string; name: string; isTeam: boolean; memberships: { committeeId: string; committeeName: string }[] } | null | undefined);
+	let open = $state(false);
+	let rootEl: HTMLDivElement | undefined = $state();
+
+	async function signOut() {
+		await fetch('/api/auth/signout', { method: 'POST' });
+		open = false;
+		await invalidateAll();
+		await goto('/modeler');
+	}
+
+	function onWindowClick(e: MouseEvent) {
+		if (open && rootEl && !e.composedPath().includes(rootEl)) open = false;
+	}
+</script>
+
+<svelte:window onclick={onWindowClick} />
+
 <div class="masthead">
 	<div class="masthead__nav">
 		<img class="masthead__logo" src="/fh-logo.svg" alt="Faith and Home" />
+		<div class="masthead__right">
+		<div class="account" bind:this={rootEl}>
+			{#if user}
+				<button class="account__btn" aria-haspopup="true" aria-expanded={open} onclick={() => (open = !open)}>{user.name || user.email} ▾</button>
+				{#if open}
+					<div class="account__menu" role="menu">
+						<a role="menuitem" href="/modeler/sites" onclick={() => (open = false)}>Sites</a>
+						{#each user.memberships as m (m.committeeId)}
+							<a role="menuitem" class="account__committee" href="/committees/{m.committeeId}" onclick={() => (open = false)}>{m.committeeName}</a>
+						{/each}
+						{#if user.isTeam}<a role="menuitem" href="/admin" onclick={() => (open = false)}>Admin</a>{/if}
+						<button role="menuitem" onclick={signOut}>Sign out</button>
+					</div>
+				{/if}
+			{:else}
+				<a class="account__btn" href="/signin?next={encodeURIComponent(page.url.pathname)}">Sign in</a>
+			{/if}
+		</div>
 		<button class="masthead__menu" aria-label="Menu">
 			<svg width="28" height="20" viewBox="0 0 28 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 				<line x1="0" y1="2"  x2="28" y2="2"  stroke="currentColor" stroke-width="2.5"/>
@@ -8,6 +49,7 @@
 				<line x1="8" y1="18" x2="28" y2="18" stroke="currentColor" stroke-width="2.5"/>
 			</svg>
 		</button>
+		</div>
 	</div>
 
 	<div class="masthead__body">
@@ -60,6 +102,49 @@
 	}
 
 	.masthead__menu:hover { opacity: 0.6; }
+
+	.masthead__right { display: flex; align-items: center; gap: 0.9rem; }
+	.account { position: relative; }
+	.account__btn {
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		background: none;
+		padding: 0.25rem 0.65rem;
+		font: inherit;
+		font-size: 0.78rem;
+		color: var(--color-text);
+		text-decoration: none;
+		cursor: pointer;
+	}
+	.account__btn:hover { background: #ece8e0; }
+	.account__menu {
+		position: absolute;
+		right: 0;
+		top: calc(100% + 0.3rem);
+		z-index: 20;
+		min-width: 12rem;
+		display: flex;
+		flex-direction: column;
+		padding: 0.25rem;
+		background: var(--fh-linen);
+		border: 1px solid var(--color-border);
+		border-radius: 4px;
+		box-shadow: 0 4px 12px rgba(0 0 0 / 0.1);
+	}
+	.account__menu a, .account__menu button {
+		padding: 0.35rem 0.5rem;
+		border: none;
+		border-radius: 3px;
+		background: none;
+		font: inherit;
+		font-size: 0.78rem;
+		text-align: left;
+		color: var(--color-text);
+		text-decoration: none;
+		cursor: pointer;
+	}
+	.account__menu a:hover, .account__menu button:hover { background: #ece8e0; }
+	.account__committee { padding-left: 1rem !important; }
 
 	.masthead__body {
 		display: grid;

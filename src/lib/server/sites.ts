@@ -22,6 +22,7 @@ export interface SiteSummary {
 	updatedAt: Date;
 	visibility: 'public' | 'members';
 	committee: { id: string; name: string } | null;
+	canDelete: boolean;
 	plans: { name: string; slug: string; developmentType: DevelopmentType | null }[];
 }
 
@@ -106,6 +107,7 @@ export async function listSites(user: CurrentUser | null): Promise<SiteSummary[]
 	return rows.map(({ data, committeeId, committeeName, ...row }) => ({
 		...row,
 		committee: committeeId ? { id: committeeId, name: committeeName ?? '' } : null,
+		canDelete: canDeleteSite({ committeeId, visibility: row.visibility }, user),
 		plans: normalizeSite(siteFromRows(data as unknown as Record<string, unknown>, planRows.get(row.id) ?? [])).plans.map((p) => ({
 			name: p.name,
 			slug: p.slug,

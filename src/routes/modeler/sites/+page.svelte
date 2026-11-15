@@ -20,6 +20,16 @@
 	let error = $state('');
 
 	const names = $derived(new Map(data.sites.map((s) => [s.id, s.name || 'Untitled'])));
+	// Sites under their committees, most recently updated first
+	const groups = $derived.by(() => {
+		const out = new Map<string, { id: string | null; name: string; sites: typeof data.sites }>();
+		for (const s of data.sites) {
+			const key = s.committee?.id ?? '';
+			if (!out.has(key)) out.set(key, { id: s.committee?.id ?? null, name: s.committee?.name ?? 'No committee', sites: [] });
+			out.get(key)!.sites.push(s);
+		}
+		return [...out.values()];
+	});
 	const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 	async function duplicate(id: string) {
@@ -58,11 +68,18 @@
 
 		{#if error}<p class="error" role="alert">{error}</p>{/if}
 
-		{#if data.sites.length === 0}
-			<p class="empty">No saved sites yet.</p>
+		{#if !data.user}
+			<p class="empty"><a href="/signin?next=/modeler/sites">Sign in</a> to see your committees' sites. You can <a href="/modeler">try the modeler</a> without an account.</p>
+		{:else if data.sites.length === 0}
+			<p class="empty">No saved sites yet. Sites you save go to your committee, where its members can work on them with you.</p>
 		{:else}
+			{#each groups as g (g.id ?? '')}
+			<section class="committee-group" aria-label={g.name}>
+			<h3 class="committee-heading">
+				{#if g.id}<a href="/committees/{g.id}">{g.name}</a>{:else}{g.name}{/if}
+			</h3>
 			<ul class="site-list" aria-label="Saved sites">
-				{#each data.sites as site (site.id)}
+				{#each g.sites as site (site.id)}
 					{@const name = site.name || 'Untitled'}
 					<li class="site-card">
 						<div class="site-head">
@@ -82,7 +99,7 @@
 									<button class="btn" onclick={() => (confirmingId = '')}>Cancel</button>
 								{:else}
 									<button class="btn" onclick={() => duplicate(site.id)} title="Copy the site with all its plans">Duplicate</button>
-									<button class="btn" onclick={() => (confirmingId = site.id)}>Delete</button>
+									{#if site.canDelete}<button class="btn" onclick={() => (confirmingId = site.id)}>Delete</button>{/if}
 								{/if}
 							</div>
 						</div>
@@ -111,6 +128,8 @@
 					</li>
 				{/each}
 			</ul>
+			</section>
+			{/each}
 		{/if}
 	</main>
 </div>
@@ -143,6 +162,17 @@
 		font-size: 1.8rem;
 		margin: 0;
 	}
+
+	.committee-group { margin-top: 1.25rem; }
+	.committee-heading {
+		margin: 0 0 0.5rem;
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	.committee-heading a { color: var(--color-text); text-decoration: none; }
+	.committee-heading a:hover { text-decoration: underline; }
 
 	.site-list {
 		display: flex;

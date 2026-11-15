@@ -2,7 +2,7 @@
 	import { beforeNavigate } from '$app/navigation';
 	import EditorLayout from './EditorLayout.svelte';
 	import Masthead from './Masthead.svelte';
-	import { saveSite } from './SiteBar.svelte';
+	import { leaving, saveSite } from './SiteBar.svelte';
 	import { store } from '../store.svelte';
 
 	function isEditing(e: KeyboardEvent): boolean {
@@ -60,7 +60,7 @@
 	// Warn before leaving with unsaved changes. On a full unload, cancel() shows the browser's dialog.
 	// Shallow navigations are our own URL updates (plan switches, renames) and keep the edits.
 	beforeNavigate(({ cancel, willUnload, shallow }) => {
-		if (shallow || store.readOnly || !store.isDirty) return;
+		if (shallow || store.readOnly || !store.isDirty || leaving.toSignIn) return;
 		if (willUnload || !confirm('Leave without saving? Your changes will be lost.')) cancel();
 	});
 </script>
