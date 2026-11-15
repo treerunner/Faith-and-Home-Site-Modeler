@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { store } from './store.svelte';
 import { zoneOutline } from './geo';
-import { polygonArea } from './metrics';
+import { dwellingsByStatus, grossFloorArea, inferDevelopmentType, polygonArea, zoneAreas } from './metrics';
+import { storedSite } from './existing';
+import { normalizeSite } from './serialize';
 
 // A 20 x 10 m, 3-story existing building centered on the origin, drawn on the site; reuse is
 // proposed in a plan, so this opens one and returns the plan's copy
@@ -119,6 +121,51 @@ describe('reuse zones in the store', () => {
 		store.addWholeBuildingReuse(s.id);
 		store.newPlan();
 		expect(store.plan.structures[0].reuseZones).toBeUndefined();
+	});
+
+	it('works on one stack of floors: the building\'s own, then the stories the plan added', () => {
+		const s = placeBuilding(); // 3 stories
+		store.updateStructure(s.id, { addedStories: 3 });
+		store.addWholeBuildingReuse(s.id);
+		const z = zonesOf(s.id)[0];
+		expect(z.floors).toEqual([1, 3]); // reuse defaults to the building's own floors
+		store.updateZone(z.id, { floors: [2, 6] });
+		expect(zonesOf(s.id)[0].floors).toEqual([2, 6]);
+		store.updateZone(z.id, { floors: [2, 9] });
+		expect(zonesOf(s.id)[0].floors).toEqual([2, 6]);
+		// Fewer added stories: the zone comes down with the roof rather than disappearing
+		store.updateStructure(s.id, { addedStories: 1 });
+		expect(zonesOf(s.id)[0].floors).toEqual([2, 4]);
+		store.updateZone(z.id, { floors: [4, 4] });
+		store.updateStructure(s.id, { addedStories: 0 });
+		expect(zonesOf(s.id)[0].floors).toEqual([3, 3]);
+	});
+
+	it('splits a zone into reuse and new, counting the stories it adds', () => {
+		const s = placeBuilding(); // 20 x 10 m, 3 stories
+		store.updateStructure(s.id, { addedStories: 1 });
+		store.addWholeBuildingReuse(s.id);
+		const z = zonesOf(s.id)[0];
+		const gfa = grossFloorArea(store.plan);
+		store.updateZone(z.id, { floors: [3, 4], addedStories: 2 });
+		const areas = zoneAreas(zonesOf(s.id)[0], store.plan.structures[0]);
+		expect(areas.reuse).toBeCloseTo(200); // floor 3
+		expect(areas.new).toBeCloseTo(600); // added floor 4, and 2 more over the zone
+		expect(grossFloorArea(store.plan)).toBeCloseTo(gfa + 400);
+		expect(inferDevelopmentType(store.plan)).toBe('reuse_new');
+		// 800 m² of housing: 9 units, a quarter of them reuse
+		expect(dwellingsByStatus(store.plan)).toMatchObject({ adaptive_reuse: 2, new: 7 });
+		// Only on added floors, it's new construction
+		store.updateZone(z.id, { floors: [4, 4], addedStories: 0 });
+		expect(inferDevelopmentType(store.plan)).toBe('new');
+	});
+
+	it('keeps a zone\'s added stories through saving', () => {
+		const s = placeBuilding();
+		store.addWholeBuildingReuse(s.id);
+		store.updateZone(zonesOf(s.id)[0].id, { addedStories: 2 });
+		const loaded = normalizeSite(JSON.parse(JSON.stringify(storedSite(JSON.parse(JSON.stringify(store.site))))));
+		expect(loaded.plans[0].structures[0].reuseZones![0].addedStories).toBe(2);
 	});
 
 	it('undoes adding and deleting zones', () => {

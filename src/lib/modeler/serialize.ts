@@ -161,6 +161,7 @@ function parseZone(v: unknown, path: string, partIds: Set<string>): ReuseZone {
 		floors: [from, to],
 		use: oneOf(o.use, USES, `${path}.use`),
 		dwellings: optional(o.dwellings, (n) => num(n, `${path}.dwellings`)),
+		addedStories: optional(o.addedStories, (n) => num(n, `${path}.addedStories`)) || undefined,
 	};
 }
 

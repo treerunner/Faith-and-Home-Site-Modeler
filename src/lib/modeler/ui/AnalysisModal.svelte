@@ -12,6 +12,7 @@
 	// Restore view mode if the component is destroyed via any path.
 	$effect(() => () => { store.viewMode = previousViewMode; });
 	import { USE_COLORS } from '../colors';
+	import { addedStories, totalStories } from '../geometry';
 	import { capturePlanImage } from '../sceneExport';
 	import { fmtSqft, AVG_UNIT_SQFT } from '../units';
 	import {
@@ -42,7 +43,7 @@
 	};
 
 	const STATUS_LABELS = {
-		existing: 'Existing', new: 'New', removed: 'Removed',
+		existing: 'Existing', new: 'New', removed: 'To be removed',
 	};
 
 	const TENURE_LABELS = {
@@ -65,10 +66,10 @@
 	let steps = $derived(generateActionSteps(plan, site));
 
 	let storiesMin = $derived(
-		plan.structures.length ? Math.min(...plan.structures.map((s) => s.stories)) : 0
+		plan.structures.length ? Math.min(...plan.structures.map((s) => totalStories(s))) : 0
 	);
 	let storiesMax = $derived(
-		plan.structures.length ? Math.max(...plan.structures.map((s) => s.stories)) : 0
+		plan.structures.length ? Math.max(...plan.structures.map((s) => totalStories(s))) : 0
 	);
 
 	let reuseZones = $derived(reuseZoneCount(plan));
@@ -305,7 +306,7 @@
 									<td>{s.label}</td>
 									<td>{STATUS_LABELS[s.status]}</td>
 									<td>{s.roof.charAt(0).toUpperCase() + s.roof.slice(1)}</td>
-									<td>{s.stories}{s.basement ? ' +B' : ''}</td>
+									<td>{s.stories}{addedStories(s) ? ` +${addedStories(s)}` : ''}{s.basement ? ' +B' : ''}</td>
 									<td class="uses-cell">{s.uses.map((u) => USE_LABELS[u]).join(', ') || '—'}</td>
 									<td>{fmtSqft(structureFootprint(s))}</td>
 								</tr>

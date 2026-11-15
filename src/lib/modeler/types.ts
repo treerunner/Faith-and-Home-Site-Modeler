@@ -38,6 +38,7 @@ export interface ReuseZone {
 	floors: [number, number]; // inclusive; 1 is the ground floor, 0 the basement
 	use: Use;
 	dwellings?: number; // housing only; estimated from area until edited
+	addedStories?: number; // new floors built over the zone's outline, above the building's roof
 }
 
 export interface Structure {

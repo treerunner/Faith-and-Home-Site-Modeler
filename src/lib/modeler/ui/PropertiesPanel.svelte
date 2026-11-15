@@ -3,6 +3,7 @@
 	import PlanSwitcher from './PlanSwitcher.svelte';
 	import { syncUrl } from './SiteBar.svelte';
 	import { choicesOn } from '../existing';
+	import { totalStories } from '../geometry';
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM, fmtSqft } from '../units';
 	import type { BuildingType, CongregationProfile, DevelopmentType, Roof, Site, Status, Structure, Use } from '../types';
@@ -104,8 +105,9 @@
 		else store.updateStructure(s.id, { status });
 	}
 
+	// The building's whole stack: its own floors, then any this plan added
 	function floorOptions(s: Structure): { value: number; label: string }[] {
-		const floors = Array.from({ length: s.stories }, (_, i) => ({ value: i + 1, label: `Floor ${i + 1}` }));
+		const floors = Array.from({ length: totalStories(s) }, (_, i) => ({ value: i + 1, label: `Floor ${i + 1}${i + 1 > s.stories ? ' (added)' : ''}` }));
 		return s.basement ? [{ value: 0, label: 'Basement' }, ...floors] : floors;
 	}
 
@@ -615,7 +617,7 @@
 											{@const open = openZoneId === z.id}
 											<button class="zone-row" aria-expanded={open} onclick={() => (openZoneId = open ? '' : z.id)}>
 												<span class="zone-swatch" aria-hidden="true"></span>
-												<span class="zone-floors">{floorsLabel(z.floors)}</span>
+												<span class="zone-floors">{floorsLabel(z.floors)}{#if z.addedStories} <span class="added-badge" title="Stories added over this area">+{z.addedStories}</span>{/if}</span>
 												<span class="zone-use">{USE_OPTIONS.find((o) => o.value === z.use)?.label ?? z.use}</span>
 												<span class="zone-area">{fmtSqft(zoneFloorArea(z, s))}</span>
 											</button>
@@ -634,6 +636,19 @@
 																{#each floorOptions(s) as f (f.value)}<option value={f.value}>{f.label}</option>{/each}
 															</select>
 														</label>
+													</div>
+													<div class="field-group">
+														<label class="field-label" for="zone-added-{z.id}">Added stories</label>
+														<input
+															id="zone-added-{z.id}"
+															class="num-input"
+															type="number"
+															min="0"
+															max="20"
+															value={z.addedStories ?? 0}
+															oninput={(e) => store.updateZone(z.id, { addedStories: Number((e.target as HTMLInputElement).value) })}
+														/>
+														<span class="field-hint">New construction over this area</span>
 													</div>
 													<label class="field-label" for="zone-use-{z.id}">Proposed use</label>
 													<select id="zone-use-{z.id}" class="select-input" value={z.use} onchange={(e) => store.updateZone(z.id, { use: (e.target as HTMLSelectElement).value as Use })}>

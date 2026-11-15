@@ -42,11 +42,13 @@ function applyChoice(base: Structure, choice: ExistingChoice | undefined): Struc
 	}
 	const partIds = new Set(base.parts.map((p) => p.id));
 	const zones = choice.removed ? [] : (choice.reuseZones ?? []).filter((z) => partIds.has(z.partId));
-	// Zones stay within the site's floors: added stories are new construction, not reuse
-	const top = base.stories, bottom = base.basement ? 0 : 1;
-	const fitted = zones
-		.filter((z) => z.floors[0] <= top)
-		.map((z) => ({ ...clone(z), floors: [Math.max(z.floors[0], bottom), Math.min(z.floors[1], top)] as [number, number] }));
+	// Zones stay within the building's stack, its own floors and any the plan added; a zone
+	// above the top comes down to it
+	const top = base.stories + (choice.addedStories ?? 0), bottom = base.basement ? 0 : 1;
+	const fitted = zones.map((z) => {
+		const from = Math.min(Math.max(z.floors[0], bottom), top);
+		return { ...clone(z), floors: [from, Math.min(Math.max(z.floors[1], from), top)] as [number, number] };
+	});
 	if (fitted.length) s.reuseZones = fitted;
 	return s;
 }
