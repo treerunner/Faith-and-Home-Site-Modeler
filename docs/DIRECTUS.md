@@ -4,6 +4,20 @@ Directus is the CMS the team uses to write patterns and, later, stories. It runs
 Railway service against the **same Postgres** as the app. The app reads the tables directly;
 Directus is only the editing interface. Nothing in the app depends on Directus running.
 
+**Status (November 2026):** running on Railway, Directus 12.6.1, self-hosted on the free
+**Core** tier, configured as below. Core's limits shape the setup:
+
+- **3 seats.** Directus accounts are for the people writing patterns, not modeler users.
+  (The Open Innovation Grant, under $5M revenue and 50 employees, likely doesn't cover a
+  Lehigh project; Team is $499/month.)
+- **25 collections, 5 flows.** We use six collections and no flows.
+- **No custom permission rules.** Permissions are whole collections: no field limits, no item
+  filters, no validation. That's why plans and sites are read-only to editors (an update right on
+  plans would include their model data).
+
+`DIRECTUS_URL` (with `https://`) and a static admin `DIRECTUS_TOKEN` in `.env` let scripts
+configure Directus through its REST API; the app itself doesn't use them.
+
 ## Stand it up
 
 1. On Railway, add a Directus service (the official `directus/directus` image) in the project.
@@ -29,8 +43,8 @@ Directus is only the editing interface. Nothing in the app depends on Directus r
 | `building_types` | Checkboxes: `box`, `box_plus`, `object`, `cluster` | The pattern covers every combination of the three lists. |
 | `site_types` | Checkboxes: `urban`, `suburban`, `rural` | |
 | `development_types` | Checkboxes: `existing`, `reuse`, `new`, `reuse_new`, `downsize_sell` | |
-| `example_site_id` | Many-to-one → sites (display `name`) | The modeled site shown on the pattern page. |
-| `example_plan_id` | Many-to-one → plans (display `name`, filter by the chosen site) | Empty means the site's existing conditions. |
+| `example_site_id` | Many-to-one → sites (display `name`) | The modeled site shown on the pattern page. The analysis in the modeler can set it too. |
+| `example_plan_id` | Many-to-one → plans (display `name`, filtered to the chosen site) | Empty means the site's existing conditions. |
 | `sections` | One-to-many → pattern_sections, sorted by `sort` | Alias field. |
 | `variants` | One-to-many → pattern_variants, sorted by `sort` | Alias field. |
 
@@ -61,19 +75,22 @@ variant that fits, in `sort` order, is shown.
 
 These are for reference and relations, not editing models.
 
-- **plans:** show `name` (editable), `site_id`, `position`; `thumbnail` as read-only. Hide
-  `data`, `slug`, `old_slugs`. Renaming here keeps the plan's URL until it's next saved in the
-  modeler.
-- **sites:** show `name`, `thumbnail` read-only. Hide `data`, `slug`, `origin`, `parcel`.
+- **plans:** `name`, `site_id`, `position`, `updated_at`, all read-only. Hidden: `data`,
+  `slug`, `old_slugs`, `thumbnail` (an image data URL Directus can't display). Plans are renamed
+  in the modeler.
+- **sites:** `name`, `created_at`, `updated_at`, read-only (the name is also stored in the
+  site's `data`, so a CMS rename would be overwritten). Everything else hidden. `site_slugs` is
+  hidden.
 
 **Never edit `data` in the CMS.** It holds the model's geometry and is checked and converted
 (`normalizeSite`) only by the app; an edit there can break a site.
 
 ## Permissions
 
-Give editors full access to patterns, pattern_sections and pattern_variants; read access to
-sites and plans (plus update on `plans.name` if renaming there is wanted). Keep the public role
-without access: the app serves pages itself.
+Role **Pattern editor** (policy *Pattern editing*, Studio access): create, read, update and
+delete on patterns, pattern_sections and pattern_variants; read on sites and plans. The public
+role has no access: the app serves pages itself. Give the 3 seats to the people writing
+patterns; admin stays with the project lead.
 
 ## Later
 
