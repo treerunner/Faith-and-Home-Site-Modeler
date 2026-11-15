@@ -125,7 +125,7 @@ test('start from an address: choose the parcel and add its buildings', async ({ 
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 	// "Saved" shows when the write finishes; the URL moves to the site just after. Wait for it.
-	await expect(page).toHaveURL(/\/modeler\/e2e-address-\d+\/existing-conditions$/);
+	await expect(page).toHaveURL(/\/modeler\/e2e-address-\d+$/);
 	await page.reload();
 	await expect(page.getByLabel('Address').getByText(PLACE.label)).toBeVisible();
 	await expect(page.locator('.struct-item')).toHaveCount(2);
@@ -361,7 +361,7 @@ test('terrain: outside coverage the board stays flat; older sites can add it', a
 
 	// Saved without terrain, as sites set up before terrain were
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
-	await expect(page).toHaveURL(/\/modeler\/e2e-terrain-\d+\/existing-conditions$/);
+	await expect(page).toHaveURL(/\/modeler\/e2e-terrain-\d+$/);
 	await page.reload();
 	const add = page.getByRole('button', { name: 'Add terrain' });
 	await expect(add).toBeVisible();

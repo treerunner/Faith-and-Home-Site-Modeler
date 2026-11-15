@@ -2,6 +2,16 @@
 	import { goto, refreshAll } from '$app/navigation';
 	import Masthead from '#lib/modeler/ui/Masthead.svelte';
 	import { deleteSite, duplicateSite, planUrl, siteUrl } from '#lib/modeler/api';
+	import { DEVELOPMENT_TYPE_LABELS } from '#lib/modeler/metrics';
+	import { DEFAULT_PLAN_NAME } from '#lib/modeler/serialize';
+	import type { DevelopmentType } from '#lib/modeler/types';
+
+	// The pattern book's colors for what a plan does: green reuse, orange new, both for both
+	const DEV_COLOR: Partial<Record<DevelopmentType, string>> = {
+		reuse: 'var(--color-reuse)',
+		new: 'var(--color-new)',
+		reuse_new: 'linear-gradient(to right, var(--color-reuse) 50%, var(--color-new) 50%)',
+	};
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -53,33 +63,51 @@
 		{:else}
 			<ul class="site-list" aria-label="Saved sites">
 				{#each data.sites as site (site.id)}
-					<li class="site-row">
-						<div class="site-info">
-							<a class="site-name" href={siteUrl(site.slug)}>{site.name || 'Untitled'}</a>
-							<span class="site-meta">
-								Updated {dateFmt.format(new Date(site.updatedAt))}
-								{#if site.duplicatedFrom}
-									· Copy of {names.get(site.duplicatedFrom) ?? 'a deleted site'}
+					{@const name = site.name || 'Untitled'}
+					<li class="site-card">
+						<div class="site-head">
+							<div class="site-info">
+								<a class="site-name" href={siteUrl(site.slug)}>{name}</a>
+								<span class="site-meta">
+									Updated {dateFmt.format(new Date(site.updatedAt))}
+									{#if site.duplicatedFrom}
+										· Copy of {names.get(site.duplicatedFrom) ?? 'a deleted site'}
+									{/if}
+								</span>
+							</div>
+							<div class="site-actions">
+								{#if confirmingId === site.id}
+									<span class="confirm-text">Delete this site and its plans?</span>
+									<button class="btn btn--danger" onclick={() => remove(site.id)}>Delete</button>
+									<button class="btn" onclick={() => (confirmingId = '')}>Cancel</button>
+								{:else}
+									<button class="btn" onclick={() => duplicate(site.id)} title="Copy the site with all its plans">Duplicate</button>
+									<button class="btn" onclick={() => (confirmingId = site.id)}>Delete</button>
 								{/if}
-							</span>
-							<ul class="plan-links" aria-label="Plans in {site.name || 'Untitled'}">
-								{#each site.plans as plan (plan.slug)}
-									<li><a href={planUrl(site.slug, plan.slug)}>{plan.name || 'Untitled plan'}</a></li>
-								{/each}
-							</ul>
+							</div>
 						</div>
-						<div class="site-actions">
-							{#if confirmingId === site.id}
-								<span class="confirm-text">Delete this site?</span>
-								<button class="btn btn--danger" onclick={() => remove(site.id)}>Delete</button>
-								<button class="btn" onclick={() => (confirmingId = '')}>Cancel</button>
+						<!-- Existing conditions, then the plans that start from them -->
+						<ul class="plan-tree" aria-label="Plans in {name}">
+							<li class="plan-row plan-row--site">
+								<a class="plan-name" href={siteUrl(site.slug)}>{DEFAULT_PLAN_NAME}</a>
+								<span class="plan-tag">Site</span>
+								<a class="plan-link" href={planUrl(site.slug, '', true)} aria-label="View {name}, {DEFAULT_PLAN_NAME}">View</a>
+							</li>
+							{#each site.plans as plan (plan.slug)}
+								{@const planName = plan.name || 'Untitled plan'}
+								<li class="plan-row">
+									<a class="plan-name" href={planUrl(site.slug, plan.slug)}>{planName}</a>
+									{#if plan.developmentType}
+										<span class="dev-tag" style={DEV_COLOR[plan.developmentType] ? `background:${DEV_COLOR[plan.developmentType]}` : ''}>
+											{DEVELOPMENT_TYPE_LABELS[plan.developmentType]}
+										</span>
+									{/if}
+									<a class="plan-link" href={planUrl(site.slug, plan.slug, true)} aria-label="View {name}, {planName}">View</a>
+								</li>
 							{:else}
-								<a class="btn" href={siteUrl(site.slug)}>Open</a>
-								<a class="btn" href={planUrl(site.slug, site.plans[0].slug, true)}>View</a>
-								<button class="btn" onclick={() => duplicate(site.id)} title="Copy the site with all its plans">Duplicate</button>
-								<button class="btn" onclick={() => (confirmingId = site.id)}>Delete</button>
-							{/if}
-						</div>
+								<li class="plan-row plan-row--empty">No plans yet</li>
+							{/each}
+						</ul>
 					</li>
 				{/each}
 			</ul>
@@ -117,20 +145,28 @@
 	}
 
 	.site-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		border-top: 1px solid var(--color-border);
 	}
 
-	.site-row {
+	/* One site and its plans, held together */
+	.site-card {
+		border: 1px solid var(--color-border);
+		border-radius: 4px;
+		background: var(--fh-linen);
+		padding: 0.65rem 0.8rem 0.5rem;
+	}
+
+	.site-head {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.5rem 1rem;
-		padding: 0.7rem 0;
-		border-bottom: 1px solid var(--color-border);
 	}
 
 	.site-info {
@@ -142,31 +178,69 @@
 
 	.site-name {
 		font-weight: 700;
-		font-size: 0.9rem;
+		font-size: 0.95rem;
 		color: var(--color-text);
 		text-decoration: none;
 	}
 
 	.site-name:hover { text-decoration: underline; }
 
-	.plan-links {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.15rem 0.75rem;
+	.plan-tree {
 		list-style: none;
-		margin: 0.2rem 0 0;
+		margin: 0.5rem 0 0;
 		padding: 0;
-		font-size: 0.75rem;
+		border-top: 1px solid var(--color-border);
 	}
 
-	.plan-links a {
+	.plan-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.3rem 0 0.3rem 1rem;
+		font-size: 0.78rem;
+		border-bottom: 1px solid #ebe8e1;
+	}
+
+	.plan-row:last-child { border-bottom: none; }
+
+	/* Existing conditions head the list; plans hang under them */
+	.plan-row--site { padding-left: 0; }
+	.plan-row--site .plan-name { font-weight: 600; }
+	.plan-row--empty { color: var(--fh-stone); font-style: italic; }
+
+	.plan-name {
+		color: var(--color-text);
+		text-decoration: none;
+	}
+
+	.plan-name:hover { text-decoration: underline; }
+
+	.plan-tag {
+		font-size: 0.6rem;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--fh-stone);
+	}
+
+	.dev-tag {
+		font-size: 0.65rem;
+		padding: 0.05rem 0.4rem;
+		border-radius: 3px;
+		background: var(--fh-stone-tint);
+		color: var(--fh-black);
+	}
+
+	.plan-link {
+		margin-left: auto;
+		font-size: 0.72rem;
 		color: var(--color-text);
 		text-decoration: underline;
 		text-decoration-color: var(--color-border);
 		text-underline-offset: 2px;
 	}
 
-	.plan-links a:hover { text-decoration-color: currentColor; }
+	.plan-link:hover { text-decoration-color: currentColor; }
 
 	.site-meta, .confirm-text, .empty {
 		font-size: 0.75rem;

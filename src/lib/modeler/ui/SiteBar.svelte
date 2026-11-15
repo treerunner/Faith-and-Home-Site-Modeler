@@ -66,7 +66,8 @@
 		}
 	}
 
-	// A copy of the current plan in this site, unsaved like any other edit
+	// A copy of the current plan in this site, unsaved like any other edit; from the site view, a
+	// fresh plan
 	function duplicate() {
 		store.duplicatePlan();
 		syncUrl();
@@ -86,7 +87,11 @@
 			title="Save (Cmd+S)"
 		>Save</button>
 		<button class="bar-btn" onclick={share} disabled={busy} title="Copy a view-only link">Share</button>
-		<button class="bar-btn" onclick={duplicate} title="Copy this plan as a new scenario">Duplicate</button>
+		{#if store.onSite}
+			<button class="bar-btn" onclick={duplicate} title="Start a plan from existing conditions">New plan</button>
+		{:else}
+			<button class="bar-btn" onclick={duplicate} title="Copy this plan as a new scenario">Duplicate</button>
+		{/if}
 	{/if}
 	<a class="bar-btn" href="/modeler/sites">Sites</a>
 </div>
