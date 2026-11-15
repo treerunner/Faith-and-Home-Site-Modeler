@@ -7,6 +7,16 @@ import { invite, type CurrentUser } from './auth';
 
 // Committees: who's in them, invitations, and the team's switches
 
+// An invitation whose email can't be sent stays listed (it can be cancelled and sent again)
+async function sendInvite(committeeId: string, email: string, role: Role, invitedBy: string, origin: string): Promise<boolean> {
+	try {
+		return await invite(committeeId, email, role, invitedBy, origin);
+	} catch (e) {
+		console.error('Invitation email failed:', e);
+		error(502, 'The invitation is saved, but its email couldn’t be sent. Cancel it and try again in a few minutes.');
+	}
+}
+
 export async function allowNewCommittees(): Promise<boolean> {
 	const [row] = await db.select({ value: settings.value }).from(settings).where(eq(settings.key, 'allow_new_committees'));
 	return row ? row.value === true : true;
@@ -34,7 +44,7 @@ export async function createCommitteeFor(user: CurrentUser | null, rawName: stri
 	const name = rawName.trim().slice(0, 120);
 	if (!name) error(400, 'Give the committee a name');
 	const [c] = await db.insert(committees).values({ name, createdBy: user.id }).returning({ id: committees.id });
-	if (!(await invite(c.id, leadEmail, 'lead', user.id, origin))) error(400, 'That doesn’t look like an email address');
+	if (!(await sendInvite(c.id, leadEmail, 'lead', user.id, origin))) error(400, 'That doesn’t look like an email address');
 	return c.id;
 }
 
@@ -93,7 +103,7 @@ export async function renameCommittee(id: string, user: CurrentUser | null, rawN
 export async function inviteMember(id: string, user: CurrentUser | null, email: string, role: unknown, origin: string): Promise<void> {
 	mustManage(id, user);
 	if (role !== 'lead' && role !== 'member') error(400, 'role is lead or member');
-	if (!(await invite(id, email, role, user!.id, origin))) error(400, 'That doesn’t look like an email address');
+	if (!(await sendInvite(id, email, role, user!.id, origin))) error(400, 'That doesn’t look like an email address');
 }
 
 export async function cancelInvitation(id: string, user: CurrentUser | null, invitationId: string): Promise<void> {
