@@ -38,7 +38,9 @@ previous build, which works with the newer schema.
 | `XFF_DEPTH` | `1` | One proxy (Railway's edge) in front of the app |
 | `BODY_SIZE_LIMIT` | `4M` | adapter-node's default (512 KB) can refuse a large site save |
 
-`PORT` is set by Railway. A custom domain later: add it in Railway, add the CNAME it shows to
+`PORT` and `RAILWAY_ENVIRONMENT_NAME` are set by Railway. On Railway the app refuses to start
+without `RESEND_API_KEY` and `EMAIL_FROM` (it would otherwise only print sign-in links to its
+log), so a missing email setting fails the deploy instead of silently breaking sign-in. A custom domain later: add it in Railway, add the CNAME it shows to
 DNS, change `ORIGIN`.
 
 ## First rollout (November 2026)
