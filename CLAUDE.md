@@ -64,6 +64,10 @@ Interactive site modeler for the Faith & Home pattern book (Small Cities Lab, Le
 Pull from the pattern book: green (adaptive reuse), orange (new construction), blue, red, off-white base. Define as CSS tokens and share with three.js materials.
 - In 3D, buildings and roofs carry a faint paper grain (15%) and the board and terrain a fainter one (7%), from a CC0 kraft-paper texture laid by world position (`scene/grain.ts`, `applyGrain` via `oncreate`). Foam, draped print and plan view stay flat.
 
+## Deploying
+- Railway, per docs/DEPLOY.md: `railway.json` builds, runs `npm run db:migrate:prod` (`scripts/migrate.js`, drizzle-orm's migrator) before each deploy, and starts `node build`. Production has its own database; `.env` is development only and never points at production. adapter-node behind Railway needs `ORIGIN`, `ADDRESS_HEADER`/`XFF_DEPTH` (the rate limit) and `BODY_SIZE_LIMIT=4M` (large saves).
+- People set the name their committees see at `/account`.
+
 ## Workflow
 - Start each milestone in plan mode and wait for approval.
 - Small commits; run `npm run check`, `npm test`, and Playwright before declaring done.

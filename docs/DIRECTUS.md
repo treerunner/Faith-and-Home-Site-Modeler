@@ -85,6 +85,14 @@ These are for reference and relations, not editing models.
 **Never edit `data` in the CMS.** It holds the model's geometry and is checked and converted
 (`normalizeSite`) only by the app; an edit there can break a site.
 
+## Onboarding someone
+
+Directus and the modeler have separate accounts. Someone who writes patterns needs a Directus
+seat (User Directory → Invite, role Pattern editor; Core allows 3 seats in all). Someone who
+should have the Faith & Home team's rights in the modeler (every committee, examples, admin) needs
+an invitation to the team committee: `/committees/faith-home-team` → Invite. Someone doing both
+needs both; one doesn't grant the other.
+
 ## Permissions
 
 Role **Pattern editor** (policy *Pattern editing*, Studio access): create, read, update and
