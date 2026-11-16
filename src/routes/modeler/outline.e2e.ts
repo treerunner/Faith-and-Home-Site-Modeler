@@ -27,8 +27,10 @@ test('draw a structure point by point, snapped to its neighbor, then move its po
 	await page.keyboard.press('Enter');
 	await expect(page.locator('.struct-item')).toHaveCount(2);
 	await expect(page.locator('.group-badge')).toHaveCount(2); // it touches the square: one building
-	const before = await footprint(page); // 36 + 54 m²
-	expect(before).toBe('969 sq ft');
+	const before = await footprint(page); // 36 + 54 m² = 969 sq ft
+	// Clicks land on whole pixels (~9 cm here), so the unsnapped far corners wobble a little; a
+	// first point that missed its snap would be off by about 13 sq ft
+	expect(Math.abs(Number(before.replace(/[^\d.]/g, '')) - 969)).toBeLessThanOrEqual(5);
 
 	// Select it, then drag its far corner out 4 m: points move, the area grows
 	await page.mouse.click(at(8, 0).x, at(8, 0).y);
