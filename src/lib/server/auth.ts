@@ -1,5 +1,5 @@
 import type { Cookies } from '@sveltejs/kit';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, count, eq, gt, isNull } from 'drizzle-orm';
 import { db } from './db';
 import { committees, invitations, loginTokens, memberships, sessions, users } from './db/schema';
 import { sendEmail } from './email';
@@ -21,17 +21,23 @@ const SESSION_DAYS = 30;
 
 // ── Sign-in links ────────────────────────────────────────────────────────────
 
+// Too many sign-in links asked for one address: the inbox (and the email allowance) is spared
+export class TooManyLinks extends Error {}
+const LINKS_PER_EMAIL = 3; // live (unexpired) links at once, so per 15 minutes
+
 export async function requestSignIn(rawEmail: string, next: string | null, origin: string): Promise<boolean> {
 	const email = normalEmail(rawEmail);
 	if (!email) return false;
+	const [live] = await db.select({ n: count() }).from(loginTokens).where(and(eq(loginTokens.email, email), gt(loginTokens.expiresAt, new Date())));
+	if (live.n >= LINKS_PER_EMAIL) throw new TooManyLinks();
 	const token = newToken();
 	await db.insert(loginTokens).values({ tokenHash: await hashToken(token), email, next: safeNext(next), expiresAt: minutes(15) });
 	const link = `${origin}/auth/verify?token=${token}`;
 	await sendEmail({
 		to: email,
 		subject: 'Sign in to the Faith & Home site modeler',
-		text: `Use this link to sign in. It works once, for 15 minutes.\n\n${link}\n\nIf you didn't ask to sign in, you can ignore this email.`,
-		html: `<p>Use this link to sign in. It works once, for 15 minutes.</p><p><a href="${link}">Sign in to the site modeler</a></p><p>If you didn't ask to sign in, you can ignore this email.</p>`,
+		text: `Open this link, then press Sign in. It works once, for 15 minutes.\n\n${link}\n\nIf you didn't ask to sign in, you can ignore this email.`,
+		html: `<p>Open this link, then press Sign in. It works once, for 15 minutes.</p><p><a href="${link}">Sign in to the site modeler</a></p><p>If you didn't ask to sign in, you can ignore this email.</p>`,
 	});
 	return true;
 }
@@ -115,14 +121,24 @@ export async function invite(committeeId: string, rawEmail: string, role: Role, 
 	await sendEmail({
 		to: email,
 		subject: `You're invited to ${committee.name} on the Faith & Home site modeler`,
-		text: `You've been invited to join ${committee.name}, to work on its sites and plans together.\n\nAccept and sign in (the link works for 14 days):\n${link}`,
+		text: `You've been invited to join ${committee.name}, to work on its sites and plans together.\n\nOpen this link to accept and sign in (it works for 14 days):\n${link}`,
 		html: `<p>You've been invited to join <strong>${escapeHtml(committee.name)}</strong>, to work on its sites and plans together.</p><p><a href="${link}">Accept and sign in</a> (the link works for 14 days)</p>`,
 	});
 	return true;
 }
 
+// What an invitation is for, without using it (the page shows it before you accept)
+export async function peekInvitation(token: string): Promise<{ committeeName: string; email: string } | null> {
+	const [row] = await db
+		.select({ committeeName: committees.name, email: invitations.email })
+		.from(invitations)
+		.innerJoin(committees, eq(committees.id, invitations.committeeId))
+		.where(and(eq(invitations.tokenHash, await hashToken(token)), isNull(invitations.acceptedAt), gt(invitations.expiresAt, new Date())));
+	return row ?? null;
+}
+
 // Accepts an invitation: signs the invited person in (creating their account) and adds them
-export async function acceptInvitation(token: string): Promise<{ userId: string; committeeId: string } | null> {
+export async function acceptInvitation(token: string): Promise<{ userId: string; committeeId: string; committeeSlug: string } | null> {
 	const [inv] = await db
 		.update(invitations)
 		.set({ acceptedAt: new Date() })
@@ -138,7 +154,8 @@ export async function acceptInvitation(token: string): Promise<{ userId: string;
 	if (inv.role === 'lead') {
 		await db.update(memberships).set({ role: 'lead' }).where(and(eq(memberships.committeeId, inv.committeeId), eq(memberships.userId, userId)));
 	}
-	return { userId, committeeId: inv.committeeId };
+	const [c] = await db.select({ slug: committees.slug }).from(committees).where(eq(committees.id, inv.committeeId));
+	return { userId, committeeId: inv.committeeId, committeeSlug: c.slug };
 }
 
 function escapeHtml(s: string): string {
