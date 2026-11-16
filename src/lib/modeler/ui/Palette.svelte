@@ -2,6 +2,7 @@
 	import type { OpenSpace, Part } from '../types';
 	import { store } from '../store.svelte';
 	import AddressPanel from './AddressPanel.svelte';
+	import PanelSection from './PanelSection.svelte';
 
 	const SHAPES: { shape: Part['shape']; label: string }[] = [
 		{ shape: 'square', label: 'Square' },
@@ -34,7 +35,7 @@
 
 <aside class="palette" aria-label="Shape palette">
 	<AddressPanel />
-	<h2 class="palette-heading">Palette</h2>
+	<PanelSection title="Palette" key="palette">
 	<ul class="shape-list" role="list">
 		{#each SHAPES as s (s.shape)}
 			<li>
@@ -78,8 +79,9 @@
 	</button>
 
 	<div class="palette-hint">Drag a shape onto the canvas, or draw an outline point by point</div>
+	</PanelSection>
 
-	<h2 class="palette-heading palette-heading--section">Open Spaces</h2>
+	<PanelSection title="Open Spaces" key="open-spaces">
 	<ul class="os-list" role="list">
 		{#each OPEN_SPACES as os (os.kind)}
 			<li>
@@ -97,7 +99,9 @@
 		{/each}
 	</ul>
 
-	<h2 class="palette-heading palette-heading--section">Trees</h2>
+	</PanelSection>
+
+	<PanelSection title="Trees" key="trees">
 	<button
 		class="tree-btn"
 		class:tree-btn--active={store.mode.type === 'placingTree'}
@@ -107,6 +111,7 @@
 		<span class="tree-icon" aria-hidden="true">▲</span>
 		<span>Place tree</span>
 	</button>
+	</PanelSection>
 
 </aside>
 
@@ -120,17 +125,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+		overflow-y: auto; /* on short screens the trees and open spaces scroll into view */
 		user-select: none;
 	}
 
-	.palette-heading {
-		font-size: 0.7rem;
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--color-text);
-		margin: 0;
-	}
+	/* Items keep their size and the palette scrolls; a flex column would squeeze them instead */
+	.palette > :global(*) { flex-shrink: 0; }
+
 
 	.shape-list {
 		list-style: none;
@@ -162,9 +163,6 @@
 
 	.shape-tile:active { cursor: grabbing; }
 
-	.palette-heading--section {
-		margin-top: 0.5rem;
-	}
 
 	.os-list {
 		list-style: none;

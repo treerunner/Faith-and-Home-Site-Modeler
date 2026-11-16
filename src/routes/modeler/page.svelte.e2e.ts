@@ -86,3 +86,28 @@ test('the Social tab scrolls to the end, and long notes show in full', async ({ 
 	const [box, panel] = [await notes.boundingBox(), await page.locator('.props-panel').boundingBox()];
 	expect(box!.y + box!.height).toBeLessThanOrEqual(panel!.y + panel!.height);
 });
+
+test('the palette scrolls on a short screen, so trees are reachable', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 600 });
+	await page.goto('/modeler');
+	const palette = page.getByRole('complementary', { name: 'Shape palette' });
+	await palette.evaluate((el) => (el.scrollTop = el.scrollHeight));
+	const tree = page.getByRole('button', { name: 'Place tree' });
+	await expect(tree).toBeInViewport();
+	await tree.click();
+	await expect(tree).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('palette sections collapse, and stay collapsed', async ({ page }) => {
+	await page.goto('/modeler');
+	const toggle = page.getByRole('button', { name: 'Open Spaces' });
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.getByLabel('Draw Parking')).toBeVisible();
+	await toggle.click();
+	await expect(page.getByLabel('Draw Parking')).toHaveCount(0);
+	await page.screenshot({ path: 'tests/screenshots/palette-collapsed.png' });
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'Open Spaces' })).toHaveAttribute('aria-expanded', 'false');
+	await page.getByRole('button', { name: 'Open Spaces' }).click();
+	await expect(page.getByLabel('Draw Parking')).toBeVisible();
+});

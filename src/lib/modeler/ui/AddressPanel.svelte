@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { syncUrl } from './SiteBar.svelte';
+	import PanelSection from './PanelSection.svelte';
 	import { store } from '../store.svelte';
 	import { fetchContext, fetchGeocode, fetchSuggestions, type Suggestion } from '../address';
 
@@ -98,7 +99,7 @@
 </script>
 
 <section class="address" aria-label="Address">
-	<h2 class="address__heading">Address</h2>
+	<PanelSection title="Address" key="address">
 
 	<!-- The address and neighborhood belong to the site; plans show them -->
 	{#if !store.onSite}
@@ -174,6 +175,7 @@
 			<p class="address__note">Start from a real place, or use the grid.</p>
 		{/if}
 	{/if}
+	</PanelSection>
 </section>
 
 <style>
@@ -184,14 +186,6 @@
 		border-bottom: 1px solid var(--color-border);
 	}
 
-	.address__heading {
-		font-size: 0.7rem;
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		margin: 0 0 0.4rem;
-		color: var(--color-text);
-	}
 
 	.address__combo { position: relative; }
 
