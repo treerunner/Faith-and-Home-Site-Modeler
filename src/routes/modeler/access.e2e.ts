@@ -237,3 +237,18 @@ test('anyone signed in can start a committee from the committees page', async ({
 	await expect(page.getByRole('link', { name })).toBeVisible();
 	await ctx.close();
 });
+
+test('signing in from the masthead lands on your sites, or back on the site you were viewing', async ({ browser }) => {
+	const c = await committee('landing');
+	const lead = await user('landing', [{ committeeId: c, role: 'lead' }]);
+	const anon = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+	const page = await anon.newPage();
+	await signIn(anon, lead);
+	const site = await siteIn(page, c, `E2E landing ${Date.now()}`);
+	await anon.clearCookies();
+	await page.goto('/patterns');
+	await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/signin');
+	await page.goto(`/modeler/${site.slug}/view`);
+	await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', `/signin?next=${encodeURIComponent(`/modeler/${site.slug}/view`)}`);
+	await anon.close();
+});

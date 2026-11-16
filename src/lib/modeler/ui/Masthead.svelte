@@ -40,7 +40,8 @@
 					</div>
 				{/if}
 			{:else}
-				<a class="account__btn" href="/signin?next={encodeURIComponent(page.url.pathname)}">Sign in</a>
+				<!-- Signing in lands on your sites; from a site's page, back to that site -->
+				<a class="account__btn" href={/^\/modeler\/(?!sites$)[^/]+/.test(page.url.pathname) ? `/signin?next=${encodeURIComponent(page.url.pathname)}` : '/signin'}>Sign in</a>
 			{/if}
 		</div>
 		<button class="masthead__menu" aria-label="Menu">
