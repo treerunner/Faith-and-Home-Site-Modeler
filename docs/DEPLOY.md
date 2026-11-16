@@ -1,5 +1,7 @@
 # Deploying to Railway
 
+**Live at https://modeler.smallcitieslab.org** (also `faith-and-home-site-modeler-production.up.railway.app`).
+
 The modeler runs on Railway as a Node service (SvelteKit's `adapter-node`, built to `build/`),
 next to its own Postgres with PostGIS and the Directus service. `railway.json` holds the build
 and deploy settings; the variables below live in Railway.
@@ -30,18 +32,31 @@ previous build, which works with the newer schema.
 
 | Variable | Value | Why |
 |---|---|---|
-| `DATABASE_URL` | Reference: the production Postgres's `DATABASE_URL` (private network) | The app's database |
+| `DATABASE_URL` | `${{PostGIS-Production.DATABASE_PRIVATE_URL}}` | The app's database, over Railway's private network. **Not** the PostGIS service's `DATABASE_URL`: in this PostGIS template that one is the *public* proxy address, which stops working when the public proxy is off (the app then fails with `ECONNREFUSED`) |
 | `RESEND_API_KEY` | Same as `.env` | Sign-in and invitation emails |
 | `EMAIL_FROM` | `Faith & Home Site Modeler <hello@smallcitieslab.org>` (Railway needs no quotes) | Sender, on the verified domain |
-| `ORIGIN` | `https://<service>.up.railway.app` (or the custom domain) | SvelteKit's request checks, and the address in email links |
+| `ORIGIN` | `https://modeler.smallcitieslab.org` | SvelteKit's request checks, and the address in email links |
 | `ADDRESS_HEADER` | `X-Forwarded-For` | The sign-in rate limit counts real visitors, not Railway's proxy |
 | `XFF_DEPTH` | `1` | One proxy (Railway's edge) in front of the app |
 | `BODY_SIZE_LIMIT` | `4M` | adapter-node's default (512 KB) can refuse a large site save |
 
+Directus uses the same private address: `DB_CONNECTION_STRING=${{PostGIS-Production.DATABASE_PRIVATE_URL}}`.
+The production database's public TCP proxy stays off; turn it on only for a one-off job from a
+laptop (like the first copy), then off again.
+
+Variable edits in Railway are staged: apply them (the banner on the project canvas) to deploy.
+"Redeploy" on an old deployment can rerun it with that deployment's old variables.
+
 `PORT` and `RAILWAY_ENVIRONMENT_NAME` are set by Railway. On Railway the app refuses to start
 without `RESEND_API_KEY` and `EMAIL_FROM` (it would otherwise only print sign-in links to its
-log), so a missing email setting fails the deploy instead of silently breaking sign-in. A custom domain later: add it in Railway, add the CNAME it shows to
-DNS, change `ORIGIN`.
+log), so a missing email setting fails the deploy instead of silently breaking sign-in. ## Custom domain
+
+`modeler.smallcitieslab.org`: in Railway (app service → Settings → Networking → Custom Domain,
+port 8080, the port the app listens on), plus a CNAME (`modeler` → the target Railway shows) and
+its `railway-verify` TXT record in the smallcitieslab.org DNS. The certificate (Let's Encrypt)
+renews automatically. If Railway shows the domain online but still serves its generic
+`*.up.railway.app` certificate for a while, removing and re-adding the domain in Railway fixes
+it; the DNS records can stay. After a domain change, update `ORIGIN`.
 
 ## First rollout (November 2026)
 
