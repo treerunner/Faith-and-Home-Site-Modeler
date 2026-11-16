@@ -49,14 +49,23 @@ test('sign in by email link', async ({ page, browser }) => {
 	// The link itself (the email isn't sent in tests): a token we know, as the server stores it
 	const token = newToken();
 	await sql`INSERT INTO login_tokens (token_hash, email, next, expires_at) VALUES (${await hashToken(token)}, ${email}, '/modeler/sites', now() + interval '15 minutes')`;
+	// A mail scanner opening the link first doesn't use it up: only pressing Sign in does
+	expect((await anon.request.get(`/auth/verify?token=${token}`)).ok()).toBe(true);
 	await p.goto(`/auth/verify?token=${token}`);
+	await p.getByRole('button', { name: 'Sign in' }).click();
 	await expect(p).toHaveURL(/\/modeler\/sites$/);
 	await expect(p.getByRole('button', { name: new RegExp(email) })).toBeVisible();
 	const [u] = await sql`SELECT id FROM users WHERE email = ${email}`;
 	users.push(u.id);
 	// A link works once
 	await p.goto(`/auth/verify?token=${token}`);
-	await expect(p).toHaveURL(/\/signin\?expired=1$/);
+	await p.getByRole('button', { name: 'Sign in' }).click();
+	await expect(p.getByText('That link has expired or was already used.')).toBeVisible();
+
+	// Asking again and again: a fourth link for one address within 15 minutes is refused
+	const ask = () => p.request.post('/api/auth/signin', { headers: { origin: 'http://localhost:4173' }, data: { email } });
+	expect((await ask()).status()).toBe(200); // the third live link (with the form's and the test's)
+	expect((await ask()).status()).toBe(429);
 	await anon.close();
 });
 
@@ -130,6 +139,8 @@ test('members edit, leads invite and delete, outsiders see only public view link
 	const token = newToken();
 	await sql`INSERT INTO invitations (committee_id, email, role, token_hash, expires_at) VALUES (${c}, ${outsider.email}, 'member', ${await hashToken(token)}, now() + interval '1 day')`;
 	await page.goto(`/auth/invite?token=${token}`);
+	await expect(page.getByText(/You're invited to join E2E access/)).toBeVisible();
+	await page.getByRole('button', { name: 'Accept and sign in' }).click();
 	await expect(page).toHaveURL(/\/committees\/e2e-[\w-]+$/); // the committee's slug
 	await page.goto(`/modeler/${closed.slug}`);
 	await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
