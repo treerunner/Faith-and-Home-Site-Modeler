@@ -36,6 +36,7 @@
 							<a role="menuitem" class="account__committee" href="/committees/{m.committeeSlug}" onclick={() => (open = false)}>{m.committeeName}</a>
 						{/each}
 						{#if user.isTeam}<a role="menuitem" href="/admin" onclick={() => (open = false)}>Admin</a>{/if}
+						<a role="menuitem" href="/account" onclick={() => (open = false)}>Your account</a>
 						<button role="menuitem" onclick={signOut}>Sign out</button>
 					</div>
 				{/if}

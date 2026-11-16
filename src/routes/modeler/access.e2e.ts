@@ -252,3 +252,21 @@ test('signing in from the masthead lands on your sites, or back on the site you 
 	await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', `/signin?next=${encodeURIComponent(`/modeler/${site.slug}/view`)}`);
 	await anon.close();
 });
+
+test('you set the name your committees see', async ({ browser }) => {
+	const c = await committee('names');
+	const me = await user('names', [{ committeeId: c, role: 'lead' }]);
+	await sql`UPDATE users SET name = '' WHERE id = ${me.id}`;
+	const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+	const page = await ctx.newPage();
+	await signIn(ctx, me);
+	await page.goto('/account');
+	await expect(page.getByRole('region', { name: 'Email' })).toContainText(me.email);
+	await page.getByLabel('Name').fill('Pat Lee');
+	await page.getByRole('button', { name: 'Save' }).click();
+	await expect(page.getByText('Saved')).toBeVisible();
+	await page.getByRole('link', { name: /E2E names/ }).click();
+	await expect(page.getByRole('region', { name: 'Members' })).toContainText('Pat Lee');
+	await expect(page.getByRole('button', { name: /Pat Lee/ })).toBeVisible(); // the account menu
+	await ctx.close();
+});

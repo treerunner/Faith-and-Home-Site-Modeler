@@ -161,3 +161,10 @@ export async function acceptInvitation(token: string): Promise<{ userId: string;
 function escapeHtml(s: string): string {
 	return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
+
+// ── Your account ─────────────────────────────────────────────────────────────
+
+// The name shown to your committees (empty shows your email)
+export async function setName(user: CurrentUser, rawName: string): Promise<void> {
+	await db.update(users).set({ name: rawName.trim().slice(0, 80) }).where(eq(users.id, user.id));
+}
