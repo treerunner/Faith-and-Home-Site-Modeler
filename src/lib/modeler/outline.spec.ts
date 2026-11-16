@@ -108,3 +108,51 @@ describe('drawing and editing outlines in the store', () => {
 		expect(polygonArea(zoneOutline(z, store.plan.structures[0].parts[0]))).toBeCloseTo(200);
 	});
 });
+
+describe('squaring up and lining up', () => {
+	beforeEach(() => store.newSite());
+
+	// A nearly rectangular 20 x 10 m outline turned 7°, with one corner a little off
+	function skewedOutline(): Pt[] {
+		const c = Math.cos((7 * Math.PI) / 180), s = Math.sin((7 * Math.PI) / 180);
+		const at = (x: number, y: number): Pt => [x * c - y * s, x * s + y * c];
+		return [at(-10, -5), at(10, -5), at(10.6, 5.4), at(-10, 5)];
+	}
+
+	it('makes an outline its best-fitting rectangle, at its own angle, so it can take a gable', () => {
+		store.startDrawingStructure();
+		for (const [x, y] of skewedOutline()) store.addStructureVertex(x, y);
+		store.finishStructure();
+		const s = store.plan.structures[0];
+		store.makeRectangle(s.id);
+		const part = store.plan.structures[0].parts[0];
+		expect(part.shape).toBe('rect');
+		expect(((part.rotation % 90) + 90) % 90).toBeCloseTo(7, 0);
+		expect(partFootprint(part)).toBeGreaterThan(200);
+		store.updateStructure(s.id, { roof: 'gable' });
+		expect(store.plan.structures[0].roof).toBe('gable');
+		store.undo();
+		store.undo();
+		expect(store.plan.structures[0].parts[0].shape).toBe('poly');
+	});
+
+	it('turns a piece to line up with a neighbor\'s walls, or in 15° steps', () => {
+		store.startDrawingStructure();
+		for (const [x, y] of skewedOutline()) store.addStructureVertex(x, y);
+		store.finishStructure();
+		store.makeRectangle(store.plan.structures[0].id);
+		store.placePart('square', 30, 0);
+		const sq = store.plan.structures[1].parts[0];
+		// Grab the handle due east of its center and turn it about 9°
+		store.startRotating(sq.id, sq.x + 10, sq.y);
+		const turn = (deg: number) => store.updateRotation(sq.x + 10 * Math.cos((deg * Math.PI) / 180), sq.y + 10 * Math.sin((deg * Math.PI) / 180), false);
+		turn(9);
+		expect(store.plan.structures[1].parts[0].rotation).toBeCloseTo(7, 0);
+		expect(store.mode).toMatchObject({ type: 'rotating', aligned: true });
+		turn(20);
+		expect(store.plan.structures[1].parts[0].rotation).toBe(15);
+		store.updateRotation(sq.x + 10 * Math.cos(0.2), sq.y + 10 * Math.sin(0.2), true);
+		expect(store.plan.structures[1].parts[0].rotation).toBeCloseTo((0.2 * 180) / Math.PI, 3);
+		store.endRotation();
+	});
+});

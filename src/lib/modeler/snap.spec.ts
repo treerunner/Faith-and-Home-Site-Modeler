@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { snapToGrid, getPartAABB, getPartCorners, snapEdge } from './snap';
+import { snapToGrid, getPartAABB, getPartCorners, snapEdge, snapRotation, edgeAngles } from './snap';
 import type { Part } from './types';
 
 function makePart(overrides: Partial<Part> = {}): Part {
@@ -111,5 +111,32 @@ describe('snapEdge', () => {
 		const result = snapEdge(part, [part]);
 		expect(result.x).toBe(part.x);
 		expect(result.y).toBe(part.y);
+	});
+});
+
+describe('snapRotation', () => {
+	it('lines up with a nearby wall within a few degrees, any quarter turn', () => {
+		expect(snapRotation(0, 9, [7])).toEqual({ rotation: 7, aligned: true });
+		expect(snapRotation(0, 95, [7])).toEqual({ rotation: 97, aligned: true });
+		expect(snapRotation(90, -84, [7.5])).toEqual({ rotation: 7.5, aligned: true });
+	});
+
+	it('turns in 15° steps from its start otherwise', () => {
+		expect(snapRotation(0, 20, [7])).toEqual({ rotation: 15, aligned: false });
+		expect(snapRotation(7, 16, [])).toEqual({ rotation: 22, aligned: false });
+		expect(snapRotation(10, -20, [])).toEqual({ rotation: 355, aligned: false });
+	});
+
+	it('takes the nearest of several walls', () => {
+		expect(snapRotation(0, 6, [7, 4])).toEqual({ rotation: 7, aligned: true });
+	});
+});
+
+describe('edgeAngles', () => {
+	it('gives wall directions folded to a quarter turn, skipping short edges', () => {
+		const c = Math.cos((7 * Math.PI) / 180), s = Math.sin((7 * Math.PI) / 180);
+		const rect = [[0, 0], [20 * c, 20 * s], [20 * c - 10 * s, 20 * s + 10 * c], [-10 * s, 10 * c]] as [number, number][];
+		expect(edgeAngles([rect])).toEqual([7]);
+		expect(edgeAngles([[[0, 0], [1, 0], [1, 1]]])).toEqual([]);
 	});
 });
