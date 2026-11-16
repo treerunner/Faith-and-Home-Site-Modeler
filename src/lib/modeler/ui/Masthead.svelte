@@ -60,7 +60,7 @@
 		</div>
 
 		<div class="masthead__col">
-			<p class="masthead__lead">Tell us about your space, your culture, and your community.</p>
+			<p class="masthead__lead">Tell us about your space and your community.</p>
 			<p class="masthead__body-text">We will connect you with models, tools, and stories that fit your context.</p>
 		</div>
 
