@@ -14,6 +14,10 @@ export const variables = defineEnvVars({
 		description: 'Resend API key for sending sign-in and invitation emails (optional)',
 		schema: (value) => value ?? '',
 	},
+	RAILWAY_ENVIRONMENT_NAME: {
+		description: 'Set by Railway on deployed services; there, the email settings are required',
+		schema: (value) => value ?? '',
+	},
 	EMAIL_FROM: {
 		description: 'Sender for emails, e.g. "Faith & Home <noreply@example.org>" (a domain verified in Resend)',
 		schema: (value) => value ?? '',
