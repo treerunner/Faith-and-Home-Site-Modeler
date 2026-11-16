@@ -65,6 +65,16 @@ test('draw a structure point by point, snapped to its neighbor, then move its po
 	await page.mouse.dblclick(at(12, 3).x, at(12, 3).y);
 	expect(await footprint(page)).not.toBe(overhang);
 
+	// An outline squares up into a rectangle where it stands, and can then take a gable roof
+	const additionRow = page.locator('.struct-row').last();
+	if ((await additionRow.getAttribute('aria-expanded')) !== 'true') await additionRow.click();
+	const addition = page.locator('.struct-item').last();
+	await expect(addition.getByLabel('Roof').locator('option')).toHaveText(['Flat', 'Object']);
+	await addition.getByRole('button', { name: 'Make rectangle' }).click();
+	await expect(addition.getByRole('button', { name: 'Make rectangle' })).toHaveCount(0);
+	await addition.getByLabel('Roof').selectOption('gable');
+	await expect(addition.getByLabel('Roof')).toHaveValue('gable');
+
 	// The square's corners can be moved too, once it's an outline
 	await page.getByRole('button', { name: 'Expand Structure' }).first().click();
 	await page.getByRole('button', { name: 'Edit points' }).click();

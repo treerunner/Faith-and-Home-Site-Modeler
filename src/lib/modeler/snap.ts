@@ -97,3 +97,31 @@ export function snapEdge(
 		y: distY <= threshold ? bestY : moving.y,
 	};
 }
+
+// Rotation while dragging the handle: lines up with a nearby building's walls when within
+// `tolerance` degrees of one (any of the four ways a rectangle can face it), otherwise turns in
+// 15° steps from where it started. Angles in degrees, Part.rotation's convention.
+export function snapRotation(start: number, delta: number, wallAngles: number[], tolerance = 4): { rotation: number; aligned: boolean } {
+	const raw = start + delta;
+	let best: number | null = null;
+	for (const a of wallAngles) {
+		const off = ((((raw - a) % 90) + 135) % 90) - 45; // signed distance to the wall's nearest quarter turn
+		if (Math.abs(off) <= tolerance && (best === null || Math.abs(off) < Math.abs(best))) best = off;
+	}
+	const rotation = best !== null ? raw - best : start + Math.round(delta / 15) * 15;
+	return { rotation: Math.round((((rotation % 360) + 360) % 360) * 100) / 100, aligned: best !== null };
+}
+
+// The directions of polygon edges, in degrees: what a turning piece can line up with
+export function edgeAngles(outlines: [number, number][][]): number[] {
+	const out = new Set<number>();
+	for (const ring of outlines) {
+		for (let i = 0; i < ring.length; i++) {
+			const [x1, y1] = ring[i];
+			const [x2, y2] = ring[(i + 1) % ring.length];
+			if (Math.hypot(x2 - x1, y2 - y1) < 2) continue; // short jogs and circle facets aren't walls to line up with
+			out.add(Math.round((((Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI + 360) % 90) * 10) / 10);
+		}
+	}
+	return [...out];
+}

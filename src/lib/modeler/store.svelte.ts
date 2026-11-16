@@ -1,6 +1,6 @@
 import type { BuildingType, DevelopmentType, CongregationProfile, OpenSpace, PaletteShape, Part, Plan, ReuseZone, Roof, Site, Structure, Terrain, Tree, Use } from './types';
 import type { InteractionMode, ResizeHandle } from './interaction';
-import { getPartAABB, snapEdge, snapToGrid, type AABB } from './snap';
+import { edgeAngles, getPartAABB, snapEdge, snapRotation, snapToGrid, type AABB } from './snap';
 import { ApiError, putSite } from './api';
 import { terrainModel, terrainSurface, type TerrainModel, type TerrainSurface } from './terrain';
 import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
@@ -17,6 +17,7 @@ import {
 	fitFootprint,
 	GROUND_HALF,
 	asPoly,
+	minAreaRect,
 	outlinePart,
 	partOutline,
 	pointInPolygon,
@@ -41,6 +42,7 @@ const PART_DEFAULTS: Record<PaletteShape, { w: number; d: number }> = {
 };
 
 const MAX_UNDO = 50;
+const WALL_REACH = 40; // m: how far away a building's walls still count for lining up a rotation
 
 // A zone's floors kept within the building's stack: 1 (0 with a basement) up to its top floor,
 // counting stories a plan added to the whole building. A zone above a lowered top comes down
@@ -711,6 +713,20 @@ class ModelerStore {
 		this.#reshape(partId, outline.filter((_, i) => i !== index));
 	}
 
+	// Replaces outline pieces with their best-fitting rectangles, where they stand and at their
+	// own angle (the fit address footprints use), so they can take a gable roof
+	makeRectangle(structureId: string) {
+		const s = this.plan.structures.find((x) => x.id === structureId);
+		if (!s || this.isLocked(structureId)) return;
+		const outlines = s.parts.filter((p) => p.shape === 'poly');
+		if (!outlines.length) return;
+		this.#pushUndo();
+		for (const part of outlines) {
+			const r = minAreaRect(partOutline(part));
+			this.#replacePart(part.id, (before) => ({ ...before, shape: 'rect', x: r.x, y: r.y, w: r.w, d: r.d, rotation: r.rotation, points: undefined, ridgeAxis: 'w' }));
+		}
+	}
+
 	// Turns a rectangle, square or triangle into an outline with the same corners
 	editPoints(structureId: string) {
 		const s = this.plan.structures.find((x) => x.id === structureId);
@@ -733,10 +749,16 @@ class ModelerStore {
 	}
 
 	#reshape(partId: string, outline: [number, number][], from = this.#reshapeBase(partId)) {
+		this.#replacePart(partId, (before) => withOutline(before, outline), from);
+	}
+
+	// Swaps a part for a new one everywhere it appears (on the site, each plan's copy too), keeping
+	// its reuse zones on the same ground. A part with points can't take a gable roof.
+	#replacePart(partId: string, make: (before: Part) => Part, from = this.#reshapeBase(partId)) {
 		for (const { s, part: before, zones } of from) {
-			const after = withOutline(before, outline);
+			const after = make(before);
 			s.parts = s.parts.map((p) => (p.id === partId ? after : p));
-			if (s.roof === 'gable') s.roof = 'flat';
+			if (s.roof === 'gable' && after.shape === 'poly') s.roof = 'flat';
 			if (zones) {
 				const next = zones.flatMap((z) =>
 					z.partId !== partId ? [z] : clipToPart(zoneOutline(z, before), after).map((points, k) => ({ ...z, id: k ? crypto.randomUUID() : z.id, points })),
@@ -1226,6 +1248,9 @@ class ModelerStore {
 		this.#pushUndo();
 		this.#gestureDidMutate = false;
 		const startAngle = Math.atan2(mouseY - part.y, mouseX - part.x) * (180 / Math.PI);
+		// Walls within reach to line up with: every other piece's outline nearby, and the parcel
+		const near = (p: Part) => Math.hypot(p.x - part.x, p.y - part.y) < WALL_REACH + Math.max(p.w, p.d) / 2;
+		const outlines = this.allParts.filter((p) => p.id !== id && near(p)).map(partOutline);
 		this.mode = {
 			type: 'rotating',
 			partId: id,
@@ -1233,18 +1258,21 @@ class ModelerStore {
 			centerY: part.y,
 			startAngle,
 			startRotation: part.rotation,
+			wallAngles: edgeAngles(this.site.parcel ? [...outlines, this.site.parcel] : outlines),
 		};
 	}
 
 	updateRotation(mouseX: number, mouseY: number, free: boolean) {
 		if (this.mode.type !== 'rotating') return;
-		const { partId, centerX, centerY, startAngle, startRotation } = this.mode;
+		const { partId, centerX, centerY, startAngle, startRotation, wallAngles } = this.mode;
 		const angle = Math.atan2(mouseY - centerY, mouseX - centerX) * (180 / Math.PI);
-		let delta = angle - startAngle;
-		if (!free) delta = Math.round(delta / 15) * 15;
+		const delta = angle - startAngle;
+		// Free with Shift; otherwise lines up with a nearby wall, or turns in 15° steps
+		const snapped = free ? { rotation: ((startRotation + delta) % 360 + 360) % 360, aligned: false } : snapRotation(startRotation, delta, wallAngles);
 		this.#mutPart(partId, (p) => {
-			p.rotation = ((startRotation + delta) % 360 + 360) % 360;
+			p.rotation = snapped.rotation;
 		});
+		this.mode = { ...this.mode, aligned: snapped.aligned };
 		this.#gestureDidMutate = true;
 	}
 

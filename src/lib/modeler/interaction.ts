@@ -23,6 +23,8 @@ export type InteractionMode =
 			centerY: number;
 			startAngle: number;
 			startRotation: number;
+			wallAngles: number[]; // nearby buildings' walls it can line up with
+			aligned?: boolean; // lined up with one right now
 	  }
 	| { type: 'drawingStructure'; points: [number, number][]; cursorPoint?: [number, number]; snap?: Snap }
 	| { type: 'draggingVertex'; partId: string; index: number; outline: [number, number][]; snap?: Snap }

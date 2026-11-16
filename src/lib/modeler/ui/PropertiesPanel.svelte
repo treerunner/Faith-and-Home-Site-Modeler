@@ -718,6 +718,9 @@
 									{/if}
 									<div class="action-row">
 										<button class="split-btn" onclick={() => store.startCutting(s.id)} title="Cut into pieces, like additions">Cut</button>
+										{#if s.parts.some((p) => p.shape === 'poly')}
+											<button class="split-btn" onclick={() => store.makeRectangle(s.id)} title="Replace the outline with its best-fitting rectangle, where it stands, so it can take a gable roof">Make rectangle</button>
+										{/if}
 										{#if s.parts.some((p) => p.shape === 'rect' || p.shape === 'square' || p.shape === 'tri')}
 											<button class="split-btn" onclick={() => store.editPoints(s.id)} title="Move its corners one by one, to line up with other buildings">Edit points</button>
 										{/if}

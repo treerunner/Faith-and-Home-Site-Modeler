@@ -327,6 +327,13 @@
 			</div>
 		{/if}
 
+		{#if store.mode.type === 'rotating' && store.selectedPart}
+			<!-- The angle as it turns, and whether it has lined up with a neighbor's wall -->
+			{@const deg = Math.round(store.selectedPart.rotation * 10) / 10}
+			<div class="drawing-hint">
+				{deg}°{store.mode.aligned ? ', lined up with a nearby wall' : ''}. Hold Shift to turn freely.
+			</div>
+		{/if}
 		{#if store.mode.type === 'drawingStructure'}
 			<div class="drawing-hint">
 				{#if store.mode.points.length < 3}
