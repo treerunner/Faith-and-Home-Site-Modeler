@@ -112,6 +112,12 @@ test('the right drawer slides over the canvas, reopens on a selection, and is re
 	await expect(page.locator('.drawer')).toBeVisible();
 	await expect(spatial).toHaveAttribute('aria-selected', 'true');
 
+	// The panel button in the breadcrumb bar closes and opens it too
+	await page.getByRole('button', { name: 'Close panel' }).click();
+	await expect(page.locator('.drawer')).toBeHidden();
+	await page.getByRole('button', { name: 'Open panel' }).click();
+	await expect(page.locator('.drawer')).toBeVisible();
+
 	// The other tab switches the drawer's content
 	await page.getByRole('tab', { name: 'Social' }).click();
 	await expect(page.getByRole('heading', { name: 'Congregation' })).toBeVisible();

@@ -1017,7 +1017,7 @@
 	}
 	.props-panel:not(.props-panel--open) .tab { left: 0; } /* closed, fully on screen */
 	.tab:hover { color: var(--color-text); }
-	.tab--active { background: var(--color-surface); color: var(--fh-dusk); }
+	.tab--active { background: var(--color-surface); color: var(--color-text); }
 
 	.tab-icon {
 		width: 24px;

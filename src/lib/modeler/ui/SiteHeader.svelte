@@ -47,6 +47,23 @@
 	</span>
 	<span class="sep" aria-hidden="true">›</span>
 	<PlanSwitcher />
+
+	<!-- Opens and closes the right drawer, always in the same place -->
+	<button
+		class="drawer-toggle"
+		aria-label={store.drawerOpen ? 'Close panel' : 'Open panel'}
+		aria-pressed={store.drawerOpen}
+		title={store.drawerOpen ? 'Close panel' : 'Open panel'}
+		onclick={() => (store.drawerOpen = !store.drawerOpen)}
+	>
+		<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+			<rect x="2.5" y="3.5" width="15" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+			<line x1="12.5" y1="3.5" x2="12.5" y2="16.5" stroke="currentColor" stroke-width="1.5" />
+			{#if store.drawerOpen}
+				<rect x="12.5" y="3.5" width="5" height="13" fill="currentColor" opacity="0.35" />
+			{/if}
+		</svg>
+	</button>
 </nav>
 
 <style>
@@ -68,6 +85,22 @@
 	.crumb--committee a:hover { color: var(--color-text); text-decoration: underline; }
 	.crumb--site { font-weight: 600; overflow: visible; }
 	.sep { color: var(--fh-stone); }
+
+	.drawer-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 24px;
+		margin: -0.3rem -0.4rem -0.3rem auto; /* no taller than the crumbs */
+		border: none;
+		border-radius: 4px;
+		background: none;
+		color: var(--fh-stone);
+		cursor: pointer;
+	}
+	.drawer-toggle:hover { color: var(--color-text); background: #ece8e0; }
+	.drawer-toggle[aria-pressed='true'] { color: var(--color-text); }
 
 	.site-name-input {
 		field-sizing: content; /* as wide as the name */
