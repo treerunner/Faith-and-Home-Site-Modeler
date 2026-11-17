@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	boardHalfFor,
+	grownBuildings,
 	offsetPolygon,
 	partOutline,
 	splitPart,
@@ -225,19 +226,37 @@ describe('clipLineToBoard', () => {
 describe('boardHalfFor', () => {
 	const square = (h: number): [number, number][] => [[-h, -h], [h, -h], [h, h], [-h, h]];
 
-	it('keeps the board when the parcel has room', () => {
-		expect(boardHalfFor(square(60), 150)).toBeNull();
-		expect(boardHalfFor(square(120), 150)).toBeNull(); // exactly at the 30 m margin
+	it('keeps the board when the parcel has room, even on a wide screen', () => {
+		expect(boardHalfFor(square(30), 150)).toBeNull();
+		// A lot about Redeemer Too's size: 55 × 70 m
+		expect(boardHalfFor([[-24, -37], [31, -37], [31, 32], [-24, 32]], 150)).toBeNull();
 	});
 
 	it('grows the board around a parcel near the edge, rounded to 10 m', () => {
-		expect(boardHalfFor(square(125), 150)).toBe(190); // 125 + 60 margin
-		expect(boardHalfFor([[0, 0], [10, 0], [10, -210]], 150)).toBe(270);
+		expect(boardHalfFor([[-100, -10], [125, -10], [125, 10], [-100, 10]], 150)).toBe(190); // 125 + 60 margin
+		expect(boardHalfFor([[150, 0], [160, 0], [160, 10]], 150)).toBe(220);
+	});
+
+	it('grows the board so a tall parcel, fitted on a wide screen, stays on it', () => {
+		// St. Tim's: 92 × 145 m. Fitted at 2.5:1, the view is 174 m tall and 435 m wide
+		expect(boardHalfFor([[-60, -70], [32, -70], [32, 75], [-60, 75]], 150)).toBe(240);
+		expect(boardHalfFor(square(60), 150)).toBe(180);
 	});
 
 	it('stops at the largest board', () => {
 		expect(boardHalfFor(square(900), 150)).toBe(400);
 		expect(boardHalfFor(square(900), 400)).toBeNull();
+	});
+});
+
+describe('grownBuildings', () => {
+	const box = (x: number, y: number, id: string) => ({ id, polygon: [[x - 5, y - 5], [x + 5, y - 5], [x + 5, y + 5], [x - 5, y + 5]] as Pt[] });
+
+	it("keeps the old board as it was and adds only the new ring's buildings", () => {
+		// The church at the origin became chipboard and left the old foam
+		const old = [box(100, 0, 'neighbor')];
+		const fetched = [box(0, 0, 'church again'), box(100, 0, 'neighbor again'), box(200, 0, 'new ring'), box(149, 0, 'edge again')];
+		expect(grownBuildings(old, 150, fetched).map((b) => b.id)).toEqual(['neighbor', 'new ring']);
 	});
 });
 

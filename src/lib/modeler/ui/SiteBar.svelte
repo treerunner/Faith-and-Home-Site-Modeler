@@ -15,7 +15,7 @@
 		else await goto(url, { shallow: true, replace: true });
 	}
 
-	type Member = { committeeId: string; committeeName: string };
+	type Member = { committeeId: string; committeeName: string; committeeSlug: string };
 	type User = { id: string; isTeam: boolean; memberships: Member[] } | null | undefined;
 
 	// Saving a new site asks which committee it goes to (several, or none yet): shared with the
@@ -45,7 +45,13 @@
 		}
 		saveChoice.open = false;
 		const thumbnail = await captureThumbnail(store.plan, store.viewMode === '3d').catch(() => null);
+		const isNew = !store.isPersisted;
 		const ok = await store.save(thumbnail, committeeId);
+		// A new site now has a committee: the breadcrumb names it
+		if (ok && isNew && committeeId) {
+			const m = (page.data.user as User)?.memberships.find((x) => x.committeeId === committeeId);
+			if (m) store.rights.committee = { id: m.committeeId, name: m.committeeName, slug: m.committeeSlug };
+		}
 		if (ok) await syncUrl();
 		return ok;
 	}
@@ -95,7 +101,7 @@
 		if (patch.visibility) store.rights.visibility = patch.visibility;
 		if (patch.committeeId) {
 			const m = user?.memberships.find((x) => x.committeeId === patch.committeeId);
-			store.rights.committee = { id: patch.committeeId, name: m?.committeeName ?? '' };
+			store.rights.committee = { id: patch.committeeId, name: m?.committeeName ?? '', slug: m?.committeeSlug ?? '' };
 		}
 	}
 	let noticeTimer: ReturnType<typeof setTimeout> | undefined;

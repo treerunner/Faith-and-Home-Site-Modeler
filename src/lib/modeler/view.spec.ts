@@ -56,8 +56,8 @@ describe('zoomAt', () => {
 	});
 
 	it('does not move the view when zoom is already at a limit', () => {
-		const v = zoomAt({ center: [5, 5], height: maxViewHeight(HALF) }, 2, [50, 50], HALF);
-		expect(v).toEqual({ center: [5, 5], height: maxViewHeight(HALF) });
+		const v = zoomAt({ center: [0, 0], height: maxViewHeight(HALF) }, 2, [50, 50], HALF);
+		expect(v).toEqual({ center: [0, 0], height: maxViewHeight(HALF) });
 	});
 });
 
@@ -69,9 +69,12 @@ describe('panBy', () => {
 		expect(v.center[1]).toBeCloseTo(5);
 	});
 
-	it('keeps the view center on the board', () => {
-		expect(panBy({ center: [0, 0], height: 100 }, -100000, 0, 500, HALF).center[0]).toBe(HALF);
-		expect(panBy({ center: [0, 0], height: 100 }, 0, 100000, 500, 400).center[1]).toBe(-400);
+	it("stops when the view's edge reaches the board's edge (plus the zoom-out allowance)", () => {
+		// A 100 m view reaches 50 m from its center; the board's edge is 150 m out
+		expect(panBy({ center: [0, 0], height: 100 }, -100000, 0, 500, HALF).center[0]).toBe(100);
+		expect(panBy({ center: [0, 0], height: 100 }, 0, 100000, 500, 400).center[1]).toBeCloseTo(-350);
+		// A wide canvas reaches further sideways, so it pans less far that way
+		expect(panBy({ center: [0, 0], height: 100 }, -100000, 0, 500, HALF, 2).center[0]).toBe(50);
 	});
 });
 
@@ -81,8 +84,17 @@ describe('board limits', () => {
 		expect(zoomAt({ center: [0, 0], height: 300 }, 2, [0, 0], 400).height).toBe(600);
 	});
 
-	it('keeps a fitted view centered on the board', () => {
-		expect(fitView({ minX: 500, maxX: 520, minY: 0, maxY: 20 }, 1, HALF).center[0]).toBe(HALF);
+	it('keeps a fitted view on the board', () => {
+		expect(fitView({ minX: 500, maxX: 520, minY: 0, maxY: 20 }, 1, HALF).center[0]).toBe(138); // 150 - 24 / 2
+	});
+
+	it('zooms out no further than the board fills a wide canvas', () => {
+		expect(maxViewHeight(HALF, 2.5)).toBeCloseTo(120);
+		expect(maxViewHeight(HALF, 0.5)).toBe(maxViewHeight(HALF)); // a tall canvas: the height limits
+		// St. Tim's on its old 300 m board at 2.4:1: no linen past the sides
+		const v = fitView({ minX: -60, maxX: 32, minY: -70, maxY: 75 }, 2.4, HALF);
+		expect(v.height * 2.4).toBeLessThanOrEqual(2 * HALF + 1e-9);
+		expect(v.center[0]).toBeCloseTo(0);
 	});
 });
 

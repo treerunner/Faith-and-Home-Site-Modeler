@@ -65,8 +65,9 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 	// A new site opens on the site view: existing conditions, edited here only
 	await page.goto('/modeler');
 	await page.getByLabel('Site name').fill(`E2E site ${stamp}`);
-	await expect(page.locator('.plan-eyebrow')).toHaveText('Site');
-	await expect(page.locator('.plan-name-fixed')).toHaveText('Existing conditions');
+	const crumbs = page.getByRole('navigation', { name: 'Where you are' });
+	await expect(crumbs).toContainText('Unsaved sketch');
+	await expect(page.locator('.plan-name')).toHaveText('Existing conditions');
 	await page.getByLabel('Drag to place Square').dragTo(canvas, { targetPosition: { x: 200, y: 200 } });
 	await expect(structures(page)).toHaveCount(1);
 	await expect(page.getByText('Unsaved changes')).toBeVisible();
@@ -74,6 +75,9 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 	await expect(page).toHaveURL(urlIs(site));
 	created.push(await siteIdBySlug(request, `e2e-site-${stamp}`));
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+	// Saved, the breadcrumb names the committee that owns it, linked to its page
+	await expect(crumbs).not.toContainText('Unsaved sketch');
+	await expect(crumbs.getByRole('link')).toHaveAttribute('href', /^\/committees\/.+/);
 
 	// A plan starts from existing conditions and adds a proposed building
 	await planAction(page, 'New plan');
@@ -109,7 +113,9 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 	await expect(raised.getByLabel('Added stories')).toHaveValue('1');
 
 	// Renaming a plan moves its URL on save; the old one redirects
+	await planAction(page, 'Rename');
 	await page.getByLabel('Plan name').fill('Housing on lot');
+	await page.keyboard.press('Enter');
 	await save(page);
 	await expect(page).toHaveURL(urlIs(`${site}/housing-on-lot`));
 	await page.getByRole('button', { name: 'Choose plan' }).click();
@@ -117,20 +123,22 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 	await page.keyboard.press('Escape');
 	await page.goto(`${site}/new-plan`);
 	await expect(page).toHaveURL(urlIs(`${site}/housing-on-lot`));
-	await expect(page.getByLabel('Plan name')).toHaveValue('Housing on lot');
+	await expect(page.locator('.plan-name')).toHaveText('Housing on lot');
 	await expect(structures(page)).toHaveCount(2);
 	await expect((await openStructure(page, 0)).getByLabel('Added stories')).toHaveValue('1');
 
 	// Toolbar Duplicate copies the plan within the site
 	await page.getByRole('button', { name: 'Duplicate' }).click();
-	await expect(page.getByLabel('Plan name')).toHaveValue('Housing on lot copy');
+	await expect(page.locator('.plan-name')).toHaveText('Housing on lot copy');
 	await expect(page).toHaveURL(urlIs(`${site}/housing-on-lot-copy`));
 	await save(page);
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
 	// The site is renamed on the site view only; that moves every plan URL, and old site URLs redirect
-	await expect(page.getByLabel('Site name')).toBeDisabled();
-	await chooseSite(page);
+	// In a plan the site's name leads back to the site view, where it's edited
+	await expect(page.getByLabel('Site name')).toHaveCount(0);
+	await crumbs.getByRole('button', { name: `E2E site ${stamp}` }).click();
+	await expect(page).toHaveURL(urlIs(site));
 	await page.getByLabel('Site name').fill(`E2E site ${stamp} Grace`);
 	await save(page);
 	const renamed = `${site}-grace`;
@@ -159,12 +167,12 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 	await page.goto(link);
 	await expect(page.getByText('View only')).toBeVisible();
 	await expect(page.getByRole('complementary', { name: 'Shape palette' })).toHaveCount(0);
-	await expect(page.getByLabel('Plan name')).toBeDisabled();
 	await chooseSite(page);
 	await expect(page).toHaveURL(urlIs(`${renamed}/view`));
 	await expect(structures(page)).toHaveCount(1);
 	await page.getByRole('button', { name: 'Choose plan' }).click();
 	await expect(page.locator('.plan-menu').getByRole('button', { name: 'New plan' })).toHaveCount(0);
+	await expect(page.locator('.plan-menu').getByRole('button', { name: 'Rename' })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 
 	// Deleting a plan goes to the one before it; its old URL falls back to the site view

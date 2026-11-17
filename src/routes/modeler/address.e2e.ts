@@ -58,7 +58,8 @@ async function mockAddressApi(page: Page, context: ContextResponse, terrain: Ter
 // Plan view is centered on the origin; site meters to page pixels at the current zoom
 async function clickSite(page: Page, x: number, y: number, viewHeight: number) {
 	const box = (await page.locator('.canvas-area canvas').boundingBox())!;
-	const scale = box.height / viewHeight;
+	// A wide canvas shows no more than the 300 m board across, so the view may be shorter
+	const scale = box.height / Math.min(viewHeight, (300 * box.height) / box.width);
 	await page.mouse.click(box.x + box.width / 2 + x * scale, box.y + box.height / 2 + y * scale);
 }
 
@@ -268,6 +269,8 @@ test('3D: the wheel zooms toward what is under the cursor', async ({ page }) => 
 	await page.getByRole('button', { name: 'Add buildings' }).click();
 	await expect(page.getByText('Loading terrain…')).toHaveCount(0);
 	await page.getByRole('button', { name: '3D', exact: true }).click();
+	// The drawer slides over the right of the canvas, where the cursor goes: put it away
+	if (await page.locator('.tab--active').count()) await page.locator('.tab--active').click();
 	await page.waitForTimeout(800);
 
 	// The church is near the middle of the view; a neighbor's foam block is off to the right

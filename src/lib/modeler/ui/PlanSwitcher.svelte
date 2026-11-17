@@ -4,6 +4,7 @@
 
 	let open = $state(false);
 	let confirmingDelete = $state(false);
+	let renaming = $state(false); // the plan's name is a text box in place of the menu button
 	let rootEl: HTMLDivElement | undefined = $state();
 
 	function close() {
@@ -20,13 +21,32 @@
 	function newPlan() {
 		store.newPlan();
 		syncUrl();
-		close();
+		rename();
 	}
 
 	function duplicate() {
 		store.duplicatePlan();
 		syncUrl();
+		rename();
+	}
+
+	// A new or copied plan opens with its name ready to type over
+	function rename() {
 		close();
+		renaming = true;
+	}
+
+	function focusAndSelect(el: HTMLInputElement) {
+		el.focus();
+		el.select();
+	}
+
+	function handleRenameKey(e: KeyboardEvent) {
+		if (e.key === 'Enter' || e.key === 'Escape') {
+			e.preventDefault();
+			e.stopPropagation();
+			(e.target as HTMLInputElement).blur();
+		}
 	}
 
 	function remove() {
@@ -53,31 +73,32 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="plan-switcher" bind:this={rootEl} onkeydown={handleKeyDown}>
 	<div class="plan-row">
-		<!-- The site view is existing conditions; plans are the alternatives under it -->
-		<span class="plan-eyebrow">{store.onSite ? 'Site' : 'Plan'}</span>
-		{#if store.onSite}
-			<span class="plan-name-fixed">{store.plan.name}</span>
-		{:else}
+		<!-- The last breadcrumb: existing conditions (the site view) or a plan, by name; it opens the plan menu -->
+		{#if renaming}
 			<input
 				class="plan-name-input"
 				type="text"
 				aria-label="Plan name"
 				placeholder="Untitled plan"
 				value={store.plan.name}
-				disabled={store.readOnly}
+				use:focusAndSelect
+				onkeydown={handleRenameKey}
+				onblur={() => (renaming = false)}
 				oninput={(e) => store.renamePlan((e.target as HTMLInputElement).value)}
 			/>
+		{:else}
+			<button
+				class="plan-menu-btn"
+				aria-label="Choose plan ({store.plan.name || 'Untitled plan'})"
+				aria-haspopup="true"
+				aria-expanded={open}
+				title="Choose a plan"
+				onclick={() => (open ? close() : (open = true))}
+			>
+				<span class="plan-name">{store.plan.name || 'Untitled plan'}</span>
+				<span class="caret" aria-hidden="true">▾</span>
+			</button>
 		{/if}
-		<button
-			class="plan-menu-btn"
-			aria-label="Choose plan"
-			aria-haspopup="true"
-			aria-expanded={open}
-			onclick={() => (open ? close() : (open = true))}
-		>
-			<span class="plan-count">{store.site.plans.length}</span>
-			<span aria-hidden="true">▾</span>
-		</button>
 	</div>
 
 	{#if open}
@@ -117,6 +138,7 @@
 						<button class="menu-btn" onclick={newPlan} title="Start from existing conditions">New plan</button>
 						{#if !store.onSite}
 							<button class="menu-btn" onclick={duplicate} title="Copy this plan">Duplicate</button>
+							<button class="menu-btn" onclick={rename}>Rename</button>
 							<button class="menu-btn menu-btn--quiet" onclick={() => (confirmingDelete = true)}>Delete plan</button>
 						{/if}
 					{/if}
@@ -129,9 +151,7 @@
 <style>
 	.plan-switcher {
 		position: relative;
-		padding: 0.35rem 0.6rem 0.4rem;
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
+		min-width: 0;
 	}
 
 	.plan-row {
@@ -140,63 +160,57 @@
 		gap: 0.35rem;
 	}
 
-	.plan-eyebrow {
-		font-size: 0.6rem;
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--fh-stone);
-	}
 
 	.plan-name-input {
-		flex: 1;
-		min-width: 0;
+		field-sizing: content; /* as wide as the name, like the breadcrumb's other parts */
+		min-width: 6ch;
+		max-width: 24rem;
 		border: none;
 		border-bottom: 1px solid transparent;
 		background: transparent;
-		font-size: 0.75rem;
+		font: inherit;
+		font-size: 0.85rem;
+		font-weight: 600;
 		color: var(--color-text);
 		padding: 0;
 		outline: none;
 		caret-color: var(--color-selection);
 	}
 
-	.plan-name-fixed {
-		flex: 1;
-		min-width: 0;
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--color-text);
-	}
 
 	.plan-name-input:focus { border-bottom-color: var(--color-selection); }
-	.plan-name-input:disabled { color: var(--color-text); opacity: 1; }
 
 	.plan-menu-btn {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
-		padding: 0.1rem 0.35rem;
-		border: 1px solid var(--color-border);
+		gap: 0.35rem;
+		margin: -0.15rem -0.4rem;
+		padding: 0.15rem 0.4rem;
+		border: 1px solid transparent;
 		border-radius: 3px;
 		background: none;
-		font-size: 0.65rem;
+		font: inherit;
+		font-size: 0.85rem;
+		font-weight: 600;
 		color: var(--color-text);
 		cursor: pointer;
+		max-width: 24rem;
 	}
 
-	.plan-menu-btn:hover,
-	.plan-menu-btn[aria-expanded='true'] { background: #ece8e0; }
+	.plan-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.caret { font-size: 0.7rem; color: var(--fh-stone); }
 
-	.plan-count { font-variant-numeric: tabular-nums; }
+	.plan-menu-btn:hover,
+	.plan-menu-btn[aria-expanded='true'] { background: #ece8e0; border-color: var(--color-border); }
+
 
 	.plan-menu {
 		position: absolute;
-		left: 0.6rem;
-		right: 0.6rem;
-		top: calc(100% - 0.15rem);
-		z-index: 10;
-		background: #fff;
+		left: 0;
+		width: 16rem;
+		top: calc(100% + 0.3rem);
+		z-index: 30;
+		background: var(--fh-linen);
 		border: 1px solid var(--color-border);
 		border-radius: 4px;
 		box-shadow: 0 4px 12px rgba(0 0 0 / 0.1);

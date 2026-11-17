@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { decodePng } from '../../lib/server/png';
 
 test('modeler page loads with palette', async ({ page }) => {
 	await page.goto('/modeler');
@@ -65,13 +66,13 @@ test('the scale bar follows the zoom', async ({ page }) => {
 	await page.goto('/modeler');
 	const label = page.locator('.scale-bar__label');
 	await expect(label).toHaveText('25 ft'); // default 100 m view
-	for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Zoom out' }).click();
+	for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'Zoom out' }).click();
 	await expect(label).not.toHaveText('25 ft');
 	// The bar's drawn length matches its label at the new zoom
 	const canvas = (await page.locator('.canvas-area canvas').boundingBox())!;
 	const bar = (await page.locator('.scale-bar__line').boundingBox())!;
 	const feet = Number((await label.textContent())!.replace(' ft', ''));
-	const viewMeters = 100 * 1.25 ** 4;
+	const viewMeters = 100 * 1.25 ** 2; // within the board on a wide canvas
 	expect(bar.width).toBeCloseTo(((feet / 3.28084) / viewMeters) * canvas.height, 0);
 });
 
@@ -80,11 +81,48 @@ test('the Social tab scrolls to the end, and long notes show in full', async ({ 
 	await page.getByRole('tab', { name: 'Social' }).click();
 	const notes = page.getByLabel('Notes');
 	await notes.fill(Array.from({ length: 12 }, (_, i) => `Line ${i + 1} of the congregation notes, long enough to wrap.`).join('\n'));
-	await page.locator('.props-panel').evaluate((el) => (el.scrollTop = el.scrollHeight));
-	// The box grows with its text, and the panel scrolls to its bottom edge
+	await page.locator('.drawer').evaluate((el) => (el.scrollTop = el.scrollHeight));
+	// The box grows with its text, and the drawer scrolls to its bottom edge
 	expect(await notes.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
-	const [box, panel] = [await notes.boundingBox(), await page.locator('.props-panel').boundingBox()];
+	const [box, panel] = [await notes.boundingBox(), await page.locator('.drawer').boundingBox()];
 	expect(box!.y + box!.height).toBeLessThanOrEqual(panel!.y + panel!.height);
+});
+
+test('the right drawer slides over the canvas, reopens on a selection, and is remembered', async ({ page }) => {
+	await page.goto('/modeler');
+	const canvas = page.locator('.canvas-area canvas');
+	const spatial = page.getByRole('tab', { name: 'Spatial' });
+	await expect(page.locator('.drawer')).toBeVisible();
+	const open = (await canvas.boundingBox())!.width;
+
+	// Clicking the open tab slides the drawer away; the canvas keeps its size
+	await spatial.click();
+	await expect(page.locator('.drawer')).toBeHidden();
+	await expect(spatial).toHaveAttribute('aria-selected', 'false');
+	expect((await canvas.boundingBox())!.width).toBe(open);
+	await page.waitForTimeout(400);
+	await page.screenshot({ path: 'tests/screenshots/drawer-closed.png' });
+
+	// Remembered across a reload
+	await page.reload();
+	await expect(page.getByRole('tab', { name: 'Social' })).toBeVisible();
+	await expect(page.locator('.drawer')).toBeHidden();
+
+	// Placing (and so selecting) a building opens it to Spatial
+	await page.getByLabel('Drag to place Square').dragTo(canvas);
+	await expect(page.locator('.drawer')).toBeVisible();
+	await expect(spatial).toHaveAttribute('aria-selected', 'true');
+
+	// The panel button in the breadcrumb bar closes and opens it too
+	await page.getByRole('button', { name: 'Close panel' }).click();
+	await expect(page.locator('.drawer')).toBeHidden();
+	await page.getByRole('button', { name: 'Open panel' }).click();
+	await expect(page.locator('.drawer')).toBeVisible();
+
+	// The other tab switches the drawer's content
+	await page.getByRole('tab', { name: 'Social' }).click();
+	await expect(page.getByRole('heading', { name: 'Congregation' })).toBeVisible();
+	await page.screenshot({ path: 'tests/screenshots/drawer-social.png' });
 });
 
 test('the palette scrolls on a short screen, so trees are reachable', async ({ page }) => {
@@ -110,4 +148,30 @@ test('palette sections collapse, and stay collapsed', async ({ page }) => {
 	await expect(page.getByRole('button', { name: 'Open Spaces' })).toHaveAttribute('aria-expanded', 'false');
 	await page.getByRole('button', { name: 'Open Spaces' }).click();
 	await expect(page.getByLabel('Draw Parking')).toBeVisible();
+});
+
+test("dragging the plan view stops at the board's edge, side to side as well as up and down", async ({ page }) => {
+	await page.goto('/modeler');
+	const canvas = page.locator('.canvas-area canvas');
+	const box = (await canvas.boundingBox())!;
+	// A square at the middle of the ground (the view starts centered on it, 100 m tall)
+	await page.getByLabel('Drag to place Square').dragTo(canvas, { targetPosition: { x: box.width / 2, y: box.height / 2 } });
+	await canvas.click({ position: { x: box.width / 2, y: 20 } }); // deselect
+
+	// Drag far to the left: the view stops when its right edge meets the ground's (200 m out)
+	for (let i = 0; i < 3; i++) {
+		await page.mouse.move(box.x + box.width - 300, box.y + box.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(box.x + 20, box.y + box.height / 2, { steps: 5 });
+		await page.mouse.up();
+	}
+	// The view is 100 m tall and width / height wide, so its center stops at 200 - 50 × aspect.
+	// The square sits that far left of the canvas's middle, still on screen
+	const pxPerM = box.height / 100;
+	const stop = 200 - 50 * (box.width / box.height);
+	const squareX = box.x + box.width / 2 - stop * pxPerM;
+	expect(squareX).toBeGreaterThan(box.x);
+	const buf = await page.screenshot({ clip: { x: squareX - 2, y: box.y + box.height / 2 - 2, width: 4, height: 4 } });
+	const png = await decodePng(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
+	expect(png.data[0]).toBeLessThan(0xb0); // the square's dark chipboard, not the near-white grid
 });

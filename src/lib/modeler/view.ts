@@ -22,13 +22,25 @@ export interface Bounds {
 export const MIN_VIEW_HEIGHT = 20;
 export const DEFAULT_VIEW: PlanView = { center: [0, 0], height: 100 };
 const FIT_MARGIN = 1.2; // breathing room around fitted content
-const BOARD_ZOOM_OUT = 1.1; // zoom out no further than the whole board plus a little
+const BOARD_ZOOM_OUT = 1; // zoom out no further than the whole board: nothing past its edge shows
 
-// Limits come from the board (half its width): the view center stays on it, and the view
-// never shows much more than all of it.
-export const maxViewHeight = (half: number) => 2 * half * BOARD_ZOOM_OUT;
-const clampHeight = (h: number, half: number) => Math.min(maxViewHeight(half), Math.max(MIN_VIEW_HEIGHT, h));
-const clampPan = (v: number, half: number) => Math.min(half, Math.max(-half, v));
+// Limits come from the board (half its width) and the canvas's shape (width / height): the view
+// never shows much more than the board across its wider side, and panning stops at its edges.
+export const maxViewHeight = (half: number, aspect = 1) => (2 * half * BOARD_ZOOM_OUT) / Math.max(1, aspect);
+const clampHeight = (h: number, half: number, aspect: number) => Math.min(maxViewHeight(half, aspect), Math.max(MIN_VIEW_HEIGHT, h));
+// The center stays far enough in that the view's edge (`extent` is half the view on that axis)
+// doesn't pass the board's edge plus the zoom-out allowance
+const clampPan = (v: number, half: number, extent: number) => {
+	const limit = Math.max(0, half * BOARD_ZOOM_OUT - extent);
+	return Math.min(limit, Math.max(-limit, v));
+};
+
+// A view held to the board: zoomed out no further, panned no further
+export function clampView(view: PlanView, half: number, aspect = 1): PlanView {
+	const height = clampHeight(view.height, half, aspect);
+	const a = aspect || 1;
+	return { center: [clampPan(view.center[0], half, (height * a) / 2), clampPan(view.center[1], half, height / 2)], height };
+}
 
 // Everything worth framing: the parcel and the plan's structures, open spaces and trees.
 export function contentBounds(plan: Plan, parcel?: Pt[]): Bounds | null {
@@ -57,30 +69,23 @@ export function fitView(bounds: Bounds | null, aspect: number, half: number): Pl
 	if (!bounds) return DEFAULT_VIEW;
 	const w = bounds.maxX - bounds.minX;
 	const h = bounds.maxY - bounds.minY;
-	return {
-		center: [clampPan((bounds.minX + bounds.maxX) / 2, half), clampPan((bounds.minY + bounds.maxY) / 2, half)],
-		height: clampHeight(Math.max(h, w / (aspect || 1)) * FIT_MARGIN, half),
-	};
+	const center: Pt = [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2];
+	return clampView({ center, height: Math.max(h, w / (aspect || 1)) * FIT_MARGIN }, half, aspect);
 }
 
 // Zooms by `factor` (above 1 shows more) while keeping the site point under the cursor still.
-export function zoomAt(view: PlanView, factor: number, [px, py]: Pt, half: number): PlanView {
-	const height = clampHeight(view.height * factor, half);
+export function zoomAt(view: PlanView, factor: number, [px, py]: Pt, half: number, aspect = 1): PlanView {
+	const height = clampHeight(view.height * factor, half, aspect);
 	const k = height / view.height;
-	return {
-		center: [clampPan(px + (view.center[0] - px) * k, half), clampPan(py + (view.center[1] - py) * k, half)],
-		height,
-	};
+	return clampView({ center: [px + (view.center[0] - px) * k, py + (view.center[1] - py) * k], height }, half, aspect);
 }
 
 // Moves the view so the content follows a drag of (dx, dy) screen pixels.
-export function panBy(view: PlanView, dx: number, dy: number, canvasHeight: number, half: number): PlanView {
+export function panBy(view: PlanView, dx: number, dy: number, canvasHeight: number, half: number, aspect = 1): PlanView {
 	const metersPerPixel = view.height / canvasHeight;
 	// Screen x matches site x; screen down is site +y (north is up)
-	return {
-		...view,
-		center: [clampPan(view.center[0] - dx * metersPerPixel, half), clampPan(view.center[1] - dy * metersPerPixel, half)],
-	};
+	const center: Pt = [view.center[0] - dx * metersPerPixel, view.center[1] - dy * metersPerPixel];
+	return clampView({ ...view, center }, half, aspect);
 }
 
 const NICE_FEET = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];

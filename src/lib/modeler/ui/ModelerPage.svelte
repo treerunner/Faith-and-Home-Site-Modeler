@@ -2,6 +2,7 @@
 	import { beforeNavigate } from '$app/navigation';
 	import EditorLayout from './EditorLayout.svelte';
 	import Masthead from './Masthead.svelte';
+	import SiteHeader from './SiteHeader.svelte';
 	import { leaving, saveSite } from './SiteBar.svelte';
 	import { store } from '../store.svelte';
 
@@ -73,6 +74,7 @@
 
 <div class="modeler-page">
 	<Masthead />
+	<SiteHeader />
 	<div class="editor-wrap">
 		<EditorLayout />
 	</div>

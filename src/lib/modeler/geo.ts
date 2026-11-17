@@ -41,12 +41,22 @@ export const MAX_BOARD_HALF = 400;
 export const GROUND_HALF = 200; // grid mode: the 400 m ground plane
 const BOARD_EDGE_MARGIN = 30; // a parcel closer than this to the edge grows the board
 const BOARD_GROW_MARGIN = 60; // neighborhood kept around a parcel on a grown board
+// The board also fills a wide canvas fitted to the parcel (as the plan view fits it, with its
+// 1.2 margin): a tall lot on a wide screen shows much more side to side than its own width
+const WIDE_VIEW = 2.5; // canvas width / height
+const FIT_MARGIN = 1.2;
 
 // The board size a parcel needs, or null if the current board already has room around it.
 export function boardHalfFor(parcel: Pt[], current: number): number | null {
-	const extent = Math.max(...parcel.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y))));
-	if (extent <= current - BOARD_EDGE_MARGIN || current >= MAX_BOARD_HALF) return null;
-	return Math.min(MAX_BOARD_HALF, Math.ceil((extent + BOARD_GROW_MARGIN) / 10) * 10);
+	const xs = parcel.map(([x]) => x);
+	const ys = parcel.map(([, y]) => y);
+	const extent = Math.max(...xs.map(Math.abs), ...ys.map(Math.abs));
+	const [w, h] = [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
+	const [cx, cy] = [(Math.max(...xs) + Math.min(...xs)) / 2, (Math.max(...ys) + Math.min(...ys)) / 2];
+	const viewH = Math.max(h, w / WIDE_VIEW) * FIT_MARGIN;
+	const inView = Math.max(Math.abs(cx) + (viewH * WIDE_VIEW) / 2, Math.abs(cy) + viewH / 2);
+	if ((extent <= current - BOARD_EDGE_MARGIN && inView <= current) || current >= MAX_BOARD_HALF) return null;
+	return Math.min(MAX_BOARD_HALF, Math.ceil(Math.max(extent + BOARD_GROW_MARGIN, inView) / 10) * 10);
 }
 
 // ── Polygons ────────────────────────────────────────────────────────────────
@@ -309,6 +319,17 @@ export function clipLineToBoard(line: Pt[], half: number): Pt[][] {
 // Buildings whose centroid falls inside the parcel.
 export function buildingsInParcel<B extends { polygon: Pt[] }>(buildings: B[], parcel: Pt[]): B[] {
 	return buildings.filter((b) => pointInPolygon(polygonCentroid(b.polygon), parcel));
+}
+
+// A grown board's buildings: the old board's exactly as they were (the parcel's own left the
+// foam when they became chipboard, and must not come back), plus the fetched ones in the new
+// ring around it. A building belongs to the board its center is on.
+export function grownBuildings<B extends { polygon: Pt[] }>(old: B[], oldHalf: number, fetched: B[]): B[] {
+	const onOld = (b: B) => {
+		const [x, y] = polygonCentroid(b.polygon);
+		return Math.abs(x) <= oldHalf && Math.abs(y) <= oldHalf;
+	};
+	return [...old, ...fetched.filter((b) => !onOld(b))];
 }
 
 // Joins neighboring parcels into one outline, or null if they don't form a single piece
