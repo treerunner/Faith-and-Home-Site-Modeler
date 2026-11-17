@@ -28,7 +28,7 @@ import {
 	suggestSiteType,
 } from './geo';
 import { partFootprint, polygonArea } from './metrics';
-import { contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } from './view';
+import { clampView, contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } from './view';
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
 import { freshStructures, storedSite, syncPlan } from './existing';
@@ -1365,7 +1365,8 @@ class ModelerStore {
 		// The parcel under the address is the likely one: preselect it to confirm or change
 		const underAddress = this.parcelAt(0, 0);
 		if (underAddress) this.setup.selected = [underAddress];
-		this.planView = { center: [0, 0], height: 220 }; // parcels around the address need room
+		// Parcels around the address need room, as much as the board allows on this canvas
+		this.planView = clampView({ center: [0, 0], height: 220 }, this.boardHalf, this.#planAspect || 1);
 		this.mode = context.parcels.length ? { type: 'choosingParcel' } : { type: 'drawingParcel', points: [] };
 	}
 
@@ -1459,12 +1460,26 @@ class ModelerStore {
 		void this.#growBoardFor(polygon, version).then(() => this.#offerPrefill(polygon, version));
 	}
 
-	// A parcel near the board's edge (a big rural lot) gets a bigger board: the neighborhood is
-	// reloaded once at a size that fits it. If that fails, the current board is kept.
+	// Sites set up before boards were sized for wide screens may need a bigger one
+	get boardTooSmall(): boolean {
+		const parcel = this.site.parcel;
+		return this.site.mode === 'address' && !!this.site.origin && !!parcel?.length && boardHalfFor(parcel, this.boardHalf) !== null;
+	}
+
+	boardState = $state<'idle' | 'loading' | 'failed'>('idle');
+
+	widenBoard() {
+		if (this.site.parcel?.length) void this.#growBoardFor(this.site.parcel, this.#parcelVersion);
+	}
+
+	// A parcel near the board's edge (a big rural lot), or tall enough that a wide screen sees past
+	// the board, gets a bigger board: the neighborhood is reloaded once at a size that fits it. If
+	// that fails, the current board is kept.
 	async #growBoardFor(parcel: [number, number][], version: number) {
 		const half = boardHalfFor(parcel, this.boardHalf);
 		const origin = this.site.origin;
 		if (!half || !origin) return;
+		this.boardState = 'loading';
 		if (this.setup) this.setup = { ...this.setup, growing: true };
 		try {
 			const context = await fetchContext(origin.lat, origin.lng, half);
@@ -1478,9 +1493,11 @@ class ModelerStore {
 			};
 			void this.loadTerrain(); // the bigger board needs its own
 			if (this.setup) this.setup = { ...this.setup, context: { ...context, parcels: this.setup.context.parcels } };
+			this.boardState = 'idle';
 			this.fitPlan();
 		} catch (e) {
 			console.error('could not grow the board', e);
+			this.boardState = 'failed';
 			if (this.setup) this.setup = { ...this.setup, growFailed: true };
 		} finally {
 			if (this.setup) this.setup = { ...this.setup, growing: false };
@@ -1555,17 +1572,23 @@ class ModelerStore {
 	}
 
 	setPlanAspect(aspect: number) {
+		const changed = aspect !== this.#planAspect;
 		this.#planAspect = aspect;
 		if (this.#fitPending) this.fitPlan();
+		else if (changed) {
+			// A wider canvas shows more: keep the view on the board
+			const held = clampView(this.planView, this.boardHalf, aspect);
+			if (held.height !== this.planView.height || held.center.some((v, i) => v !== this.planView.center[i])) this.planView = held;
+		}
 	}
 
 	// Zooms around a site point (the cursor), or the view center
 	zoomPlan(factor: number, at: [number, number] = this.planView.center) {
-		this.planView = zoomAt(this.planView, factor, at, this.boardHalf);
+		this.planView = zoomAt(this.planView, factor, at, this.boardHalf, this.#planAspect || 1);
 	}
 
 	panPlan(dx: number, dy: number, canvasHeight: number) {
-		this.planView = panBy(this.planView, dx, dy, canvasHeight, this.boardHalf);
+		this.planView = panBy(this.planView, dx, dy, canvasHeight, this.boardHalf, this.#planAspect || 1);
 	}
 
 	updateSiteName(name: string) {
