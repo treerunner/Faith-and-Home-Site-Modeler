@@ -3,6 +3,7 @@
 	import { store } from '../store.svelte';
 	import { worldToScreen, getPerspCamera } from '../scene/cameraRef';
 	import { OPEN_SPACE_COLORS } from '../colors';
+	import { fmtSqft } from '../units';
 	import type { OpenSpace } from '../types';
 
 	// Shoelace formula for polygon area in m²
@@ -104,7 +105,7 @@
 			{#if entry.parking !== null && entry.parking > 0}
 				<span class="os-label__count">~{entry.parking} spaces</span>
 			{:else}
-				<span class="os-label__area">{Math.round(entry.area)} m²</span>
+				<span class="os-label__area">{fmtSqft(entry.area)}</span>
 			{/if}
 		</div>
 	{/if}
