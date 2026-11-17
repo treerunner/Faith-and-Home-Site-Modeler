@@ -1,10 +1,15 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { store } from '../store.svelte';
-	import { worldToScreen, getPerspCamera } from '../scene/cameraRef';
+	import { mainView, worldToScreen, type SceneView } from '../scene/cameraRef';
 	import { OPEN_SPACE_COLORS } from '../colors';
 	import { fmtSqft } from '../units';
-	import type { OpenSpace } from '../types';
+	import type { OpenSpace, Plan } from '../types';
+
+	// Compare labels each plan over its own view, and they don't select
+	interface Props { plan?: Plan; view?: SceneView; interactive?: boolean }
+	let { plan: shown, view = mainView, interactive = true }: Props = $props();
+	let plan = $derived(shown ?? store.plan);
 
 	// Shoelace formula for polygon area in m²
 	function polygonArea(pts: [number, number][]): number {
@@ -64,11 +69,11 @@
 	}
 
 	let entries = $derived<LabelEntry[]>(
-		store.plan.openSpaces.map((os) => {
+		plan.openSpaces.map((os) => {
 			void viewVersion; // re-derive on resize / camera move
 			const c = centroid(os.polygon);
-			const cam = store.viewMode === '3d' ? (getPerspCamera() ?? undefined) : undefined;
-			const screen = worldToScreen(c[0], c[1], cam);
+			const cam = store.viewMode === '3d' ? (view.perspCamera ?? undefined) : undefined;
+			const screen = worldToScreen(c[0], c[1], cam, 0, view);
 			const area = polygonArea(os.polygon);
 			return {
 				os,
@@ -78,13 +83,14 @@
 					os.label ||
 					os.kind.charAt(0).toUpperCase() + os.kind.slice(1).replace('_', ' '),
 				parking: os.kind === 'parking' ? parkingSpaces(area) : null,
-				selected: store.selectedOpenSpaceId === os.id,
+				selected: interactive && store.selectedOpenSpaceId === os.id,
 			};
 		}),
 	);
 
 	function handleLabelClick(e: MouseEvent, osId: string) {
 		e.stopPropagation();
+		if (!interactive) return;
 		store.selectOpenSpace(osId);
 	}
 </script>

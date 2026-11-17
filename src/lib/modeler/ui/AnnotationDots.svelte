@@ -1,10 +1,16 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { store } from '../store.svelte';
-	import { clientToSite, getPerspCamera, rendererEl, topBelow, worldToScreen } from '../scene/cameraRef';
+	import { clientToSite, mainView, topBelow, worldToScreen, type SceneView } from '../scene/cameraRef';
+	import type { Plan } from '../types';
 
-	// The pattern book's numbered orange dots, over the canvas while the Notes drawer is open.
+	// The pattern book's numbered dots, over the canvas while the Notes drawer is open.
 	// In plan view a dot can be dragged; a click opens its text in the drawer.
+	// Compare draws each plan's over its own view, always shown, not editable.
+	interface Props { plan?: Plan; view?: SceneView; always?: boolean }
+	let { plan: shown, view = mainView, always = false }: Props = $props();
+	let plan = $derived(shown ?? store.plan);
+	let visible = $derived(always || store.showNotes);
 
 	// Re-project on resize, after a plan view pan or zoom, and every frame in 3D (as the labels do)
 	let viewVersion = $state(0);
@@ -20,7 +26,7 @@
 		return () => cancelAnimationFrame(raf);
 	});
 	$effect(() => {
-		if (store.viewMode !== '3d' || !store.showNotes) return;
+		if (store.viewMode !== '3d' || !visible) return;
 		let raf: number;
 		const loop = () => {
 			viewVersion++;
@@ -35,28 +41,29 @@
 		// In 3D, on whatever is under it (a roof or the ground); off the board, nothing is drawn
 		let screen;
 		if (store.viewMode === '3d') {
-			const top = topBelow(x, y);
+			const top = topBelow(x, y, view);
 			if (top === null) return null;
-			screen = worldToScreen(x, y, getPerspCamera() ?? undefined, top + 0.5);
-		} else screen = worldToScreen(x, y);
-		const r = rendererEl?.getBoundingClientRect();
+			screen = worldToScreen(x, y, view.perspCamera ?? undefined, top + 0.5, view);
+		} else screen = worldToScreen(x, y, undefined, 0, view);
+		const r = view.el?.getBoundingClientRect();
 		if (!screen || !r || screen.x < r.left || screen.x > r.right || screen.y < r.top || screen.y > r.bottom) return null;
 		return screen;
 	}
 
 	let dots = $derived(
-		store.showNotes
-			? store.plan.annotations.map((a) => {
+		visible
+			? plan.annotations.map((a) => {
 					void viewVersion;
 					return { a, screen: place(a.x, a.y) };
 				})
 			: [],
 	);
 
-	let draggable = $derived(!store.readOnly && store.viewMode === 'plan');
+	let draggable = $derived(!always && !store.readOnly && store.viewMode === 'plan');
 
 	function down(e: PointerEvent, n: number) {
 		e.stopPropagation();
+		if (always) return;
 		if (!draggable) {
 			store.focusNote = n;
 			return;
@@ -67,7 +74,7 @@
 
 	function move(e: PointerEvent) {
 		if (store.mode.type !== 'draggingNote') return;
-		const pos = clientToSite(e.clientX, e.clientY);
+		const pos = clientToSite(e.clientX, e.clientY, view);
 		if (pos) store.dragNote(pos.x, pos.y);
 	}
 </script>

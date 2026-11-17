@@ -3,11 +3,12 @@
 	import { OrbitControls } from '@threlte/extras';
 	import * as THREE from 'three';
 	import type { OrbitControls as ThreeOrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-	import { setPerspCamera, setRenderer, surfaceUnder, topBelow } from './cameraRef';
+	import { surfaceUnder, topBelow, useSceneView } from './cameraRef';
 	import { store } from '../store.svelte';
 	import { cameraFloor, zoomAbout, ZOOM_LIMITS } from '../view';
 
 	const { size: sizeStore, renderer, invalidate } = useThrelte();
+	const view = useSceneView();
 
 	let cam: THREE.PerspectiveCamera | undefined = $state();
 	let controls: ThreeOrbitControls | undefined = $state();
@@ -20,7 +21,7 @@
 		const c = controls, camera = cam;
 		const keepAbove = () => {
 			const { x, z } = camera.position;
-			const floor = cameraFloor(store.ground, x, z, topBelow(x, z));
+			const floor = cameraFloor(store.ground, x, z, topBelow(x, z, view));
 			if (camera.position.y < floor) {
 				camera.position.y = floor;
 				invalidate();
@@ -47,7 +48,7 @@
 			if (!controls) return;
 			const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
 			pending += px * WHEEL_SPEED;
-			zoomPoint = (px < 0 && surfaceUnder(e.clientX, e.clientY)) || controls.target.clone();
+			zoomPoint = (px < 0 && surfaceUnder(e.clientX, e.clientY, view)) || controls.target.clone();
 		};
 		el.addEventListener('wheel', onwheel, { passive: false });
 		return () => el.removeEventListener('wheel', onwheel);
@@ -75,12 +76,12 @@
 		const { width, height } = sizeStore.current;
 		cam.aspect = height > 0 ? width / height : 1;
 		cam.updateProjectionMatrix();
-		setPerspCamera(cam);
+		view.perspCamera = cam;
 	});
 
 	$effect(() => {
 		// renderer from useThrelte() is the WebGLRenderer directly in Threlte v8
-		if (renderer) setRenderer(renderer as unknown as THREE.WebGLRenderer);
+		if (renderer) view.renderer = renderer as unknown as THREE.WebGLRenderer;
 	});
 </script>
 

@@ -9,7 +9,7 @@
 	import SetupBanner from './SetupBanner.svelte';
 	import Scene from '../scene/Scene.svelte';
 	import { store } from '../store.svelte';
-	import { clientToSite, hitTest, rendererEl } from '../scene/cameraRef';
+	import { clientToSite, hitTest, mainView } from '../scene/cameraRef';
 	import { exportPNG } from '../sceneExport';
 	import { creditLine } from '../credits';
 	import type { PaletteShape, Part } from '../types';
@@ -80,7 +80,7 @@
 
 	function beginPress(e: PointerEvent, click: () => void) {
 		press = { x: e.clientX, y: e.clientY, view: store.planView, panning: false, click };
-		rendererEl?.setPointerCapture(e.pointerId);
+		mainView.el?.setPointerCapture(e.pointerId);
 	}
 
 	function handlePointerDown(e: PointerEvent) {
@@ -158,26 +158,26 @@
 				s.parts.some((p) => p.id === partId),
 			);
 			if (ownerStructure) store.setActiveStructure(ownerStructure.id);
-			rendererEl?.setPointerCapture(e.pointerId);
+			mainView.el?.setPointerCapture(e.pointerId);
 			store.startDragging(partId, result.x - part.x, result.y - part.y, cloning);
 		} else if (result.kind === 'vertex') {
 			// Drag a point, or a new one out of an edge's midpoint (Alt held: no snapping)
-			rendererEl?.setPointerCapture(e.pointerId);
+			mainView.el?.setPointerCapture(e.pointerId);
 			store.startDraggingVertex(result.partId, result.index, result.insert);
 		} else if (result.kind === 'resize') {
-			rendererEl?.setPointerCapture(e.pointerId);
+			mainView.el?.setPointerCapture(e.pointerId);
 			store.startResizing(result.partId, result.handle as ResizeHandle);
 		} else if (result.kind === 'rotate') {
-			rendererEl?.setPointerCapture(e.pointerId);
+			mainView.el?.setPointerCapture(e.pointerId);
 			store.startRotating(result.partId, result.x, result.y);
 		} else if (result.kind === 'osVertex') {
-			rendererEl?.setPointerCapture(e.pointerId);
+			mainView.el?.setPointerCapture(e.pointerId);
 			store.startDraggingOsVertex(result.openSpaceId, result.vertexIndex);
 		} else if (result.kind === 'openSpace') {
-			rendererEl?.setPointerCapture(e.pointerId);
+			mainView.el?.setPointerCapture(e.pointerId);
 			store.startDraggingOpenSpace(result.openSpaceId, result.x, result.y);
 		} else if (result.kind === 'tree') {
-			rendererEl?.setPointerCapture(e.pointerId);
+			mainView.el?.setPointerCapture(e.pointerId);
 			store.startDraggingTree(result.treeId, result.x - (store.plan.trees.find(t => t.id === result.treeId)?.x ?? 0), result.y - (store.plan.trees.find(t => t.id === result.treeId)?.y ?? 0));
 		} else {
 			// Ground: a click deselects everything; a drag pans and keeps the selection
@@ -200,7 +200,7 @@
 	const SNAP_PX = 10;
 	function snapRadius(e: { altKey: boolean }): number {
 		if (e.altKey) return 0;
-		return (SNAP_PX * store.planView.height) / (rendererEl?.clientHeight || 1);
+		return (SNAP_PX * store.planView.height) / (mainView.el?.clientHeight || 1);
 	}
 
 	function handlePointerMove(e: PointerEvent) {
@@ -212,7 +212,7 @@
 				// From the view at press time, so the drag never drifts
 				// From the view at the press, so the drag stays under the pointer; held to the board
 				// on the canvas's wider side
-				const [w, h] = [rendererEl?.clientWidth || 1, rendererEl?.clientHeight || 1];
+				const [w, h] = [mainView.el?.clientWidth || 1, mainView.el?.clientHeight || 1];
 				store.planView = panBy(press.view, dx, dy, h, store.boardHalf, w / h);
 				return;
 			}
