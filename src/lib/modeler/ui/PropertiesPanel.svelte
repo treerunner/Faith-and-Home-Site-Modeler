@@ -372,7 +372,7 @@
 		{@const notes = store.plan.annotations}
 		<div class="section section--props">
 			<h2 class="panel-heading">Notes</h2>
-			<p class="field-hint">Number what matters on the model, a sentence each, as the pattern book does.</p>
+			<p class="field-hint">Number what matters on the model, a sentence or two each.</p>
 			{#if notes.length}
 				<ol class="note-list">
 					{#each notes as a (a.n)}
