@@ -71,6 +71,46 @@ test('reuse part of an existing building: zones, floors, housing units', async (
 	await expect(page.locator('.zone-row')).toHaveCount(1);
 });
 
+test('a plan changes a building\'s mix of uses, and what a use gains is reuse', async ({ page }) => {
+	await page.goto('/modeler');
+	await page.getByLabel('Drag to place Square').dragTo(page.locator('.canvas-area canvas'));
+	await page.getByLabel('Stories', { exact: true }).fill('3');
+	const use = (name: string) => page.getByRole('checkbox', { name, exact: true });
+	await use('Worship').check();
+	await page.getByRole('button', { name: 'New plan' }).click();
+
+	// In a plan the uses unlock; the shape and height stay the site's
+	await expect(page.getByText('Shape and height are set on the site.')).toBeVisible();
+	await use('Housing').check();
+	await use('Worship').uncheck();
+	// The 6 m square on 3 floors: 108 m², all of it now housing
+	await expect(page.locator('.mix-note')).toContainText('On the site: Worship 100%.');
+	await expect(page.locator('.mix-reuse')).toHaveText('Reuse: 1,163 sq ft to housing, ~1 unit');
+	await expect(page.locator('.struct-row').getByTitle('Uses changed in this plan')).toBeVisible();
+	await page.locator('.mix-note').scrollIntoViewIfNeeded();
+	await page.waitForTimeout(300);
+	await page.screenshot({ path: 'tests/screenshots/use-shares.png' });
+
+	// The analysis counts it as adaptive reuse
+	await page.getByRole('button', { name: 'Analysis' }).click();
+	await expect(page.getByRole('row', { name: /Adaptive reuse\s+1,163 sq ft/ })).toBeVisible();
+	await expect(page.getByText('1 adaptive reuse')).toBeVisible();
+	await page.keyboard.press('Escape');
+
+	// Reset goes back to the site's mix
+	await page.getByRole('button', { name: 'Reset to site' }).click();
+	await expect(use('Worship')).toBeChecked();
+	await expect(use('Housing')).not.toBeChecked();
+	await expect(page.locator('.mix-note')).toHaveCount(0);
+
+	// The site keeps its own
+	await use('Housing').check();
+	await page.locator('.site-note').getByRole('button', { name: 'Edit on site' }).first().click();
+	await expect(use('Worship')).toBeChecked();
+	await expect(use('Housing')).not.toBeChecked();
+	await expect(page.locator('.mix-note')).toHaveCount(0);
+});
+
 test('a site saved with the old Reuse status opens as Existing with a reuse zone', async ({ page, request, baseURL }) => {
 	const id = crypto.randomUUID();
 	created.push(id);

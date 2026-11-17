@@ -62,6 +62,10 @@ export interface Structure {
 	// and a roof chosen by the plan over the site's
 	addedStories?: number;
 	planRoof?: Roof;
+	// A plan's mix of uses for a site piece, when it differs from the site's (`uses`, `useWeights`).
+	// What a use gains over the site's share is adaptive reuse (`shareReuse` in metrics.ts).
+	planUses?: Use[];
+	planUseWeights?: Partial<Record<Use, number>>;
 }
 
 export interface OpenSpace {

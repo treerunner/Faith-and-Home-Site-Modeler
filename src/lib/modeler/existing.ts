@@ -1,13 +1,13 @@
 // Existing conditions and plans. The site's existing buildings are drawn once, in
 // `site.existing`; every plan inherits them live and can only say what happens to each piece:
-// to be removed, reuse zones, added stories, a different roof. Plans can't move, reshape or
+// to be removed, reuse zones, a different mix of uses, added stories, a different roof. Plans can't move, reshape or
 // cut them.
 //
 // In memory a plan holds the full list (the site's pieces with its choices applied, then its
 // own new pieces), so rendering, metrics and editing read `plan.structures` as before. Saved,
 // a plan holds only its new pieces and its choices: nothing derived is stored.
 
-import type { Plan, ReuseZone, Roof, Site, Structure } from './types';
+import type { Plan, ReuseZone, Roof, Site, Structure, Use } from './types';
 import { settleRoofHosts } from './geometry';
 
 // What a plan says about one of the site's pieces
@@ -16,6 +16,8 @@ export interface ExistingChoice {
 	addedStories?: number;
 	roof?: Roof;
 	reuseZones?: ReuseZone[];
+	uses?: Use[];
+	useWeights?: Partial<Record<Use, number>>;
 }
 
 export type ExistingChoices = Record<string, ExistingChoice>;
@@ -36,6 +38,10 @@ export function existingIds(existing: Plan): Set<string> {
 function applyChoice(base: Structure, choice: ExistingChoice | undefined): Structure {
 	const s: Structure = { ...clone(base), status: choice?.removed ? 'removed' : 'existing', reuseZones: undefined };
 	if (!choice) return s;
+	if (choice.uses && !choice.removed) {
+		s.planUses = clone(choice.uses);
+		s.planUseWeights = clone(choice.useWeights ?? {});
+	}
 	if (choice.addedStories) s.addedStories = choice.addedStories;
 	if (choice.roof) {
 		s.roof = choice.roof;
@@ -65,6 +71,10 @@ export function choicesOf(existing: Plan, plan: Plan): ExistingChoices {
 		if (s.addedStories) c.addedStories = s.addedStories;
 		if (s.planRoof) c.roof = s.planRoof;
 		if (s.reuseZones?.length) c.reuseZones = clone(s.reuseZones);
+		if (s.planUses && s.status !== 'removed') {
+			c.uses = clone(s.planUses);
+			c.useWeights = clone(s.planUseWeights ?? {});
+		}
 		if (Object.keys(c).length) out[s.id] = c;
 	}
 	return out;
@@ -125,14 +135,15 @@ export function freshStructures(existing: Plan): Structure[] {
 }
 
 // What plans say about one site piece, for a warning before the site deletes it
-export function choicesOn(site: Site, structureId: string): { removed: number; zones: number; added: number } {
-	const out = { removed: 0, zones: 0, added: 0 };
+export function choicesOn(site: Site, structureId: string): { removed: number; zones: number; added: number; uses: number } {
+	const out = { removed: 0, zones: 0, added: 0, uses: 0 };
 	for (const p of site.plans) {
 		const s = p.structures.find((s) => s.id === structureId);
 		if (!s) continue;
 		if (s.status === 'removed') out.removed++;
 		if (s.reuseZones?.length) out.zones++;
 		if (s.addedStories) out.added++;
+		if (s.planUses) out.uses++;
 	}
 	return out;
 }

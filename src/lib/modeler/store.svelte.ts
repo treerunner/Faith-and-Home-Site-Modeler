@@ -28,7 +28,7 @@ import {
 	storiesFromTags,
 	suggestSiteType,
 } from './geo';
-import { partFootprint, polygonArea } from './metrics';
+import { partFootprint, polygonArea, programOf, sameMix } from './metrics';
 import { clampView, contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } from './view';
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
@@ -886,11 +886,22 @@ class ModelerStore {
 		const s = this.plan.structures.find((s) => s.id === id);
 		if (!s) return;
 		if (this.isLocked(id)) {
-			// A plan decides what happens to a site piece: removed, raised, re-roofed. The rest is the site's.
+			// A plan decides what happens to a site piece: removed, raised, re-roofed, its mix of uses.
+			// The rest is the site's.
 			const base = this.site.existing.structures.find((b) => b.id === id)!;
-			const { status, roof, addedStories } = patch;
-			if (status === 'new' || (status === undefined && roof === undefined && addedStories === undefined)) return;
+			const { status, roof, addedStories, uses, useWeights } = patch;
+			const mix = uses !== undefined || useWeights !== undefined;
+			if (status === 'new' || (status === undefined && roof === undefined && addedStories === undefined && !mix)) return;
+			if (mix && (status ?? s.status) !== 'existing') return;
 			this.#pushUndo();
+			if (mix) {
+				const now = programOf(s);
+				const next = { uses: uses ?? now.uses, weights: useWeights ?? now.weights };
+				// A mix the same as the site's is the site's
+				const same = sameMix(next, { uses: base.uses, weights: base.useWeights ?? {} });
+				s.planUses = same ? undefined : [...next.uses];
+				s.planUseWeights = same ? undefined : { ...next.weights };
+			}
 			if (status) {
 				s.status = status;
 				// The site's rooftop pieces on it go, or stay, with it
@@ -898,7 +909,7 @@ class ModelerStore {
 				for (const r of all) {
 					if (r.id !== id && this.isLocked(r.id) && restsOn(all, r.id, id)) {
 						r.status = status;
-						if (status !== 'existing') r.reuseZones = undefined;
+						if (status !== 'existing') Object.assign(r, { reuseZones: undefined, planUses: undefined, planUseWeights: undefined });
 					}
 				}
 			}
@@ -907,7 +918,7 @@ class ModelerStore {
 				s.planRoof = roof === base.roof ? undefined : roof;
 			}
 			if (addedStories !== undefined) s.addedStories = Math.max(0, Math.round(addedStories)) || undefined;
-			if (s.status !== 'existing') s.reuseZones = undefined;
+			if (s.status !== 'existing') Object.assign(s, { reuseZones: undefined, planUses: undefined, planUseWeights: undefined });
 			// Zones re-fit the stack when the building's added stories change
 			if (s.reuseZones) s.reuseZones = s.reuseZones.map((z) => ({ ...z, floors: clampFloors(z.floors, s) }));
 			return;
@@ -926,6 +937,15 @@ class ModelerStore {
 		// Reuse happens in existing buildings only, and within their floors
 		if (s.status !== 'existing') s.reuseZones = undefined;
 		if (s.reuseZones) s.reuseZones = s.reuseZones.map((z) => ({ ...z, floors: clampFloors(z.floors, s) }));
+	}
+
+	// A plan goes back to the site's mix of uses for one of its pieces
+	resetUses(id: string) {
+		const s = this.plan.structures.find((s) => s.id === id);
+		if (!s?.planUses) return;
+		this.#pushUndo();
+		s.planUses = undefined;
+		s.planUseWeights = undefined;
 	}
 
 	deleteStructure(id: string) {

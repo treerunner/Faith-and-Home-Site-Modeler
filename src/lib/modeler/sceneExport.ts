@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getRenderer, getPerspCamera, planCamera, mainScene, topBelow } from './scene/cameraRef';
 import type { Annotation, Plan } from './types';
-import { FH } from './colors';
+import { COLORS, FH } from './colors';
 
 const PAD = 8;
 
@@ -24,7 +24,7 @@ function drawDots(ctx: CanvasRenderingContext2D, notes: Annotation[], camera: TH
 function dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, n: number, scale: number) {
 	ctx.beginPath();
 	ctx.arc(x, y, r, 0, Math.PI * 2);
-	ctx.fillStyle = FH.lantern;
+	ctx.fillStyle = COLORS.note;
 	ctx.fill();
 	ctx.lineWidth = 2 * scale;
 	ctx.strokeStyle = '#fff';

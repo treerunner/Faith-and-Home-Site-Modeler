@@ -111,12 +111,72 @@ export function zoneDwellings(zone: ReuseZone, structure: Structure): number {
 
 const zonesOf = (plan: Plan) => plan.structures.flatMap((s) => (s.reuseZones ?? []).map((z) => ({ z, s })));
 
+// ── Use shares ───────────────────────────────────────────────────────────────
+
+// A building's mix of uses: a plan's own for a site piece, else the site's
+export function programOf(s: Structure): { uses: Use[]; weights: Partial<Record<Use, number>> } {
+	return s.planUses ? { uses: s.planUses, weights: s.planUseWeights ?? {} } : { uses: s.uses, weights: s.useWeights ?? {} };
+}
+
+// Each use's share of a mix, 0..1
+export function useShares(uses: Use[], weights: Partial<Record<Use, number>>): Partial<Record<Use, number>> {
+	const total = uses.reduce((sum, u) => sum + (weights[u] ?? 50), 0);
+	const out: Partial<Record<Use, number>> = {};
+	if (total > 0) for (const u of uses) out[u] = (weights[u] ?? 50) / total;
+	return out;
+}
+
+// Two mixes are the same when they hold the same uses in the same shares
+export function sameMix(
+	a: { uses: Use[]; weights: Partial<Record<Use, number>> },
+	b: { uses: Use[]; weights: Partial<Record<Use, number>> },
+): boolean {
+	if (a.uses.length !== b.uses.length || a.uses.some((u) => !b.uses.includes(u))) return false;
+	const [sa, sb] = [useShares(a.uses, a.weights), useShares(b.uses, b.weights)];
+	return a.uses.every((u) => Math.abs((sa[u] ?? 0) - (sb[u] ?? 0)) < 1e-6);
+}
+
+// Floor a building's zones take from its own floors (not what they add above its roof)
+function zonedOwnArea(s: Structure): number {
+	return (s.reuseZones ?? []).reduce((sum, z) => sum + zoneAreas(z, s).reuse, 0);
+}
+
+// Reuse by share: in a plan, what each use gains over the site's mix of a building that stays,
+// on the building's own floors after its zones. Floors the plan adds are new construction.
+export function shareReuse(s: Structure): Partial<Record<Use, number>> {
+	if (!s.planUses || s.status !== 'existing') return {};
+	const own = Math.max(0, structureFootprint(s) * (s.stories + (s.basement ? 1 : 0)) - zonedOwnArea(s));
+	const site = useShares(s.uses, s.useWeights ?? {});
+	const plan = useShares(s.planUses, s.planUseWeights ?? {});
+	const out: Partial<Record<Use, number>> = {};
+	for (const u of s.planUses) {
+		const gain = (plan[u] ?? 0) - (site[u] ?? 0);
+		if (gain > 1e-9) out[u] = gain * own;
+	}
+	return out;
+}
+
+const sum = (r: Partial<Record<Use, number>>) => Object.values(r).reduce((a, b) => a + (b ?? 0), 0);
+
+// Units in the housing a building gains by share
+export function shareDwellings(s: Structure): number {
+	return Math.floor(sqmToSqft(shareReuse(s).housing ?? 0) / AVG_UNIT_SQFT);
+}
+
+// Adaptive reuse floor area: reuse zones on buildings' own floors, plus reuse by share
+export function reuseFloorArea(plan: Plan): number {
+	return plan.structures.reduce(
+		(total, s) => total + (s.reuseZones ?? []).reduce((a, z) => a + zoneAreas(z, s).reuse, 0) + sum(shareReuse(s)),
+		0,
+	);
+}
+
 export function reuseZoneCount(plan: Plan): number {
 	return zonesOf(plan).length;
 }
 
 export function dwellingsEstimate(plan: Plan): number {
-	const structures = plan.structures.reduce((sum, s) => sum + (s.dwellings ?? 0), 0);
+	const structures = plan.structures.reduce((sum, s) => sum + (s.dwellings ?? 0) + shareDwellings(s), 0);
 	return structures + zonesOf(plan).reduce((sum, { z, s }) => sum + zoneDwellings(z, s), 0);
 }
 
@@ -124,6 +184,7 @@ export function dwellingsEstimate(plan: Plan): number {
 export function dwellingsByStatus(plan: Plan): { adaptive_reuse: number; new: number; existing: number } {
 	const result = { adaptive_reuse: 0, new: 0, existing: 0 };
 	for (const s of plan.structures) {
+		result.adaptive_reuse += shareDwellings(s);
 		if (!s.uses.includes('housing') || !s.dwellings) continue;
 		if (s.status === 'new') result.new += s.dwellings;
 		else if (s.status === 'existing') result.existing += s.dwellings;
@@ -154,12 +215,12 @@ export function useFloorAreaByUse(plan: Plan): Partial<Record<Use, number>> {
 			const part = s.parts.find((p) => p.id === z.partId);
 			zoned += area - (part ? polygonArea(zoneOutline(z, part)) * (z.addedStories ?? 0) : 0);
 		}
-		if (s.uses.length === 0) continue;
-		// Added stories take the building's program, like its other floors
+		// Added stories take the building's program, like its other floors; a plan's mix of uses
+		// shares out the building in that plan
+		const { uses, weights } = programOf(s);
 		const remaining = Math.max(0, structureFootprint(s) * totalStories(s) - zoned);
-		const totalWeight = s.uses.reduce((sum, u) => sum + (s.useWeights?.[u] ?? 50), 0);
-		if (totalWeight === 0) continue;
-		for (const u of s.uses) add(u, remaining * ((s.useWeights?.[u] ?? 50) / totalWeight));
+		const shares = useShares(uses, weights);
+		for (const u of uses) add(u, remaining * (shares[u] ?? 0));
 	}
 	return result;
 }
@@ -203,7 +264,7 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	if (
 		site.siteType === 'urban' &&
 		plan.structures.length > 0 &&
-		plan.structures.every((s) => s.uses.length === 1 && s.uses[0] === 'worship')
+		plan.structures.every((s) => programOf(s).uses.join() === 'worship')
 	) {
 		steps.push({
 			category: 'program',
@@ -212,7 +273,7 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 		});
 	}
 
-	if (plan.structures.length > 0 && plan.structures.every((s) => s.status === 'existing') && reuseZoneCount(plan) === 0) {
+	if (plan.structures.length > 0 && plan.structures.every((s) => s.status === 'existing') && reuseZoneCount(plan) === 0 && reuseFloorArea(plan) === 0) {
 		steps.push({
 			category: 'pattern',
 			message: 'No new construction or adaptive reuse proposed. Consider opportunities for change.',
@@ -236,9 +297,10 @@ export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
 	// zone with units (entered or estimated from area)
 	const uncounted = plan.structures.filter(
 		(s) =>
-			s.uses.includes('housing') &&
+			programOf(s).uses.includes('housing') &&
 			!(s.dwellings && s.dwellings > 0) &&
-			!(s.reuseZones ?? []).some((z) => zoneDwellings(z, s) > 0),
+			!(s.reuseZones ?? []).some((z) => zoneDwellings(z, s) > 0) &&
+			!(shareDwellings(s) > 0),
 	);
 	if (uncounted.length) {
 		const which = uncounted.length === 1 ? uncounted[0].label || 'A structure' : `${uncounted.length} structures`;
@@ -344,7 +406,7 @@ export const DEVELOPMENT_TYPE_LABELS: Record<DevelopmentType, string> = {
 export function inferDevelopmentType(plan: Plan): DevelopmentType | null {
 	if (plan.structures.length === 0) return null;
 	const areas = zonesOf(plan).map(({ z, s }) => zoneAreas(z, s));
-	const reuse = areas.some((a) => a.reuse > 0);
+	const reuse = areas.some((a) => a.reuse > 0) || plan.structures.some((s) => sum(shareReuse(s)) > 0);
 	const added = plan.structures.some((s) => s.status === 'new' || addedStories(s) > 0) || areas.some((a) => a.new > 0);
 	if (reuse && added) return 'reuse_new';
 	if (reuse) return 'reuse';

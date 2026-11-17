@@ -89,7 +89,7 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 
 	// The site's building is locked in the plan: the plan only adds stories, or removes it
 	const inherited = await openStructure(page, 0);
-	await expect(inherited.getByText('Shape, height and uses are set on the site.')).toBeVisible();
+	await expect(inherited.getByText('Shape and height are set on the site.')).toBeVisible();
 	await expect(inherited.getByLabel('Stories', { exact: true })).toBeDisabled();
 	await expect(inherited.getByRole('button', { name: 'Delete' })).toHaveCount(0);
 	await inherited.getByLabel('Added stories').fill('1');

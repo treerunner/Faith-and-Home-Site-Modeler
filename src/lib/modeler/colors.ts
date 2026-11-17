@@ -29,6 +29,7 @@ export const COLORS = {
 	grid:     '#d9d8d7',
 	gridSub:  '#e8e7e5',
 	selection: FH.dusk,
+	note:     FH.dusk, // numbered note dots; orange means new construction here
 	cut:      '#a29e97', // the terrain seen from below: a cut through solid board, as its edge looks in shade
 	// 3D backdrop, bottom to top: a studio sweep behind the model
 	backdrop: [FH.linen, '#e9e6df', '#b9b4ab'],
