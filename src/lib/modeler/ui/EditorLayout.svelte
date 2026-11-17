@@ -2,6 +2,7 @@
 	import Palette from './Palette.svelte';
 	import PropertiesPanel from './PropertiesPanel.svelte';
 	import OpenSpaceLabels from './OpenSpaceLabels.svelte';
+	import AnnotationDots from './AnnotationDots.svelte';
 	import AnalysisModal from './AnalysisModal.svelte';
 	import SiteBar from './SiteBar.svelte';
 	import Attribution from './Attribution.svelte';
@@ -90,6 +91,11 @@
 
 		if (store.mode.type === 'placingTree') {
 			if (pos) beginPress(e, () => store.placeTree(pos.x, pos.y));
+			return;
+		}
+
+		if (store.mode.type === 'placingNote') {
+			if (pos) beginPress(e, () => store.addNote(pos.x, pos.y));
 			return;
 		}
 
@@ -265,7 +271,7 @@
 			if (store.mode.type === 'drawingParcel' && store.setup?.context.parcels.length) store.mode = { type: 'choosingParcel' };
 			else if (store.mode.type === 'drawingParcel' || store.mode.type === 'choosingParcel') store.finishSetup();
 			else if (store.mode.type === 'cutting' || store.mode.type === 'drawingZone') store.selectStructure(store.mode.structureId);
-			else if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree' || store.mode.type === 'drawingStructure') store.cancelPlacing();
+			else if (store.mode.type === 'drawingOpenSpace' || store.mode.type === 'placingTree' || store.mode.type === 'placingNote' || store.mode.type === 'drawingStructure') store.cancelPlacing();
 			else if (store.selectedOpenSpaceId) store.selectOpenSpace(null);
 			else if (store.selectedTreeId) store.selectTree(null);
 		}
@@ -302,6 +308,7 @@
 			ondblclick={handleDoubleClick}
 		/>
 		<OpenSpaceLabels />
+		<AnnotationDots />
 		<Attribution />
 		<SetupBanner />
 
@@ -343,6 +350,9 @@
 			<div class="drawing-hint">
 				{deg}°{store.mode.aligned ? ', lined up with a nearby wall' : ''}. Hold Shift to turn freely.
 			</div>
+		{/if}
+		{#if store.mode.type === 'placingNote'}
+			<div class="drawing-hint">Click the spot to number. Esc to cancel.</div>
 		{/if}
 		{#if store.mode.type === 'drawingStructure'}
 			<div class="drawing-hint">
@@ -403,7 +413,7 @@
 			<button
 				class="export-btn"
 				disabled={store.viewMode !== '3d'}
-				onclick={() => exportPNG(undefined, creditLine(store.site.context))}
+				onclick={() => exportPNG(undefined, creditLine(store.site.context), store.showNotes ? store.plan.annotations : [])}
 				title="Export PNG"
 			>↓ PNG</button>
 			<button

@@ -138,7 +138,7 @@
 	const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
 	let planImageSrc = $state<string | null>(null);
-	$effect(() => { planImageSrc = capturePlanImage(plan); });
+	$effect(() => { planImageSrc = capturePlanImage(plan, plan.annotations); });
 
 	function pct(n: number, total: number): string {
 		return total > 0 ? Math.round((n / total) * 100) + '%' : '—';
@@ -215,6 +215,14 @@
 					<img class="overview-plan" src={planImageSrc} alt="Site plan" />
 				{/if}
 				</div>
+				<!-- The plan's notes, numbered as on the plan image, as the pattern book does -->
+				{#if plan.annotations.length}
+					<ol class="report-notes" aria-label="Notes">
+						{#each plan.annotations as a (a.n)}
+							<li><span class="report-note-num" aria-hidden="true">{a.n}</span>{a.text}</li>
+						{/each}
+					</ol>
+				{/if}
 			</section>
 
 			<!-- Your pattern: the site's cell in the matrix, and the pattern written for it -->
@@ -555,6 +563,34 @@
 		flex-direction: column;
 		gap: 0.3rem;
 		flex: 1;
+	}
+
+	.report-notes {
+		list-style: none;
+		margin: 0.9rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		font-size: 0.85rem;
+		line-height: 1.4;
+	}
+	.report-notes li { display: flex; gap: 0.5rem; align-items: flex-start; }
+	/* The book's dot: a lantern-orange circle with a bold white number */
+	.report-note-num {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.35rem;
+		height: 1.35rem;
+		border-radius: 50%;
+		background: var(--color-new);
+		color: #fff;
+		font-size: 0.72rem;
+		font-weight: 800;
+		print-color-adjust: exact;
+		-webkit-print-color-adjust: exact;
 	}
 
 	.overview-plan {

@@ -1,11 +1,98 @@
 import * as THREE from 'three';
-import { getRenderer, getPerspCamera, planCamera, mainScene } from './scene/cameraRef';
-import type { Plan } from './types';
+import { getRenderer, getPerspCamera, planCamera, mainScene, topBelow } from './scene/cameraRef';
+import type { Annotation, Plan } from './types';
 import { FH } from './colors';
 
 const PAD = 8;
 
-export function capturePlanImage(plan: Plan): string | null {
+// The pattern book's numbered dots, drawn onto an exported picture: each note projected through
+// the camera that drew it. In 3D a note sits on whatever is under it; off the board it's left out.
+// `height` is the picture's, which may sit above a list of notes on the same canvas.
+function drawDots(ctx: CanvasRenderingContext2D, notes: Annotation[], camera: THREE.Camera, is3D: boolean, scale: number, height = ctx.canvas.height) {
+	const width = ctx.canvas.width;
+	const r = 14 * scale;
+	for (const a of notes) {
+		const y = is3D ? topBelow(a.x, a.y) : 0;
+		if (y === null) continue;
+		const v = new THREE.Vector3(a.x, y + (is3D ? 0.5 : 0), a.y).project(camera);
+		if (v.z > 1) continue;
+		const [px, py] = [((v.x + 1) / 2) * width, ((1 - v.y) / 2) * height];
+		dot(ctx, px, py, r, a.n, scale);
+	}
+}
+
+function dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, n: number, scale: number) {
+	ctx.beginPath();
+	ctx.arc(x, y, r, 0, Math.PI * 2);
+	ctx.fillStyle = FH.lantern;
+	ctx.fill();
+	ctx.lineWidth = 2 * scale;
+	ctx.strokeStyle = '#fff';
+	ctx.stroke();
+	ctx.fillStyle = '#fff';
+	ctx.font = `800 ${Math.round(r * 1.05)}px system-ui, sans-serif`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText(String(n), x, y + scale);
+	ctx.textAlign = 'start';
+}
+
+// Wraps text to a width, word by word
+function wrap(ctx: CanvasRenderingContext2D, text: string, width: number): string[] {
+	const lines: string[] = [];
+	let line = '';
+	for (const word of text.split(/\s+/).filter(Boolean)) {
+		const next = line ? `${line} ${word}` : word;
+		if (ctx.measureText(next).width > width && line) {
+			lines.push(line);
+			line = word;
+		} else line = next;
+	}
+	if (line) lines.push(line);
+	return lines;
+}
+
+// The picture with its dots, and the numbered notes beneath it as in the book
+function withNotes(source: HTMLCanvasElement, notes: Annotation[], camera: THREE.Camera, is3D: boolean): HTMLCanvasElement {
+	const scale = source.width / source.clientWidth || 1;
+	const pad = 20 * scale;
+	const size = 15 * scale;
+	const lineH = size * 1.4;
+	const r = 11 * scale;
+	const measure = document.createElement('canvas').getContext('2d')!;
+	measure.font = `${size}px system-ui, sans-serif`;
+	const textW = source.width - pad * 2 - r * 2 - 10 * scale;
+	const blocks = notes.map((a) => ({ a, lines: wrap(measure, a.text || ' ', textW) }));
+	const listH = notes.length ? pad * 2 + blocks.reduce((h, b) => h + Math.max(b.lines.length * lineH, r * 2) + 8 * scale, 0) : 0;
+
+	const out = document.createElement('canvas');
+	out.width = source.width;
+	out.height = source.height + listH;
+	const ctx = out.getContext('2d')!;
+	ctx.fillStyle = FH.linen;
+	ctx.fillRect(0, 0, out.width, out.height);
+	ctx.drawImage(source, 0, 0);
+	ctx.save();
+	ctx.beginPath();
+	ctx.rect(0, 0, source.width, source.height);
+	ctx.clip();
+	drawDots(ctx, notes, camera, is3D, scale, source.height);
+	ctx.restore();
+
+	let y = source.height + pad;
+	for (const { a, lines } of blocks) {
+		dot(ctx, pad + r, y + r, r, a.n, scale * 0.8);
+		ctx.font = `${size}px system-ui, sans-serif`;
+		ctx.fillStyle = '#231f20';
+		ctx.textBaseline = 'top';
+		lines.forEach((l, i) => ctx.fillText(l, pad + r * 2 + 10 * scale, y + (r * 2 - size) / 2 + i * lineH));
+		y += Math.max(lines.length * lineH, r * 2) + 8 * scale;
+	}
+	return out;
+}
+
+// Notes: the plan's, to draw their dots on the picture (the analysis); none for a clean one
+export function capturePlanImage(plan: Plan, notes: Annotation[] = []): string | null {
 	const renderer = getRenderer();
 	const scene = mainScene;
 	if (!renderer || !planCamera || !scene) return null;
@@ -26,6 +113,10 @@ export function capturePlanImage(plan: Plan): string | null {
 	for (const t of plan.trees) {
 		xs.push(t.x - t.radius, t.x + t.radius);
 		zs.push(t.y - t.radius, t.y + t.radius);
+	}
+	for (const a of notes) {
+		xs.push(a.x);
+		zs.push(a.y);
 	}
 
 	// Hide grid lines during capture
@@ -59,7 +150,17 @@ export function capturePlanImage(plan: Plan): string | null {
 	}
 
 	renderer.render(scene, planCamera);
-	const dataURL = renderer.domElement.toDataURL('image/png');
+	let dataURL: string;
+	if (notes.length) {
+		const out = document.createElement('canvas');
+		out.width = renderer.domElement.width;
+		out.height = renderer.domElement.height;
+		const ctx = out.getContext('2d')!;
+		ctx.drawImage(renderer.domElement, 0, 0);
+		// Sized to the picture, which the report shows small
+		drawDots(ctx, notes, planCamera, false, out.width / 320);
+		dataURL = out.toDataURL('image/png');
+	} else dataURL = renderer.domElement.toDataURL('image/png');
 
 	// Restore camera and grid before anything else can paint.
 	// All of this is synchronous in one JS task, so the browser never
@@ -76,20 +177,19 @@ export function capturePlanImage(plan: Plan): string | null {
 }
 
 // Data credits travel with shared images: printed small in the bottom-right corner.
-function withCredits(source: HTMLCanvasElement, credit: string): string {
+function withCredits(source: HTMLCanvasElement, credit: string, bottom = source.height, scale = source.width / source.clientWidth || 1): string {
 	const out = document.createElement('canvas');
 	out.width = source.width;
 	out.height = source.height;
 	const ctx = out.getContext('2d');
 	if (!ctx) return source.toDataURL('image/png');
 	ctx.drawImage(source, 0, 0);
-	const scale = source.width / source.clientWidth || 1; // device pixels per CSS pixel
-	const size = Math.round(11 * scale);
+	const size = Math.round(11 * scale); // scale: device pixels per CSS pixel
 	const pad = Math.round(6 * scale);
 	ctx.font = `${size}px system-ui, sans-serif`;
 	const width = ctx.measureText(credit).width;
 	const x = out.width - width - pad * 2;
-	const y = out.height - size - pad * 2;
+	const y = bottom - size - pad * 2; // on the picture, above any notes beneath it
 	ctx.fillStyle = 'rgba(247, 247, 242, 0.85)';
 	ctx.fillRect(x, y, width + pad * 2, size + pad * 2);
 	ctx.fillStyle = '#595657';
@@ -98,14 +198,17 @@ function withCredits(source: HTMLCanvasElement, credit: string): string {
 	return out.toDataURL('image/png');
 }
 
-export function exportPNG(filename = 'site-model.png', credit: string | null = null) {
+// Notes: the ones on screen (the Notes drawer open), drawn as dots with their list beneath
+export function exportPNG(filename = 'site-model.png', credit: string | null = null, notes: Annotation[] = []) {
 	const renderer = getRenderer();
 	const camera = getPerspCamera();
 	const scene = mainScene;
 	if (!renderer || !camera || !scene) return;
 
 	renderer.render(scene, camera);
-	const dataURL = credit ? withCredits(renderer.domElement, credit) : renderer.domElement.toDataURL('image/png');
+	const picture = notes.length ? withNotes(renderer.domElement, notes, camera, true) : renderer.domElement;
+	const scale = renderer.domElement.width / renderer.domElement.clientWidth || 1;
+	const dataURL = credit ? withCredits(picture, credit, renderer.domElement.height, scale) : picture.toDataURL('image/png');
 	const a = document.createElement('a');
 	a.href = dataURL;
 	a.download = filename;

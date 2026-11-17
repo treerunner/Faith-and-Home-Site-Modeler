@@ -85,11 +85,14 @@ function makeSite(): Site {
 	};
 }
 
+export type SidebarTab = 'spatial' | 'social' | 'notes';
+export const NOTE_MAX = 280; // a sentence or two, as in the pattern book
+
 class ModelerStore {
 	site = $state<Site>(makeSite());
 	mode = $state<InteractionMode>({ type: 'idle' });
 	activeStructureId = $state<string>('');
-	sidebarTab = $state<'spatial' | 'social'>('spatial');
+	sidebarTab = $state<SidebarTab>('spatial');
 	drawerOpen = $state(true); // the right drawer; closed, the canvas takes its width
 	viewMode = $state<'plan' | '3d'>('plan');
 	showLabels = $state(true);
@@ -1601,6 +1604,75 @@ class ModelerStore {
 
 	startPlacingTree() {
 		this.mode = { type: 'placingTree' };
+	}
+
+	// ── Notes: numbered annotations, as in the pattern book ──────────────────
+	// Each plan (existing conditions too) numbers its own from 1, in the order placed.
+
+	hoveredNote = $state<number | null>(null); // view state: a dot and its list item light up together
+	focusNote = $state<number | null>(null); // the Notes list focuses this note's text, then clears it
+	#editingNote: number | null = null; // typing in one note is one undo step
+
+	// Dots show while the Notes drawer is open
+	get showNotes(): boolean {
+		return this.drawerOpen && this.sidebarTab === 'notes';
+	}
+
+	startPlacingNote() {
+		this.mode = { type: 'placingNote' };
+	}
+
+	addNote(x: number, y: number) {
+		this.#pushUndo();
+		const n = this.plan.annotations.length + 1;
+		this.plan.annotations.push({ n, x, y, text: '' });
+		this.mode = { type: 'idle' };
+		this.focusNote = n;
+	}
+
+	startNoteDrag(n: number) {
+		this.mode = { type: 'draggingNote', n, moved: false };
+	}
+
+	dragNote(x: number, y: number) {
+		const m = this.mode;
+		if (m.type !== 'draggingNote') return;
+		const a = this.plan.annotations.find((a) => a.n === m.n);
+		if (!a) return;
+		if (!m.moved) {
+			this.#pushUndo(); // a click that doesn't move isn't a step
+			this.mode = { ...m, moved: true };
+		}
+		a.x = x;
+		a.y = y;
+	}
+
+	// Ends a drag; a dot pressed without moving was a click, and opens its text
+	endNoteDrag() {
+		const m = this.mode;
+		if (m.type !== 'draggingNote') return;
+		this.mode = { type: 'idle' };
+		if (!m.moved) this.focusNote = m.n;
+	}
+
+	updateNote(n: number, text: string) {
+		const a = this.plan.annotations.find((a) => a.n === n);
+		if (!a) return;
+		if (this.#editingNote !== n) {
+			this.#pushUndo();
+			this.#editingNote = n;
+		}
+		a.text = text.slice(0, NOTE_MAX);
+	}
+
+	endNoteEdit() {
+		this.#editingNote = null;
+	}
+
+	deleteNote(n: number) {
+		this.#pushUndo();
+		this.#editingNote = null;
+		this.plan.annotations = this.plan.annotations.filter((a) => a.n !== n).map((a, i) => ({ ...a, n: i + 1 }));
 	}
 
 	placeTree(x: number, y: number) {

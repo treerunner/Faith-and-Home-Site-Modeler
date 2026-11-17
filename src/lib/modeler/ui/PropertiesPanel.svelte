@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { store } from '../store.svelte';
+	import { tick } from 'svelte';
+	import { NOTE_MAX, store, type SidebarTab } from '../store.svelte';
 	import { syncUrl } from './SiteBar.svelte';
 	import { choicesOn } from '../existing';
 	import { restsOn, totalStories } from '../geometry';
@@ -15,9 +16,10 @@
 	const TABS = [
 		{ key: 'spatial', label: 'Spatial', icon: '/icons/spatial.svg' },
 		{ key: 'social', label: 'Social', icon: '/icons/social.svg' },
+		{ key: 'notes', label: 'Notes', icon: '/icons/notes.svg' },
 	] as const;
 
-	function toggleTab(tab: 'spatial' | 'social') {
+	function toggleTab(tab: SidebarTab) {
 		if (store.drawerOpen && store.sidebarTab === tab) store.drawerOpen = false;
 		else {
 			store.sidebarTab = tab;
@@ -29,17 +31,34 @@
 	let lastSelected: string | null = null;
 	$effect(() => {
 		const id = store.activeStructureId;
-		if (id && id !== lastSelected) {
+		// While notes are being written, the Notes drawer stays put
+		if (id && id !== lastSelected && !store.showNotes) {
 			store.sidebarTab = 'spatial';
 			store.drawerOpen = true;
 		}
 		lastSelected = id;
 	});
 
+	// A new note, or a dot clicked: open the Notes drawer and put the cursor in that note
+	$effect(() => {
+		const n = store.focusNote;
+		if (n === null) return;
+		store.sidebarTab = 'notes';
+		store.drawerOpen = true;
+		void tick().then(() => {
+			const el = document.getElementById(`note-${n}`);
+			el?.focus();
+			el?.scrollIntoView({ block: 'nearest' });
+			store.focusNote = null;
+		});
+	});
+
+	let placingNote = $derived(store.mode.type === 'placingNote');
+
 	// Open or closed, and the tab, are remembered in this browser
 	const DRAWER_KEY = 'fh-drawer';
 	try {
-		const saved = JSON.parse(localStorage.getItem(DRAWER_KEY) ?? 'null') as { open: boolean; tab: 'spatial' | 'social' } | null;
+		const saved = JSON.parse(localStorage.getItem(DRAWER_KEY) ?? 'null') as { open: boolean; tab: SidebarTab } | null;
 		if (saved) {
 			store.drawerOpen = saved.open;
 			store.sidebarTab = saved.tab;
@@ -346,6 +365,61 @@
 				oninput={(e) => store.updateCongregationProfile({ notes: (e.target as HTMLTextAreaElement).value || undefined })}
 			></textarea>
 			</fieldset>
+		</div>
+	{/if}
+
+	{#if sidebarTab === 'notes'}
+		{@const notes = store.plan.annotations}
+		<div class="section section--props">
+			<h2 class="panel-heading">Notes</h2>
+			<p class="field-hint">Number what matters on the model, a sentence each, as the pattern book does.</p>
+			{#if !store.readOnly}
+				<button
+					class="place-note"
+					class:place-note--active={placingNote}
+					aria-pressed={placingNote}
+					disabled={store.viewMode !== 'plan'}
+					onclick={() => (placingNote ? store.cancelPlacing() : store.startPlacingNote())}
+				>
+					<span class="note-num" aria-hidden="true">{notes.length + 1}</span>
+					{placingNote ? 'Click the plan…' : 'Place note'}
+				</button>
+				{#if store.viewMode !== 'plan'}
+					<p class="field-hint">Notes are placed in Plan view.</p>
+				{/if}
+			{/if}
+			{#if notes.length}
+				<ol class="note-list">
+					{#each notes as a (a.n)}
+						<li
+							class="note"
+							class:note--hover={store.hoveredNote === a.n}
+							onpointerenter={() => (store.hoveredNote = a.n)}
+							onpointerleave={() => (store.hoveredNote = null)}
+						>
+							<span class="note-num" aria-hidden="true">{a.n}</span>
+							{#if store.readOnly}
+								<p class="note-text" id="note-{a.n}" tabindex="-1">{a.text || 'No text yet.'}</p>
+							{:else}
+								<textarea
+									id="note-{a.n}"
+									class="note-input"
+									aria-label="Note {a.n}"
+									placeholder="What happens here?"
+									maxlength={NOTE_MAX}
+									rows="2"
+									value={a.text}
+									oninput={(e) => store.updateNote(a.n, (e.target as HTMLTextAreaElement).value)}
+									onblur={() => store.endNoteEdit()}
+								></textarea>
+								<button class="note-delete" aria-label="Delete note {a.n}" title="Delete" onclick={() => store.deleteNote(a.n)}>×</button>
+							{/if}
+						</li>
+					{/each}
+				</ol>
+			{:else}
+				<p class="field-hint">No notes yet.</p>
+			{/if}
 		</div>
 	{/if}
 
@@ -1241,6 +1315,95 @@
 	}
 
 	.num-input:focus { outline: 2px solid var(--color-selection); border-color: transparent; }
+
+	.place-note {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.35rem 0.5rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: 4px;
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.place-note:hover:not(:disabled),
+	.place-note--active { border-color: var(--color-selection); background: var(--fh-dusk-tint); }
+	.place-note:disabled { opacity: 0.5; cursor: default; }
+
+	/* The book's dot, small: a lantern-orange circle with a bold white number */
+	.note-num {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		background: var(--color-new);
+		color: #fff;
+		font-size: 0.68rem;
+		font-weight: 800;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.note-list {
+		list-style: none;
+		margin: 0.25rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.note {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.4rem;
+		padding: 0.3rem;
+		margin: -0.3rem;
+		border-radius: 4px;
+	}
+	.note--hover { background: var(--fh-lantern-tint); }
+
+	.note-input {
+		flex: 1;
+		min-width: 0;
+		resize: none;
+		field-sizing: content; /* grows with its sentence */
+		min-height: 2.6em;
+		padding: 0.25rem 0.35rem;
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		background: #fff;
+		font: inherit;
+		font-size: 0.72rem;
+		line-height: 1.35;
+		color: var(--color-text);
+	}
+	.note-input:focus { outline: none; border-color: var(--color-selection); }
+
+	.note-text {
+		flex: 1;
+		margin: 0;
+		font-size: 0.72rem;
+		line-height: 1.4;
+	}
+
+	.note-delete {
+		flex-shrink: 0;
+		border: none;
+		background: none;
+		padding: 0 0.15rem;
+		font-size: 1rem;
+		line-height: 1;
+		color: var(--fh-stone);
+		cursor: pointer;
+	}
+	.note-delete:hover { color: var(--color-danger, #b3261e); }
 
 	.field-hint {
 		font-size: 0.6rem;
