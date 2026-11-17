@@ -204,7 +204,7 @@
 					{/if}
 					{#if profile.notes}
 						<div class="overview-row overview-row--notes">
-							<span class="overview-label">Notes</span>
+							<span class="overview-label">Context</span>
 							<span class="overview-value">{profile.notes}</span>
 						</div>
 					{/if}
