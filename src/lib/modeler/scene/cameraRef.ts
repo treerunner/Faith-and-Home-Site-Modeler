@@ -24,6 +24,14 @@ export function useSceneView(): SceneView {
 	return getContext<SceneView | undefined>(SCENE_VIEW) ?? mainView;
 }
 
+// Two views orbiting together (compare): the last orbit, and which view made it
+export interface OrbitSync {
+	position: [number, number, number];
+	target: [number, number, number];
+	source: SceneView | null;
+	version: number;
+}
+
 export function getRenderer(view = mainView): THREE.WebGLRenderer | null {
 	return view.renderer;
 }

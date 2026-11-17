@@ -19,7 +19,7 @@
 	import { buildingFooting } from '../terrain';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
-	import { useSceneView } from './cameraRef';
+	import { useSceneView, type OrbitSync } from './cameraRef';
 	import { applyGrain, GRAIN_BOARD, loadGrain, setGrainOn } from './grain';
 	import type { Plan, Status, Structure } from '../types';
 	import type { InteractionMode } from '../interaction';
@@ -27,8 +27,9 @@
 	interface Props {
 		plan?: Plan; // the plan to draw; the one being edited by default
 		interactive?: boolean; // false: just the model, no selection, handles or drawing (compare)
+		orbit?: OrbitSync; // compare: orbit with the other view
 	}
-	let { plan: shown, interactive = true }: Props = $props();
+	let { plan: shown, interactive = true, orbit }: Props = $props();
 	let plan = $derived(shown ?? store.plan);
 	const IDLE: InteractionMode = { type: 'idle' };
 	let mode = $derived(interactive ? store.mode : IDLE);
@@ -263,7 +264,7 @@
 </script>
 
 <PlanCamera />
-<PerspCamera />
+<PerspCamera sync={orbit} />
 
 <T.DirectionalLight
 	bind:ref={dirLight}

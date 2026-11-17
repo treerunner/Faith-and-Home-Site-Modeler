@@ -139,3 +139,23 @@ export function conditionText(when: SocialConditions): string {
 		.map(([key, allowed]) => allowed.map((a) => ANSWER_LABELS[key][a] ?? a).join(' or '))
 		.join('; ');
 }
+
+// A plan's place in the matrix and what's written for it: its pattern and variant, or the
+// closest written pattern when its cell has none. The analysis and compare both read this.
+export interface PlanPattern {
+	cell: Cell;
+	pattern: Pattern | null;
+	variant: Variant | null;
+	nearest: { pattern: Pattern; differs: Axis[] } | null;
+}
+
+export function patternFor(site: Site, plan: Plan, patterns: Pattern[]): PlanPattern {
+	const cell = siteCell(site, plan);
+	const pattern = isComplete(cell) ? patternForCell(patterns, cell) : null;
+	return {
+		cell,
+		pattern,
+		variant: pattern ? selectVariant(pattern, site.congregationProfile ?? {}) : null,
+		nearest: isComplete(cell) && !pattern ? nearestPattern(patterns, cell) : null,
+	};
+}

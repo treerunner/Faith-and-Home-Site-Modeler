@@ -3,9 +3,12 @@
 	import { OrbitControls } from '@threlte/extras';
 	import * as THREE from 'three';
 	import type { OrbitControls as ThreeOrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-	import { surfaceUnder, topBelow, useSceneView } from './cameraRef';
+	import { surfaceUnder, topBelow, useSceneView, type OrbitSync } from './cameraRef';
 	import { store } from '../store.svelte';
 	import { cameraFloor, zoomAbout, ZOOM_LIMITS } from '../view';
+
+	interface Props { sync?: OrbitSync } // shared with another view: orbit one and both move
+	let { sync }: Props = $props();
 
 	const { size: sizeStore, renderer, invalidate } = useThrelte();
 	const view = useSceneView();
@@ -29,6 +32,35 @@
 		};
 		c.addEventListener('change', keepAbove);
 		return () => c.removeEventListener('change', keepAbove);
+	});
+
+	// Orbiting together: this view's moves go to the shared orbit, the other view's come back.
+	// A move applied from the other view isn't sent back.
+	let applying = false;
+	$effect(() => {
+		if (!controls || !cam || !sync) return;
+		const c = controls, camera = cam, shared = sync;
+		const send = () => {
+			if (applying) return;
+			const p = camera.position, t = c.target;
+			shared.position = [p.x, p.y, p.z];
+			shared.target = [t.x, t.y, t.z];
+			shared.source = view;
+			shared.version++;
+		};
+		c.addEventListener('change', send);
+		return () => c.removeEventListener('change', send);
+	});
+	$effect(() => {
+		if (!controls || !cam || !sync) return;
+		void sync.version;
+		if (sync.source === view || !sync.source) return;
+		applying = true;
+		cam.position.set(...sync.position);
+		controls.target.set(...sync.target);
+		controls.update();
+		applying = false;
+		invalidate();
 	});
 
 	// The wheel (and trackpad pinch) zooms in toward what's under the cursor, and the orbit pivot

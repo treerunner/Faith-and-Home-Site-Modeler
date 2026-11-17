@@ -160,17 +160,18 @@ export async function loadPlanRoute(
 	readOnly: boolean,
 	user: CurrentUser | null,
 	path: string,
+	search = '', // kept through redirects: compare's `?compare=`
 ): Promise<{ site: Site; siteSlug: string; planId: string; rights: SiteRights }> {
 	const { site, slug, access } = await getSiteBySlug(siteParam);
 	const viewable = canView(access, user);
 	const editable = canEdit(access, user);
 	if (!viewable) {
-		if (!user) redirect(303, `/signin?next=${encodeURIComponent(path)}`);
+		if (!user) redirect(303, `/signin?next=${encodeURIComponent(path + search)}`);
 		error(404, 'Site not found');
 	}
 	const plan = (planParam && findPlanBySlug(site.plans, planParam)) || site.existing;
-	if (!readOnly && !editable) redirect(303, planUrl(slug, plan.slug, true));
-	if (siteParam !== slug || (planParam ?? '') !== plan.slug) redirect(307, planUrl(slug, plan.slug, readOnly));
+	if (!readOnly && !editable) redirect(303, planUrl(slug, plan.slug, true) + search);
+	if (siteParam !== slug || (planParam ?? '') !== plan.slug) redirect(307, planUrl(slug, plan.slug, readOnly) + search);
 	const [committee] = access.committeeId
 		? await db.select({ id: committees.id, name: committees.name, slug: committees.slug }).from(committees).where(eq(committees.id, access.committeeId))
 		: [];
