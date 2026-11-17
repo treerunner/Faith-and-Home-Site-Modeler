@@ -65,7 +65,8 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 	// A new site opens on the site view: existing conditions, edited here only
 	await page.goto('/modeler');
 	await page.getByLabel('Site name').fill(`E2E site ${stamp}`);
-	await expect(page.locator('.plan-eyebrow')).toHaveText('Site');
+	const crumbs = page.getByRole('navigation', { name: 'Where you are' });
+	await expect(crumbs).toContainText('Unsaved sketch');
 	await expect(page.locator('.plan-name-fixed')).toHaveText('Existing conditions');
 	await page.getByLabel('Drag to place Square').dragTo(canvas, { targetPosition: { x: 200, y: 200 } });
 	await expect(structures(page)).toHaveCount(1);
@@ -74,6 +75,9 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 	await expect(page).toHaveURL(urlIs(site));
 	created.push(await siteIdBySlug(request, `e2e-site-${stamp}`));
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+	// Saved, the breadcrumb names the committee that owns it, linked to its page
+	await expect(crumbs).not.toContainText('Unsaved sketch');
+	await expect(crumbs.getByRole('link')).toHaveAttribute('href', /^\/committees\/.+/);
 
 	// A plan starts from existing conditions and adds a proposed building
 	await planAction(page, 'New plan');
@@ -129,8 +133,10 @@ test('sites hold existing conditions and plans with clean, rename-safe URLs', as
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
 	// The site is renamed on the site view only; that moves every plan URL, and old site URLs redirect
-	await expect(page.getByLabel('Site name')).toBeDisabled();
-	await chooseSite(page);
+	// In a plan the site's name leads back to the site view, where it's edited
+	await expect(page.getByLabel('Site name')).toHaveCount(0);
+	await crumbs.getByRole('button', { name: `E2E site ${stamp}` }).click();
+	await expect(page).toHaveURL(urlIs(site));
 	await page.getByLabel('Site name').fill(`E2E site ${stamp} Grace`);
 	await save(page);
 	const renamed = `${site}-grace`;

@@ -89,6 +89,7 @@ class ModelerStore {
 	mode = $state<InteractionMode>({ type: 'idle' });
 	activeStructureId = $state<string>('');
 	sidebarTab = $state<'spatial' | 'social'>('spatial');
+	drawerOpen = $state(true); // the right drawer; closed, the canvas takes its width
 	viewMode = $state<'plan' | '3d'>('plan');
 	showLabels = $state(true);
 	showTerrain = $state(true); // view state, like labels: not saved
@@ -133,7 +134,7 @@ class ModelerStore {
 	saveState = $state<'idle' | 'saving' | 'error' | 'conflict' | 'signin' | 'committee'>('idle');
 	saveMessage = $state('');
 	// The viewer's rights on a saved site, and the version the next save is made from
-	rights = $state<{ canEdit: boolean; canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string } | null }>({
+	rights = $state<{ canEdit: boolean; canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string; slug: string } | null }>({
 		canEdit: true,
 		canDelete: false,
 		visibility: 'public',
@@ -167,7 +168,7 @@ class ModelerStore {
 		this.#reset(site, '', site.existing.id, false);
 	}
 
-	loadSite(site: Site, siteSlug: string, planId: string, readOnly: boolean, rights?: { canEdit: boolean; canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string } | null; version: number }) {
+	loadSite(site: Site, siteSlug: string, planId: string, readOnly: boolean, rights?: { canEdit: boolean; canDelete: boolean; visibility: 'public' | 'members'; committee: { id: string; name: string; slug: string } | null; version: number }) {
 		this.#reset(site, siteSlug, planId, readOnly);
 		if (rights) {
 			const { version, ...rest } = rights;

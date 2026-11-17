@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { store } from '../store.svelte';
-	import PlanSwitcher from './PlanSwitcher.svelte';
 	import { syncUrl } from './SiteBar.svelte';
 	import { choicesOn } from '../existing';
 	import { restsOn, totalStories } from '../geometry';
@@ -11,6 +10,63 @@
 	import { BUILDING_TYPE_LABELS, DEVELOPMENT_TYPE_LABELS, inferBuildingType, inferDevelopmentType, zoneDwellings, zoneFloorArea } from '../metrics';
 
 	let sidebarTab = $derived(store.sidebarTab);
+
+	// The drawer's tabs, with the icons in static/icons (drawn as masks, so they take our colors)
+	const TABS = [
+		{ key: 'spatial', label: 'Spatial', icon: '/icons/spatial.svg' },
+		{ key: 'social', label: 'Social', icon: '/icons/social.svg' },
+	] as const;
+
+	function toggleTab(tab: 'spatial' | 'social') {
+		if (store.drawerOpen && store.sidebarTab === tab) store.drawerOpen = false;
+		else {
+			store.sidebarTab = tab;
+			store.drawerOpen = true;
+		}
+	}
+
+	// Selecting a building, however it happens, opens the drawer to its properties
+	let lastSelected: string | null = null;
+	$effect(() => {
+		const id = store.activeStructureId;
+		if (id && id !== lastSelected) {
+			store.sidebarTab = 'spatial';
+			store.drawerOpen = true;
+		}
+		lastSelected = id;
+	});
+
+	// Open or closed, and the tab, are remembered in this browser
+	const DRAWER_KEY = 'fh-drawer';
+	try {
+		const saved = JSON.parse(localStorage.getItem(DRAWER_KEY) ?? 'null') as { open: boolean; tab: 'spatial' | 'social' } | null;
+		if (saved) {
+			store.drawerOpen = saved.open;
+			store.sidebarTab = saved.tab;
+		}
+	} catch {
+		// storage unavailable: the drawer starts open
+	}
+	// The canvas changes width with the drawer. The renderer follows, but the plan camera only
+	// recomputes its proportions when the framing changes, so the framing is renewed (same values)
+	// once the layout has settled; the 3D camera gets a window resize, which it listens for.
+	$effect(() => {
+		void store.drawerOpen;
+		// After the renderer's own size check (which follows the next frame)
+		const timer = setTimeout(() => {
+			window.dispatchEvent(new Event('resize'));
+			store.planView = { ...store.planView };
+		}, 120);
+		return () => clearTimeout(timer);
+	});
+	$effect(() => {
+		const state = JSON.stringify({ open: store.drawerOpen, tab: store.sidebarTab });
+		try {
+			localStorage.setItem(DRAWER_KEY, state);
+		} catch {
+			// storage unavailable: nothing to remember
+		}
+	});
 
 	// In a plan, what happens to one of the site's buildings
 	const STATUS_OPTIONS: { value: Status; label: string }[] = [
@@ -193,37 +249,8 @@
 </script>
 
 <aside class="props-panel" aria-label="Properties panel">
-	<div class="site-name-row">
-		<input
-			class="site-name-input"
-			type="text"
-			aria-label="Site name"
-			placeholder="Untitled Site"
-			disabled={store.readOnly || !store.onSite}
-			title={store.onSite ? undefined : 'The site name is edited on the site view'}
-			value={store.site.name}
-			oninput={(e) => store.updateSiteName((e.target as HTMLInputElement).value)}
-		/>
-	</div>
-	<PlanSwitcher />
-
-	<div class="tab-strip" role="tablist">
-		<button
-			class="tab-btn"
-			class:tab-btn--active={sidebarTab === 'spatial'}
-			role="tab"
-			aria-selected={sidebarTab === 'spatial'}
-			onclick={() => { store.sidebarTab = 'spatial'; }}
-		>Spatial</button>
-		<button
-			class="tab-btn"
-			class:tab-btn--active={sidebarTab === 'social'}
-			role="tab"
-			aria-selected={sidebarTab === 'social'}
-			onclick={() => { store.sidebarTab = 'social'; }}
-		>Social</button>
-	</div>
-
+	{#if store.drawerOpen}
+	<div class="drawer" id="drawer-content" role="tabpanel" aria-label={sidebarTab === 'spatial' ? 'Spatial' : 'Social'}>
 	{#if sidebarTab === 'social'}
 		{@const profile = store.site.congregationProfile ?? {}}
 		<div class="section section--props">
@@ -819,6 +846,28 @@
 			</fieldset>
 		</div>
 	{/if}
+	</div>
+	{/if}
+
+	<!-- The tab rail: click a tab to open its drawer; click the open tab to close it -->
+	<div class="rail" role="tablist" aria-orientation="vertical" aria-label="Panels">
+		{#each TABS as t (t.key)}
+			{@const on = store.drawerOpen && sidebarTab === t.key}
+			<button
+				class="rail-tab"
+				class:rail-tab--active={on}
+				role="tab"
+				aria-label={t.label}
+				aria-selected={on}
+				aria-controls="drawer-content"
+				title={on ? `Close ${t.label}` : t.label}
+				onclick={() => toggleTab(t.key)}
+			>
+				<span class="rail-icon" style="--icon: url({t.icon})" aria-hidden="true"></span>
+				<span class="rail-label">{t.label}</span>
+			</button>
+		{/each}
+	</div>
 </aside>
 
 <style>
@@ -918,68 +967,71 @@
 	}
 
 	.props-panel {
-		width: 220px;
 		flex-shrink: 0;
+		display: flex;
 		background: var(--color-surface);
 		border-left: 1px solid var(--color-border);
-		display: flex;
-		flex-direction: column;
-		overflow-y: auto;
 		user-select: none;
 	}
 
-	/* Sections keep their height and the panel scrolls; a flex column would squeeze them instead */
-	.props-panel > :global(*) { flex-shrink: 0; }
-
-	.site-name-row {
-		padding: 0.5rem 0.6rem 0.15rem;
-		background: var(--color-surface);
-	}
-
-	.site-name-input {
-		width: 100%;
-		border: none;
-		background: transparent;
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: var(--color-text);
-		padding: 0;
-		outline: none;
-		caret-color: var(--color-selection);
-	}
-
-	.site-name-input:focus {
-		border-bottom: 1px solid var(--color-selection);
-	}
-
-	.tab-strip {
+	.drawer {
+		width: 220px;
 		display: flex;
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
-		flex-shrink: 0;
+		flex-direction: column;
+		overflow-y: auto;
+		border-right: 1px solid var(--color-border);
 	}
 
-	.tab-btn {
-		flex: 1;
-		padding: 0.4rem 0;
+	/* Sections keep their height and the drawer scrolls; a flex column would squeeze them instead */
+	.drawer > :global(*) { flex-shrink: 0; }
+
+	.rail {
+		width: 52px;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.2rem;
+		padding: 0.5rem 0.3rem;
+	}
+
+	.rail-tab {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.45rem 0.1rem 0.35rem;
 		border: none;
+		border-radius: 4px;
 		background: none;
-		font-size: 0.7rem;
-		font-weight: 500;
-		color: var(--color-text);
+		color: var(--fh-stone);
 		cursor: pointer;
-		border-bottom: 2px solid transparent;
-		transition: color 0.1s, border-color 0.1s;
+		font: inherit;
+	}
+	.rail-tab:hover { color: var(--color-text); background: #ece8e0; }
+	.rail-tab--active { color: var(--fh-dusk); background: var(--fh-dusk-tint); }
+	.rail-tab--active:hover { background: var(--fh-dusk-tint); }
+
+	.rail-icon {
+		width: 24px;
+		height: 22px;
+		background: currentColor;
+		mask: var(--icon) center / contain no-repeat;
+		-webkit-mask: var(--icon) center / contain no-repeat;
 	}
 
-	.tab-btn:hover { color: var(--color-text); }
-
-	.tab-btn--active {
-		color: var(--color-text);
-		font-weight: 700;
-		border-bottom-color: var(--color-text);
-		background: var(--color-surface);
+	.rail-label {
+		font-size: 0.58rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
 	}
+
+
+
+
+
+
+
 
 	.textarea-input {
 		resize: vertical;

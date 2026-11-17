@@ -80,11 +80,42 @@ test('the Social tab scrolls to the end, and long notes show in full', async ({ 
 	await page.getByRole('tab', { name: 'Social' }).click();
 	const notes = page.getByLabel('Notes');
 	await notes.fill(Array.from({ length: 12 }, (_, i) => `Line ${i + 1} of the congregation notes, long enough to wrap.`).join('\n'));
-	await page.locator('.props-panel').evaluate((el) => (el.scrollTop = el.scrollHeight));
-	// The box grows with its text, and the panel scrolls to its bottom edge
+	await page.locator('.drawer').evaluate((el) => (el.scrollTop = el.scrollHeight));
+	// The box grows with its text, and the drawer scrolls to its bottom edge
 	expect(await notes.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
-	const [box, panel] = [await notes.boundingBox(), await page.locator('.props-panel').boundingBox()];
+	const [box, panel] = [await notes.boundingBox(), await page.locator('.drawer').boundingBox()];
 	expect(box!.y + box!.height).toBeLessThanOrEqual(panel!.y + panel!.height);
+});
+
+test('the right drawer closes to widen the canvas, reopens on a selection, and is remembered', async ({ page }) => {
+	await page.goto('/modeler');
+	const canvas = page.locator('.canvas-area canvas');
+	const spatial = page.getByRole('tab', { name: 'Spatial' });
+	await expect(page.locator('.drawer')).toBeVisible();
+	const open = (await canvas.boundingBox())!.width;
+
+	// Clicking the open tab closes the drawer; the canvas takes its width
+	await spatial.click();
+	await expect(page.locator('.drawer')).toHaveCount(0);
+	await expect(spatial).toHaveAttribute('aria-selected', 'false');
+	await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThan(open + 150);
+	await page.waitForTimeout(400);
+	await page.screenshot({ path: 'tests/screenshots/drawer-closed.png' });
+
+	// Remembered across a reload
+	await page.reload();
+	await expect(page.getByRole('tab', { name: 'Social' })).toBeVisible();
+	await expect(page.locator('.drawer')).toHaveCount(0);
+
+	// Placing (and so selecting) a building opens it to Spatial
+	await page.getByLabel('Drag to place Square').dragTo(canvas);
+	await expect(page.locator('.drawer')).toBeVisible();
+	await expect(spatial).toHaveAttribute('aria-selected', 'true');
+
+	// The other tab switches the drawer's content
+	await page.getByRole('tab', { name: 'Social' }).click();
+	await expect(page.getByRole('heading', { name: 'Congregation' })).toBeVisible();
+	await page.screenshot({ path: 'tests/screenshots/drawer-social.png' });
 });
 
 test('the palette scrolls on a short screen, so trees are reachable', async ({ page }) => {

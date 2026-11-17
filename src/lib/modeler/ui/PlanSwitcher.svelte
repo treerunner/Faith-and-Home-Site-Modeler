@@ -53,8 +53,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="plan-switcher" bind:this={rootEl} onkeydown={handleKeyDown}>
 	<div class="plan-row">
-		<!-- The site view is existing conditions; plans are the alternatives under it -->
-		<span class="plan-eyebrow">{store.onSite ? 'Site' : 'Plan'}</span>
+		<!-- The last breadcrumb: existing conditions (the site view) or a plan, with the plan menu -->
 		{#if store.onSite}
 			<span class="plan-name-fixed">{store.plan.name}</span>
 		{:else}
@@ -129,9 +128,7 @@
 <style>
 	.plan-switcher {
 		position: relative;
-		padding: 0.35rem 0.6rem 0.4rem;
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
+		min-width: 0;
 	}
 
 	.plan-row {
@@ -140,21 +137,17 @@
 		gap: 0.35rem;
 	}
 
-	.plan-eyebrow {
-		font-size: 0.6rem;
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--fh-stone);
-	}
 
 	.plan-name-input {
-		flex: 1;
-		min-width: 0;
+		field-sizing: content; /* as wide as the name, like the breadcrumb's other parts */
+		min-width: 6ch;
+		max-width: 24rem;
 		border: none;
 		border-bottom: 1px solid transparent;
 		background: transparent;
-		font-size: 0.75rem;
+		font: inherit;
+		font-size: 0.85rem;
+		font-weight: 600;
 		color: var(--color-text);
 		padding: 0;
 		outline: none;
@@ -162,9 +155,7 @@
 	}
 
 	.plan-name-fixed {
-		flex: 1;
-		min-width: 0;
-		font-size: 0.75rem;
+		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--color-text);
 	}
@@ -192,10 +183,10 @@
 
 	.plan-menu {
 		position: absolute;
-		left: 0.6rem;
-		right: 0.6rem;
-		top: calc(100% - 0.15rem);
-		z-index: 10;
+		left: 0;
+		width: 16rem;
+		top: calc(100% + 0.3rem);
+		z-index: 30;
 		background: #fff;
 		border: 1px solid var(--color-border);
 		border-radius: 4px;

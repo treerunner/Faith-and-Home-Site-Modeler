@@ -146,7 +146,7 @@ export interface SiteRights {
 	canEdit: boolean;
 	canDelete: boolean;
 	visibility: 'public' | 'members';
-	committee: { id: string; name: string } | null;
+	committee: { id: string; name: string; slug: string } | null;
 	version: number;
 }
 
@@ -171,7 +171,9 @@ export async function loadPlanRoute(
 	const plan = (planParam && findPlanBySlug(site.plans, planParam)) || site.existing;
 	if (!readOnly && !editable) redirect(303, planUrl(slug, plan.slug, true));
 	if (siteParam !== slug || (planParam ?? '') !== plan.slug) redirect(307, planUrl(slug, plan.slug, readOnly));
-	const [committee] = access.committeeId ? await db.select({ id: committees.id, name: committees.name }).from(committees).where(eq(committees.id, access.committeeId)) : [];
+	const [committee] = access.committeeId
+		? await db.select({ id: committees.id, name: committees.name, slug: committees.slug }).from(committees).where(eq(committees.id, access.committeeId))
+		: [];
 	return {
 		site,
 		siteSlug: slug,
