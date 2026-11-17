@@ -65,5 +65,7 @@ export type InteractionMode =
 			missed?: boolean; // the last outline didn't overlap the building
 	  }
 	| { type: 'placingTree' }
+	| { type: 'placingNote' }
+	| { type: 'draggingNote'; n: number; moved: boolean }
 	| { type: 'selectedTree'; treeId: string }
 	| { type: 'draggingTree'; treeId: string; offsetX: number; offsetY: number };

@@ -79,7 +79,7 @@ test('the scale bar follows the zoom', async ({ page }) => {
 test('the Social tab scrolls to the end, and long notes show in full', async ({ page }) => {
 	await page.goto('/modeler');
 	await page.getByRole('tab', { name: 'Social' }).click();
-	const notes = page.getByLabel('Notes');
+	const notes = page.locator('#profile-notes'); // the congregation's notes (not the Notes tab)
 	await notes.fill(Array.from({ length: 12 }, (_, i) => `Line ${i + 1} of the congregation notes, long enough to wrap.`).join('\n'));
 	await page.locator('.drawer').evaluate((el) => (el.scrollTop = el.scrollHeight));
 	// The box grows with its text, and the drawer scrolls to its bottom edge
@@ -174,4 +174,55 @@ test("dragging the plan view stops at the board's edge, side to side as well as 
 	const buf = await page.screenshot({ clip: { x: squareX - 2, y: box.y + box.height / 2 - 2, width: 4, height: 4 } });
 	const png = await decodePng(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
 	expect(png.data[0]).toBeLessThan(0xb0); // the square's dark chipboard, not the near-white grid
+});
+
+test('notes: numbered dots placed on the plan, written in the Notes drawer, as in the pattern book', async ({ page }) => {
+	await page.goto('/modeler');
+	const canvas = page.locator('.canvas-area canvas');
+	const box = (await canvas.boundingBox())!;
+	const mid = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+	await page.getByLabel('Drag to place Square').dragTo(canvas, { targetPosition: { x: box.width / 2, y: box.height / 2 } });
+
+	// Place two notes; each opens its text box, ready to type
+	await page.getByRole('tab', { name: 'Notes' }).click();
+	await page.getByRole('button', { name: 'Place note' }).click();
+	await expect(page.getByText('Click the spot to number. Esc to cancel.')).toBeVisible();
+	await page.mouse.click(mid.x, mid.y);
+	await expect(page.getByRole('textbox', { name: 'Note 1' })).toBeFocused();
+	await page.keyboard.type('The nave and fellowship halls remain active for worship.');
+	await page.getByRole('button', { name: 'Place note' }).click();
+	await page.mouse.click(mid.x - 150, mid.y + 60);
+	await page.keyboard.type('New cottages along the lane.');
+	const dots = page.locator('.note-dot');
+	await expect(dots).toHaveText(['1', '2']);
+
+	// A dot drags to a new spot in plan view
+	const before = (await dots.nth(1).boundingBox())!;
+	await dots.nth(1).hover();
+	await page.mouse.down();
+	await page.mouse.move(before.x + 60, before.y - 40, { steps: 5 });
+	await page.mouse.up();
+	expect((await dots.nth(1).boundingBox())!.x).toBeGreaterThan(before.x + 40);
+	await page.screenshot({ path: 'tests/screenshots/notes-plan.png' });
+
+	// The analysis lists them beside the plan
+	await page.getByRole('button', { name: 'Analysis' }).click();
+	await expect(page.getByRole('list', { name: 'Notes' })).toContainText('New cottages along the lane.');
+	await page.keyboard.press('Escape');
+
+	// In 3D the dots stand on the model
+	await page.getByRole('button', { name: '3D', exact: true }).click();
+	await page.waitForTimeout(800);
+	await expect(dots).toHaveCount(2);
+	await page.screenshot({ path: 'tests/screenshots/notes-3d.png' });
+	await page.getByRole('button', { name: 'Plan', exact: true }).click();
+
+	// Deleting note 1 renumbers the rest
+	await page.getByRole('button', { name: 'Delete note 1' }).click();
+	await expect(dots).toHaveText(['1']);
+	await expect(page.getByRole('textbox', { name: 'Note 1' })).toHaveValue('New cottages along the lane.');
+
+	// The dots show only while the Notes drawer is open
+	await page.getByRole('tab', { name: 'Spatial' }).click();
+	await expect(dots).toHaveCount(0);
 });

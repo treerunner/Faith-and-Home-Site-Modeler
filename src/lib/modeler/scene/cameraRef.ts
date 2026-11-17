@@ -125,10 +125,10 @@ export function hitTest(clientX: number, clientY: number): HitResult | null {
 
 // Project a world (site) point to screen (client) coordinates.
 // Pass a camera to override the default plan camera (e.g. persp cam in 3D mode).
-export function worldToScreen(wx: number, wz: number, cam?: THREE.Camera): { x: number; y: number } | null {
+export function worldToScreen(wx: number, wz: number, cam?: THREE.Camera, wy = 0): { x: number; y: number } | null {
 	const camera = cam ?? planCamera;
 	if (!camera || !rendererEl) return null;
-	const v = new THREE.Vector3(wx, 0, wz).project(camera);
+	const v = new THREE.Vector3(wx, wy, wz).project(camera);
 	if (v.z > 1) return null; // behind camera
 	const rect = rendererEl.getBoundingClientRect();
 	return {
