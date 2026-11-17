@@ -6,6 +6,7 @@
 	import AnnotationDots from './AnnotationDots.svelte';
 	import Attribution from './Attribution.svelte';
 	import CompareAnalysis from './CompareAnalysis.svelte';
+	import PlanPicker from './PlanPicker.svelte';
 	import { clientToSite, sceneView, type OrbitSync, type SceneView } from '../scene/cameraRef';
 	import { store } from '../store.svelte';
 	import { syncUrl } from './SiteBar.svelte';
@@ -24,7 +25,6 @@
 	let rows = $derived(compareRows(planSummary(a, store.site), planSummary(b, store.site)));
 	let short = $derived(rows.filter((r) => r.short));
 
-	let choices = $derived([store.site.existing, ...store.site.plans]);
 	const nameOf = (p: Plan) => (p.id === store.site.existing.id ? p.name : p.name || 'Untitled plan');
 
 	function pick(side: 'a' | 'b', id: string) {
@@ -102,19 +102,10 @@
 	</nav>
 
 	<div class="views">
-		{#each [{ side: 'A', plan: a, view: views.a }, { side: 'B', plan: b, view: views.b }] as v (v.side)}
+		{#each [{ side: 'A' as const, plan: a, view: views.a }, { side: 'B' as const, plan: b, view: views.b }] as v (v.side)}
 			<section class="view" aria-label="{v.side}: {nameOf(v.plan)}">
 				<!-- The plan's name on its view is also where you choose it -->
-				<label class="view-label">
-					<span class="side">{v.side}</span>
-					<select
-						aria-label="Plan {v.side}"
-						value={v.plan.id}
-						onchange={(e) => pick(v.side === 'A' ? 'a' : 'b', (e.target as HTMLSelectElement).value)}
-					>
-						{#each choices as p (p.id)}<option value={p.id}>{nameOf(p)}</option>{/each}
-					</select>
-				</label>
+				<PlanPicker side={v.side} plan={v.plan} name={nameOf(v.plan)} onchoose={(id) => pick(v.side === 'A' ? 'a' : 'b', id)} />
 				<Scene
 					view={v.view}
 					label="Plan {v.side}: {nameOf(v.plan)}"
@@ -193,18 +184,6 @@
 	.crumb--site { font-weight: 600; }
 	.sep { color: var(--fh-stone); }
 
-	.side {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.2rem;
-		height: 1.2rem;
-		border-radius: 3px;
-		background: var(--color-text);
-		color: var(--color-surface);
-		font-size: 0.65rem;
-		font-weight: 700;
-	}
 	.swap { margin-left: 1rem; }
 	.swap, .exit, .tool-btn {
 		padding: 0.15rem 0.55rem;
@@ -235,33 +214,6 @@
 		min-height: 0;
 		overflow: hidden;
 		background: var(--color-base);
-	}
-	.view-label {
-		position: absolute;
-		top: 0.5rem;
-		left: 0.6rem;
-		z-index: 1;
-		display: flex;
-		align-items: center;
-		gap: 0.35rem;
-		padding: 0.15rem 0.2rem;
-		border: 1px solid transparent;
-		border-radius: 4px;
-		background: rgba(247 247 242 / 0.9);
-		font-size: 0.8rem;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.view-label:hover, .view-label:focus-within { border-color: var(--color-border); background: var(--color-surface); }
-	.view-label select {
-		field-sizing: content; /* as wide as the plan's name, like the breadcrumb's */
-		max-width: 16rem;
-		border: none;
-		background: transparent;
-		font: inherit;
-		color: var(--color-text);
-		cursor: pointer;
-		outline: none;
 	}
 	@media (max-width: 800px) {
 		.views { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
