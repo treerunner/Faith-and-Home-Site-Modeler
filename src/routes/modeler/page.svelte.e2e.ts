@@ -87,25 +87,25 @@ test('the Social tab scrolls to the end, and long notes show in full', async ({ 
 	expect(box!.y + box!.height).toBeLessThanOrEqual(panel!.y + panel!.height);
 });
 
-test('the right drawer closes to widen the canvas, reopens on a selection, and is remembered', async ({ page }) => {
+test('the right drawer slides over the canvas, reopens on a selection, and is remembered', async ({ page }) => {
 	await page.goto('/modeler');
 	const canvas = page.locator('.canvas-area canvas');
 	const spatial = page.getByRole('tab', { name: 'Spatial' });
 	await expect(page.locator('.drawer')).toBeVisible();
 	const open = (await canvas.boundingBox())!.width;
 
-	// Clicking the open tab closes the drawer; the canvas takes its width
+	// Clicking the open tab slides the drawer away; the canvas keeps its size
 	await spatial.click();
-	await expect(page.locator('.drawer')).toHaveCount(0);
+	await expect(page.locator('.drawer')).toBeHidden();
 	await expect(spatial).toHaveAttribute('aria-selected', 'false');
-	await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThan(open + 150);
+	expect((await canvas.boundingBox())!.width).toBe(open);
 	await page.waitForTimeout(400);
 	await page.screenshot({ path: 'tests/screenshots/drawer-closed.png' });
 
 	// Remembered across a reload
 	await page.reload();
 	await expect(page.getByRole('tab', { name: 'Social' })).toBeVisible();
-	await expect(page.locator('.drawer')).toHaveCount(0);
+	await expect(page.locator('.drawer')).toBeHidden();
 
 	// Placing (and so selecting) a building opens it to Spatial
 	await page.getByLabel('Drag to place Square').dragTo(canvas);

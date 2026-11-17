@@ -47,18 +47,6 @@
 	} catch {
 		// storage unavailable: the drawer starts open
 	}
-	// The canvas changes width with the drawer. The renderer follows, but the plan camera only
-	// recomputes its proportions when the framing changes, so the framing is renewed (same values)
-	// once the layout has settled; the 3D camera gets a window resize, which it listens for.
-	$effect(() => {
-		void store.drawerOpen;
-		// After the renderer's own size check (which follows the next frame)
-		const timer = setTimeout(() => {
-			window.dispatchEvent(new Event('resize'));
-			store.planView = { ...store.planView };
-		}, 120);
-		return () => clearTimeout(timer);
-	});
 	$effect(() => {
 		const state = JSON.stringify({ open: store.drawerOpen, tab: store.sidebarTab });
 		try {
@@ -248,8 +236,27 @@
 	}
 </script>
 
-<aside class="props-panel" aria-label="Properties panel">
-	{#if store.drawerOpen}
+<!-- A drawer that slides over the right of the canvas, with folder tabs on its edge; the canvas
+     keeps its size, so the model doesn't jump -->
+<aside class="props-panel" class:props-panel--open={store.drawerOpen} aria-label="Properties panel">
+	<div class="tabs" role="tablist" aria-orientation="vertical" aria-label="Panels">
+		{#each TABS as t (t.key)}
+			{@const on = store.drawerOpen && sidebarTab === t.key}
+			<button
+				class="tab"
+				class:tab--active={on}
+				role="tab"
+				aria-label={t.label}
+				aria-selected={on}
+				aria-controls="drawer-content"
+				title={on ? `Close ${t.label}` : t.label}
+				onclick={() => toggleTab(t.key)}
+			>
+				<span class="tab-icon" style="--icon: url({t.icon})" aria-hidden="true"></span>
+				<span class="tab-label">{t.label}</span>
+			</button>
+		{/each}
+	</div>
 	<div class="drawer" id="drawer-content" role="tabpanel" aria-label={sidebarTab === 'spatial' ? 'Spatial' : 'Social'}>
 	{#if sidebarTab === 'social'}
 		{@const profile = store.site.congregationProfile ?? {}}
@@ -847,27 +854,6 @@
 		</div>
 	{/if}
 	</div>
-	{/if}
-
-	<!-- The tab rail: click a tab to open its drawer; click the open tab to close it -->
-	<div class="rail" role="tablist" aria-orientation="vertical" aria-label="Panels">
-		{#each TABS as t (t.key)}
-			{@const on = store.drawerOpen && sidebarTab === t.key}
-			<button
-				class="rail-tab"
-				class:rail-tab--active={on}
-				role="tab"
-				aria-label={t.label}
-				aria-selected={on}
-				aria-controls="drawer-content"
-				title={on ? `Close ${t.label}` : t.label}
-				onclick={() => toggleTab(t.key)}
-			>
-				<span class="rail-icon" style="--icon: url({t.icon})" aria-hidden="true"></span>
-				<span class="rail-label">{t.label}</span>
-			</button>
-		{/each}
-	</div>
 </aside>
 
 <style>
@@ -967,51 +953,73 @@
 	}
 
 	.props-panel {
-		flex-shrink: 0;
-		display: flex;
-		background: var(--color-surface);
-		border-left: 1px solid var(--color-border);
+		--drawer-w: 240px;
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: var(--toolbar-h, 2.5rem); /* stops above the toolbar, so Save stays in reach */
+		width: var(--drawer-w);
+		z-index: 6;
+		transform: translateX(100%);
+		transition: transform 0.24s cubic-bezier(0.2, 0, 0, 1);
 		user-select: none;
+	}
+	.props-panel--open { transform: none; }
+
+	@media (prefers-reduced-motion: reduce) {
+		.props-panel { transition: none; }
 	}
 
 	.drawer {
-		width: 220px;
+		height: 100%;
 		display: flex;
 		flex-direction: column;
 		overflow-y: auto;
-		border-right: 1px solid var(--color-border);
+		background: var(--color-surface);
+		border-left: 1px solid var(--color-border);
+		box-shadow: -6px 0 16px rgba(0 0 0 / 0.06);
+		/* Hidden once it has slid away, so it's out of the tab order */
+		visibility: hidden;
+		transition: visibility 0s linear 0.24s;
 	}
+	.props-panel--open .drawer { visibility: visible; transition: none; }
 
 	/* Sections keep their height and the drawer scrolls; a flex column would squeeze them instead */
 	.drawer > :global(*) { flex-shrink: 0; }
 
-	.rail {
-		width: 52px;
+	/* Folder tabs on the drawer's left edge: they ride with it, resting at the canvas's edge when closed */
+	.tabs {
+		position: absolute;
+		top: 0.75rem;
+		right: 100%;
 		display: flex;
 		flex-direction: column;
-		align-items: stretch;
-		gap: 0.2rem;
-		padding: 0.5rem 0.3rem;
+		gap: 0.3rem;
 	}
 
-	.rail-tab {
+	.tab {
+		position: relative;
+		left: 1px; /* over the drawer's border, so the active tab joins the sheet */
+		width: 56px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 0.25rem;
-		padding: 0.45rem 0.1rem 0.35rem;
-		border: none;
-		border-radius: 4px;
-		background: none;
+		padding: 0.5rem 0.1rem 0.4rem;
+		border: 1px solid var(--color-border);
+		border-right: none;
+		border-radius: 6px 0 0 6px;
+		background: #ece8e0;
 		color: var(--fh-stone);
 		cursor: pointer;
 		font: inherit;
+		box-shadow: -3px 1px 6px rgba(0 0 0 / 0.05);
 	}
-	.rail-tab:hover { color: var(--color-text); background: #ece8e0; }
-	.rail-tab--active { color: var(--fh-dusk); background: var(--fh-dusk-tint); }
-	.rail-tab--active:hover { background: var(--fh-dusk-tint); }
+	.props-panel:not(.props-panel--open) .tab { left: 0; } /* closed, fully on screen */
+	.tab:hover { color: var(--color-text); }
+	.tab--active { background: var(--color-surface); color: var(--fh-dusk); }
 
-	.rail-icon {
+	.tab-icon {
 		width: 24px;
 		height: 22px;
 		background: currentColor;
@@ -1019,7 +1027,7 @@
 		-webkit-mask: var(--icon) center / contain no-repeat;
 	}
 
-	.rail-label {
+	.tab-label {
 		font-size: 0.58rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;

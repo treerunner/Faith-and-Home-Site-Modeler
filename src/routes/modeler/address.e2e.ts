@@ -268,6 +268,8 @@ test('3D: the wheel zooms toward what is under the cursor', async ({ page }) => 
 	await page.getByRole('button', { name: 'Add buildings' }).click();
 	await expect(page.getByText('Loading terrain…')).toHaveCount(0);
 	await page.getByRole('button', { name: '3D', exact: true }).click();
+	// The drawer slides over the right of the canvas, where the cursor goes: put it away
+	if (await page.locator('.tab--active').count()) await page.locator('.tab--active').click();
 	await page.waitForTimeout(800);
 
 	// The church is near the middle of the view; a neighbor's foam block is off to the right

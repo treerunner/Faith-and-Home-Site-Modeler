@@ -16,6 +16,7 @@
 	import { panBy, scaleBar, type PlanView } from '../view';
 
 	let canvasAreaEl: HTMLDivElement | undefined = $state();
+	let toolbarH = $state(0); // the drawer stops above the toolbar
 	let viewModeBeforeAnalysis = $state<'plan' | '3d'>('plan');
 
 	function openAnalysis() {
@@ -280,7 +281,13 @@
 	{#if !store.readOnly}
 		<Palette />
 	{/if}
-	<div class="canvas-area" class:canvas-area--panning={press?.panning} bind:this={canvasAreaEl}>
+	<div
+		class="canvas-area"
+		class:canvas-area--panning={press?.panning}
+		class:canvas-area--drawer={store.drawerOpen}
+		style="--toolbar-h: {toolbarH}px"
+		bind:this={canvasAreaEl}
+	>
 		<Scene
 			onwheel={handleWheel}
 			ondragover={handleDragOver}
@@ -355,7 +362,7 @@
 			</div>
 		{/if}
 
-		<div class="view-toolbar">
+		<div class="view-toolbar" bind:clientHeight={toolbarH}>
 			<div class="view-tabs" role="group" aria-label="View mode">
 				<button
 					class="view-tab"
@@ -403,8 +410,8 @@
 			>Analysis</button>
 			<SiteBar />
 		</div>
+		<PropertiesPanel />
 	</div>
-	<PropertiesPanel />
 	{#if store.showAnalysis}
 		<AnalysisModal previousViewMode={viewModeBeforeAnalysis} />
 	{/if}
@@ -422,12 +429,14 @@
 		min-width: 0;
 		position: relative;
 		container-type: size;
+		overflow: hidden; /* the closed drawer waits just past the right edge */
 	}
 
 	.scale-bar {
 		position: absolute;
 		bottom: 3rem;
 		right: 0.75rem;
+		transition: right 0.24s cubic-bezier(0.2, 0, 0, 1);
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -463,6 +472,8 @@
 		pointer-events: none;
 		white-space: nowrap;
 	}
+
+	.canvas-area--drawer .scale-bar { right: calc(240px + 0.75rem); }
 
 	.view-toolbar {
 		position: absolute;
