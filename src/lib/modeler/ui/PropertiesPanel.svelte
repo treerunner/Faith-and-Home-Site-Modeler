@@ -373,21 +373,6 @@
 		<div class="section section--props">
 			<h2 class="panel-heading">Notes</h2>
 			<p class="field-hint">Number what matters on the model, a sentence each, as the pattern book does.</p>
-			{#if !store.readOnly}
-				<button
-					class="place-note"
-					class:place-note--active={placingNote}
-					aria-pressed={placingNote}
-					disabled={store.viewMode !== 'plan'}
-					onclick={() => (placingNote ? store.cancelPlacing() : store.startPlacingNote())}
-				>
-					<span class="note-num" aria-hidden="true">{notes.length + 1}</span>
-					{placingNote ? 'Click the plan…' : 'Place note'}
-				</button>
-				{#if store.viewMode !== 'plan'}
-					<p class="field-hint">Notes are placed in Plan view.</p>
-				{/if}
-			{/if}
 			{#if notes.length}
 				<ol class="note-list">
 					{#each notes as a (a.n)}
@@ -421,6 +406,24 @@
 				<p class="field-hint">No notes yet.</p>
 			{/if}
 		</div>
+		<!-- The tool sits at the foot of the drawer, apart from the list -->
+		{#if !store.readOnly}
+			<div class="note-footer">
+				<button
+					class="place-note"
+					class:place-note--active={placingNote}
+					aria-pressed={placingNote}
+					disabled={store.viewMode !== 'plan'}
+					onclick={() => (placingNote ? store.cancelPlacing() : store.startPlacingNote())}
+				>
+					<span class="note-num" aria-hidden="true">{notes.length + 1}</span>
+					{placingNote ? 'Click the plan…' : 'Place note'}
+				</button>
+				{#if store.viewMode !== 'plan'}
+					<p class="field-hint">Notes are placed in Plan view.</p>
+				{/if}
+			</div>
+		{/if}
 	{/if}
 
 	{#if sidebarTab === 'spatial'}
@@ -1315,6 +1318,18 @@
 	}
 
 	.num-input:focus { outline: 2px solid var(--color-selection); border-color: transparent; }
+
+	.note-footer {
+		margin-top: auto; /* at the bottom when the list is short */
+		position: sticky; /* and kept there when it scrolls */
+		bottom: 0;
+		padding: 0.75rem;
+		border-top: 1px solid var(--color-border);
+		background: var(--color-surface);
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
 
 	.place-note {
 		display: flex;
