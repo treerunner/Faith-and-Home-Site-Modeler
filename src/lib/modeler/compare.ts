@@ -10,9 +10,11 @@ import {
 	dwellingsEstimate,
 	grossFloorArea,
 	greenSpaceArea,
+	keptPlan,
 	lotCoverage,
 	parkingArea,
 	reuseFloorArea,
+	saleArea,
 	siteFootprint,
 	useFloorAreaByUse,
 } from './metrics';
@@ -32,28 +34,32 @@ export interface PlanSummary {
 	unitsNew: number;
 	green: number; // m²
 	parking: number; // m²
+	sale: number; // m² of land to sell
 	uses: Partial<Record<Use, number>>; // m² by use
 }
 
+// Measured, like the analysis, on what the congregation keeps
 export function planSummary(plan: Plan, site: Site): PlanSummary {
 	const dev = developmentType(plan);
 	const bt = buildingType(plan, site);
 	const cell = siteCell(site, plan);
-	const byStatus = dwellingsByStatus(plan);
+	const kept = keptPlan(plan);
+	const byStatus = dwellingsByStatus(kept);
 	return {
 		developmentType: dev ? DEVELOPMENT_TYPE_LABELS[dev] : '',
 		buildingType: bt ? BUILDING_TYPE_LABELS[bt] : '',
 		cell: isComplete(cell) ? cellLabel(cell) : '',
-		gfa: grossFloorArea(plan),
-		footprint: siteFootprint(plan),
+		gfa: grossFloorArea(kept),
+		footprint: siteFootprint(kept),
 		coverage: lotCoverage(plan, site),
-		reuse: reuseFloorArea(plan),
-		units: dwellingsEstimate(plan),
+		reuse: reuseFloorArea(kept),
+		units: dwellingsEstimate(kept),
 		unitsReuse: byStatus.adaptive_reuse,
 		unitsNew: byStatus.new,
-		green: greenSpaceArea(plan),
-		parking: parkingArea(plan),
-		uses: useFloorAreaByUse(plan),
+		green: greenSpaceArea(kept),
+		parking: parkingArea(kept),
+		sale: saleArea(plan),
+		uses: useFloorAreaByUse(kept),
 	};
 }
 
@@ -100,5 +106,7 @@ export function compareRows(a: PlanSummary, b: PlanSummary): CompareRow[] {
 		number('Green space', sqft(a.green), sqft(b.green), ' sq ft', true),
 		number('Parking', sqft(a.parking), sqft(b.parking), ' sq ft', true),
 	);
+	// Only when either plan sells land
+	if (a.sale || b.sale) rows.push(number('Land to sell', sqft(a.sale), sqft(b.sale), ' sq ft', true));
 	return rows;
 }

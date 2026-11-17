@@ -14,6 +14,7 @@
 		height?: number;   // undefined = plan slab; number = 3D extrusion
 		stories?: number;  // used for floor subdivision lines in 3D
 		raised?: boolean;  // on another building's roof: a dashed outline in plan
+		sold?: boolean;    // sold with the land: terracotta tint
 	}
 
 	let {
@@ -25,6 +26,7 @@
 		height,
 		stories = 1,
 		raised = false,
+		sold = false,
 	}: Props = $props();
 
 	const SLAB_HEIGHT = 0.1;
@@ -62,7 +64,7 @@
 	let edgeGeo = $derived(is3D ? new THREE.EdgesGeometry(geo) : null);
 
 	let isRemoved = $derived(status === 'removed');
-	let baseColor = $derived(statusColor(status));
+	let baseColor = $derived(sold ? COLORS.saleTint : statusColor(status));
 	let faceColor = $derived(selected ? COLORS.selection : baseColor);
 
 	let dashedLineRef: THREE.LineSegments | undefined = $state();

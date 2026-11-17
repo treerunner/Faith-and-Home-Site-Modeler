@@ -170,7 +170,8 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 - (Done) Notes: the book's numbered dots, placed and written in the Notes drawer, shown on the analysis and PNG exports.
 - (Done) Use shares: a plan changes a standing building's mix of uses, and what a use gains over the site's mix is adaptive reuse, without drawing a zone.
 - (Done) Compare: two plans side by side (`?compare=` on the plan's URL), synced in plan view and 3D, a strip of what changed, and a printable compare analysis.
-- Next: marking part of the property to be sold (downsize / sell), drawn like an open space; presenter mode.
+- (Done) Land to sell: a plan marks part of the property to be sold, drawn like an open space. The buildings and open spaces on it go with it, the analysis and compare measure what's kept, and a sale with nothing else proposed is inferred as Downsize / sell.
+- Frozen for the team to get to know the product (November 2026). Next, after their feedback: presenter mode.
 
 **M8. Experimental.** Stylized AI sketch renders from depth/edge passes; a splat capture of a real church placed beside chipboard massing. Separate module, off by default.
 

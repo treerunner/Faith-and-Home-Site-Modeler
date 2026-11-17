@@ -2,7 +2,8 @@
 	import { T } from '@threlte/core';
 	import * as THREE from 'three';
 	import type { OpenSpace } from '../types';
-	import { OPEN_SPACE_COLORS } from '../colors';
+	import { COLORS, OPEN_SPACE_COLORS } from '../colors';
+	import ParcelLine from './ParcelLine.svelte';
 	import { store } from '../store.svelte';
 	import { drapeGeometry } from './drape';
 
@@ -38,14 +39,48 @@
 	let geo = $derived(flatGeo && store.ground ? drapeGeometry(flatGeo, store.ground) : flatGeo);
 	let color = $derived(OPEN_SPACE_COLORS[openSpace.kind]);
 	let opacity = $derived(draft ? 0.3 : selected ? 0.75 : 0.55);
+
+	// Land to sell: a terracotta hatch, 2 m between lines, laid by world position (ShapeGeometry's
+	// UVs are its meters). In plan view it's drawn over the buildings, so those sold with it read hatched.
+	let sale = $derived(openSpace.kind === 'sale');
+	let onTop = $derived(sale && store.viewMode === 'plan');
+	let hatch: THREE.CanvasTexture | null = null;
+	function hatchTexture(): THREE.CanvasTexture {
+		if (hatch) return hatch;
+		const c = document.createElement('canvas');
+		c.width = c.height = 32;
+		const ctx = c.getContext('2d')!;
+		ctx.strokeStyle = COLORS.sale;
+		ctx.lineWidth = 3;
+		for (const d of [-32, 0, 32]) {
+			ctx.beginPath();
+			ctx.moveTo(d, 32);
+			ctx.lineTo(d + 32, 0);
+			ctx.stroke();
+		}
+		hatch = new THREE.CanvasTexture(c);
+		hatch.wrapS = hatch.wrapT = THREE.RepeatWrapping;
+		hatch.repeat.set(0.5, 0.5);
+		hatch.colorSpace = THREE.SRGBColorSpace;
+		return hatch;
+	}
 </script>
 
-{#if geo}
+{#if geo && sale}
+	<T.Mesh position={[0, store.ground ? DRAPED_Y : Y_FILL, 0]} geometry={geo} renderOrder={onTop ? 9 : 0}>
+		<T.MeshBasicMaterial map={hatchTexture()} transparent opacity={draft ? 0.5 : selected ? 1 : 0.85} side={THREE.DoubleSide}
+			depthTest={!onTop} depthWrite={false} toneMapped={false}
+			polygonOffset={true} polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
+	</T.Mesh>
+	<ParcelLine polygon={openSpace.polygon} dashed color={COLORS.sale} onTop={onTop} />
+{:else if geo}
 	<!-- Visible fill — polygonOffset pulls depth toward camera to beat the pedestal -->
 	<T.Mesh position={[0, store.ground ? DRAPED_Y : Y_FILL, 0]} geometry={geo}>
 		<T.MeshLambertMaterial {color} {opacity} transparent side={THREE.DoubleSide}
 			polygonOffset={true} polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
 	</T.Mesh>
+{/if}
+{#if geo}
 	<!-- Hit-test mesh (transparent but physically present) -->
 	{#if !draft}
 		<T.Mesh position={[0, Y_FILL + 0.005, 0]} geometry={geo} userData={{ openSpaceId: openSpace.id }}>

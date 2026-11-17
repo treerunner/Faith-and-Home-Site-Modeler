@@ -101,6 +101,20 @@
 
 	</PanelSection>
 
+	<!-- Selling part of the property: a plan's proposal, drawn like an open space -->
+	<PanelSection title="Downsize" key="downsize">
+	<button
+		class="tree-btn"
+		class:tree-btn--active={drawingKind === 'sale'}
+		disabled={store.onSite}
+		onclick={() => (drawingKind === 'sale' ? store.cancelPlacing() : startDrawing('sale'))}
+		aria-pressed={drawingKind === 'sale'}
+	>
+		<span class="sale-swatch" aria-hidden="true"></span>
+		<span>Mark land to sell</span>
+	</button>
+	{#if store.onSite}<div class="palette-hint">Marked in a plan.</div>{/if}
+	</PanelSection>
 	<PanelSection title="Trees" key="trees">
 	<button
 		class="tree-btn"
@@ -235,6 +249,15 @@
 	.tree-btn--active {
 		border-color: var(--color-selection);
 		background: var(--fh-dusk-tint);
+	}
+	.tree-btn:disabled { opacity: 0.45; cursor: default; border-color: var(--color-border); background: var(--color-surface); }
+
+	/* The hatch drawn on the model */
+	.sale-swatch {
+		width: 0.85rem;
+		height: 0.85rem;
+		border: 1px dashed var(--color-sale);
+		background: repeating-linear-gradient(-45deg, var(--color-sale) 0 1.5px, transparent 1.5px 4px);
 	}
 
 	.tree-icon {

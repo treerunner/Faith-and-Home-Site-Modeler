@@ -20,7 +20,7 @@ const USES: Use[] = [
 const ROOFS: Structure['roof'][] = ['flat', 'gable', 'object'];
 const PROVENANCES: Structure['provenance'][] = ['user', 'osm', 'overture'];
 const OPEN_SPACE_KINDS: OpenSpace['kind'][] = [
-	'parking', 'lawn', 'courtyard', 'garden', 'cemetery', 'walkway',
+	'parking', 'lawn', 'courtyard', 'garden', 'cemetery', 'walkway', 'sale',
 ];
 const SITE_TYPES: NonNullable<Site['siteType']>[] = ['urban', 'suburban', 'rural'];
 const CONTEXT_SOURCES: ContextSource[] = ['overture', 'pasda-lehigh'];
@@ -389,6 +389,8 @@ export function normalizeSite(raw: unknown): Site {
 		existing = { ...parsePlan(o.existing, 'site.existing'), name: DEFAULT_PLAN_NAME, slug: '', oldSlugs: undefined };
 		// The site's pieces are as built: what happens to them is up to each plan
 		existing.structures = existing.structures.map((s) => ({ ...s, status: 'existing', reuseZones: undefined, addedStories: undefined, planRoof: undefined, planUses: undefined, planUseWeights: undefined }));
+		// Land to sell is a plan's proposal; the site is the property as it stands
+		existing.openSpaces = existing.openSpaces.filter((os) => os.kind !== 'sale');
 		plans = arr(o.plans ?? [], 'site.plans').map((v, i) => {
 			const path = `site.plans[${i}]`;
 			const plan = parsePlan(v, path);

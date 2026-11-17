@@ -30,6 +30,8 @@ export const COLORS = {
 	gridSub:  '#e8e7e5',
 	selection: FH.dusk,
 	note:     FH.dusk, // numbered note dots; orange means new construction here
+	sale:     FH.terracotta, // land to sell, and the buildings sold with it (tinted)
+	saleTint: FH.terracottaTint,
 	cut:      '#a29e97', // the terrain seen from below: a cut through solid board, as its edge looks in shade
 	// 3D backdrop, bottom to top: a studio sweep behind the model
 	backdrop: [FH.linen, '#e9e6df', '#b9b4ab'],
@@ -66,4 +68,5 @@ export const OPEN_SPACE_COLORS: Record<OpenSpace['kind'], string> = {
 	garden:    FH.canopy,
 	cemetery:  '#6b6869',
 	walkway:   '#c8c6c7',
+	sale:      FH.terracotta, // land to sell: a hatch and a dashed edge, not a fill
 };

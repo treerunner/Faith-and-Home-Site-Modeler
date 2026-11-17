@@ -39,6 +39,10 @@
 		BUILDING_TYPE_LABELS,
 		reuseZoneCount,
 		reuseFloorArea,
+		keptPlan,
+		polygonArea,
+		saleArea,
+		soldStructures,
 	} from '../metrics';
 	import type { Use } from '../types';
 	import { creditLine } from '../credits';
@@ -67,26 +71,31 @@
 	let plan = $derived(store.plan);
 	let profile = $derived(site.congregationProfile ?? {});
 
-	let footprint = $derived(siteFootprint(plan));
-	let gfa = $derived(grossFloorArea(plan));
+	// Measured on what the congregation keeps: land to sell and the buildings on it leave
+	let kept = $derived(keptPlan(plan));
+	let sold = $derived(plan.structures.filter((s) => soldStructures(plan).has(s.id)));
+	let landSold = $derived(saleArea(plan));
+	let parcelArea = $derived(site.parcel && site.parcel.length >= 3 ? polygonArea(site.parcel) : 0);
+	let footprint = $derived(siteFootprint(kept));
+	let gfa = $derived(grossFloorArea(kept));
 	let coverage = $derived(lotCoverage(plan, site));
-	let osArea = $derived(openSpaceArea(plan));
-	let green = $derived(greenSpaceArea(plan));
-	let parking = $derived(parkingArea(plan));
-	let dwellings = $derived(dwellingsEstimate(plan));
-	let dwellingStatus = $derived(dwellingsByStatus(plan));
-	let useAreas = $derived(useFloorAreaByUse(plan));
+	let osArea = $derived(openSpaceArea(kept));
+	let green = $derived(greenSpaceArea(kept));
+	let parking = $derived(parkingArea(kept));
+	let dwellings = $derived(dwellingsEstimate(kept));
+	let dwellingStatus = $derived(dwellingsByStatus(kept));
+	let useAreas = $derived(useFloorAreaByUse(kept));
 	let steps = $derived(generateActionSteps(plan, site));
 
 	let storiesMin = $derived(
-		plan.structures.length ? Math.min(...plan.structures.map((s) => totalStories(s))) : 0
+		kept.structures.length ? Math.min(...kept.structures.map((s) => totalStories(s))) : 0
 	);
 	let storiesMax = $derived(
-		plan.structures.length ? Math.max(...plan.structures.map((s) => totalStories(s))) : 0
+		kept.structures.length ? Math.max(...kept.structures.map((s) => totalStories(s))) : 0
 	);
 
-	let reuseZones = $derived(reuseZoneCount(plan));
-	let reuseArea = $derived(reuseFloorArea(plan));
+	let reuseZones = $derived(reuseZoneCount(kept));
+	let reuseArea = $derived(reuseFloorArea(kept));
 
 	// The pattern matrix: the catalog loads async (Directus later), the matching is pure
 	let patterns = $state<Pattern[]>([]);
@@ -125,7 +134,7 @@
 
 	let statusCounts = $derived.by(() => {
 		const counts = { existing: 0, new: 0, removed: 0 };
-		for (const s of plan.structures) counts[s.status]++;
+		for (const s of kept.structures) counts[s.status]++;
 		return counts;
 	});
 
@@ -243,6 +252,16 @@
 						<tr><td class="met-label">Gross floor area</td><td class="met-value">{fmtSqft(gfa)}</td></tr>
 						{#if reuseArea > 0}
 							<tr><td class="met-label">Adaptive reuse</td><td class="met-value">{fmtSqft(reuseArea)} <span class="met-sub">{pct(reuseArea, gfa)} of floor area</span></td></tr>
+						{/if}
+						{#if landSold > 0}
+							<tr>
+								<td class="met-label">Land to sell</td>
+								<td class="met-value">
+									{fmtSqft(landSold)}
+									{#if parcelArea}<span class="met-sub">{pct(landSold, parcelArea)} of the property</span>{/if}
+									{#if sold.length}<span class="met-sub met-sub--block">Sold with it: {sold.filter((s) => !s.onRoofOf).map((s) => s.label || 'Structure').join(', ')}</span>{/if}
+								</td>
+							</tr>
 						{/if}
 						<tr><td class="met-label">Lot coverage</td><td class="met-value">{coverage !== null ? Math.round(coverage) + '%' : '—'}</td></tr>
 						<tr><td class="met-label">Structures</td>

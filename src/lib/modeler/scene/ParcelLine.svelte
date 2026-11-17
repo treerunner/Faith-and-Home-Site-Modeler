@@ -13,9 +13,10 @@
 		highlight?: boolean; // selection color
 		fill?: boolean; // light tint inside
 		color?: string; // overrides the parcel or selection color
+		onTop?: boolean; // drawn over the buildings (plan view's land to sell)
 	}
 
-	let { polygon, dashed = false, highlight = false, fill = false, color: colorOverride }: Props = $props();
+	let { polygon, dashed = false, highlight = false, fill = false, color: colorOverride, onTop = false }: Props = $props();
 
 	const Y = 0.03;
 
@@ -45,10 +46,10 @@
 	</T.Mesh>
 {/if}
 
-<T.LineSegments bind:ref={lineRef} geometry={geo}>
+<T.LineSegments bind:ref={lineRef} geometry={geo} renderOrder={onTop ? 10 : 0}>
 	{#if dashed}
-		<T.LineDashedMaterial {color} dashSize={1.2} gapSize={0.8} />
+		<T.LineDashedMaterial {color} dashSize={1.2} gapSize={0.8} depthTest={!onTop} />
 	{:else}
-		<T.LineBasicMaterial {color} />
+		<T.LineBasicMaterial {color} depthTest={!onTop} />
 	{/if}
 </T.LineSegments>

@@ -71,7 +71,8 @@
 	let entries = $derived<LabelEntry[]>(
 		plan.openSpaces.map((os) => {
 			void viewVersion; // re-derive on resize / camera move
-			const c = centroid(os.polygon);
+			// Land to sell is labeled at its top edge, so the buildings sold with it show
+			const c: [number, number] = os.kind === 'sale' ? [centroid(os.polygon)[0], Math.min(...os.polygon.map((p) => p[1]))] : centroid(os.polygon);
 			const cam = store.viewMode === '3d' ? (view.perspCamera ?? undefined) : undefined;
 			const screen = worldToScreen(c[0], c[1], cam, 0, view);
 			const area = polygonArea(os.polygon);
@@ -81,7 +82,7 @@
 				area,
 				displayName:
 					os.label ||
-					os.kind.charAt(0).toUpperCase() + os.kind.slice(1).replace('_', ' '),
+					(os.kind === 'sale' ? 'Land to sell' : os.kind.charAt(0).toUpperCase() + os.kind.slice(1).replace('_', ' ')),
 				parking: os.kind === 'parking' ? parkingSpaces(area) : null,
 				selected: interactive && store.selectedOpenSpaceId === os.id,
 			};
@@ -104,6 +105,7 @@
 		<div
 			class="os-label"
 			class:os-label--selected={entry.selected}
+			class:os-label--edge={entry.os.kind === 'sale'}
 			style="left:{entry.screen.x}px; top:{entry.screen.y}px; --accent:{color}"
 			onclick={(e) => handleLabelClick(e, entry.os.id)}
 		>
@@ -130,6 +132,9 @@
 		cursor: pointer;
 		user-select: none;
 	}
+
+	/* Hangs just inside the top edge */
+	.os-label--edge { transform: translate(-50%, 0.35rem); }
 
 	.os-label__name {
 		font-size: 0.65rem;

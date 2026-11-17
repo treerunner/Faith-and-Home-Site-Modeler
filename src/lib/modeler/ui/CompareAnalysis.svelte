@@ -4,7 +4,7 @@
 	import { store } from '../store.svelte';
 	import { capturePlanImage } from '../sceneExport';
 	import { compareRows, planSummary } from '../compare';
-	import { generateActionSteps, useFloorAreaByUse } from '../metrics';
+	import { generateActionSteps, keptPlan, useFloorAreaByUse } from '../metrics';
 	import { creditLine } from '../credits';
 	import { getPatterns, type Pattern } from '../../patterns/catalog';
 	import { cellLabel, isComplete, patternFor } from '../../patterns/match';
@@ -109,8 +109,8 @@
 			<section class="report-section">
 				<h2 class="section-heading">Use Allocation</h2>
 				<div class="columns">
-					<div class="column"><UseAllocation areas={useFloorAreaByUse(a)} label="A: {nameOf(a)}" /></div>
-					<div class="column"><UseAllocation areas={useFloorAreaByUse(b)} label="B: {nameOf(b)}" /></div>
+					<div class="column"><UseAllocation areas={useFloorAreaByUse(keptPlan(a))} label="A: {nameOf(a)}" /></div>
+					<div class="column"><UseAllocation areas={useFloorAreaByUse(keptPlan(b))} label="B: {nameOf(b)}" /></div>
 				</div>
 			</section>
 
