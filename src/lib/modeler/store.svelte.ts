@@ -98,6 +98,9 @@ class ModelerStore {
 	showLabels = $state(true);
 	showTerrain = $state(true); // view state, like labels: not saved
 	showAnalysis = $state(false);
+	// Compare: B is the plan being viewed, A this one (an id; the site view's for existing
+	// conditions). View state, never saved.
+	compareWith = $state<string | null>(null);
 	readOnly = $state(false);
 	planView = $state<PlanView>(DEFAULT_VIEW); // what plan view shows; never saved
 	#planAspect = 0; // canvas width / height, reported by the plan camera
@@ -197,6 +200,7 @@ class ModelerStore {
 		this.version = 0;
 		this.rights = { canEdit: true, canDelete: false, visibility: 'public', committee: null };
 		this.showAnalysis = false;
+		this.compareWith = null;
 		this.#selectPlan(planId);
 	}
 
@@ -242,6 +246,52 @@ class ModelerStore {
 		this.activeStructureId = '';
 		this.#undoStack.splice(0);
 		this.#redoStack.splice(0);
+	}
+
+	// ── Compare ──────────────────────────────────────────────────────────────
+
+	#planById(id: string): Plan | undefined {
+		return id === this.site.existing.id ? this.site.existing : this.site.plans.find((p) => p.id === id);
+	}
+
+	// A, the plan B is compared against; null when not comparing
+	get compareA(): Plan | null {
+		return this.compareWith ? (this.#planById(this.compareWith) ?? null) : null;
+	}
+
+	// Compares the plan being viewed with A: existing conditions by default, or the first plan
+	// when the site view is being viewed
+	startCompare(aId?: string) {
+		const fallback = this.onSite ? this.site.plans[0]?.id : this.site.existing.id;
+		const id = aId !== undefined && this.#planById(aId) && aId !== this.plan.id ? aId : fallback;
+		if (!id) return;
+		this.mode = { type: 'idle' };
+		this.showAnalysis = false;
+		this.compareWith = id;
+		// Fit both once the half-width views report their shape
+		this.#fitPending = true;
+	}
+
+	// Picks A or B; picking the other side's plan swaps them
+	setCompare(side: 'a' | 'b', id: string) {
+		if (!this.compareWith || !this.#planById(id)) return;
+		const [a, b] = [this.compareWith, this.plan.id];
+		if (side === 'a') {
+			if (id === b) this.swapCompare();
+			else this.compareWith = id;
+		} else if (id === a) this.swapCompare();
+		else this.#selectPlan(id);
+	}
+
+	swapCompare() {
+		if (!this.compareWith) return;
+		const b = this.plan.id;
+		this.#selectPlan(this.compareWith);
+		this.compareWith = b;
+	}
+
+	endCompare() {
+		this.compareWith = null;
 	}
 
 	switchPlan(id: string) {
@@ -1593,7 +1643,12 @@ class ModelerStore {
 			return;
 		}
 		this.#fitPending = false;
-		this.planView = fitView(contentBounds(this.plan, this.site.parcel), this.#planAspect, this.boardHalf);
+		// Comparing, both plans fit: the views share one framing
+		const a = this.compareA, b = this.plan;
+		const shown = a
+			? { ...b, structures: [...b.structures, ...a.structures], openSpaces: [...b.openSpaces, ...a.openSpaces], trees: [...b.trees, ...a.trees] }
+			: b;
+		this.planView = fitView(contentBounds(shown, this.site.parcel), this.#planAspect, this.boardHalf);
 	}
 
 	setPlanAspect(aspect: number) {

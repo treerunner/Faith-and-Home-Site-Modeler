@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { beforeNavigate } from '$app/navigation';
 	import EditorLayout from './EditorLayout.svelte';
+	import CompareLayout from './CompareLayout.svelte';
 	import Masthead from './Masthead.svelte';
 	import SiteHeader from './SiteHeader.svelte';
 	import { leaving, saveSite } from './SiteBar.svelte';
@@ -20,7 +21,7 @@
 			return;
 		}
 
-		if (store.readOnly) return;
+		if (store.readOnly || store.compareWith) return;
 
 		if (meta && e.key === 'z' && !e.shiftKey) {
 			e.preventDefault();
@@ -74,10 +75,17 @@
 
 <div class="modeler-page">
 	<Masthead />
-	<SiteHeader />
-	<div class="editor-wrap">
-		<EditorLayout />
-	</div>
+	<!-- Compare replaces the editor, so only its two canvases draw -->
+	{#if store.compareA}
+		<div class="editor-wrap">
+			<CompareLayout />
+		</div>
+	{:else}
+		<SiteHeader />
+		<div class="editor-wrap">
+			<EditorLayout />
+		</div>
+	{/if}
 </div>
 
 <style>

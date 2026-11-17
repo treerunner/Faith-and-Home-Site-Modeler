@@ -7,12 +7,22 @@
 
 	// Points the address bar at the plan on screen. Within a site this is shallow (no reload),
 	// so unsaved edits survive plan switches; the first save from /modeler navigates for real.
+	// Comparing adds `?compare=` with A's slug (empty for existing conditions); B is the plan.
 	export async function syncUrl() {
 		if (!store.isPersisted) return;
-		const url = planUrl(store.siteSlug, store.plan.slug, store.readOnly);
-		if (location.pathname === url) return;
+		const a = store.compareA;
+		const url = planUrl(store.siteSlug, store.plan.slug, store.readOnly) + (a ? `?compare=${encodeURIComponent(a.slug)}` : '');
+		if (location.pathname + location.search === url) return;
 		if (page.route.id === '/modeler') await goto(url, { replace: true, reset: false });
 		else await goto(url, { shallow: true, replace: true });
+	}
+
+	// Opens compare from a loaded URL's `?compare=`; an unknown slug compares with existing conditions
+	export function compareFromUrl(params: { get(name: string): string | null }) {
+		const slug = params.get('compare');
+		if (slug === null) return store.endCompare();
+		const a = slug ? store.site.plans.find((p) => p.slug === slug) : undefined;
+		store.startCompare((a ?? store.site.existing).id);
 	}
 
 	type Member = { committeeId: string; committeeName: string; committeeSlug: string };

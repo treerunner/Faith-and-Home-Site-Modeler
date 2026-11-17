@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getRenderer, getPerspCamera, planCamera, mainScene, topBelow } from './scene/cameraRef';
+import { mainView, topBelow, type SceneView } from './scene/cameraRef';
 import type { Annotation, Plan } from './types';
 import { COLORS, FH } from './colors';
 
@@ -8,11 +8,11 @@ const PAD = 8;
 // The pattern book's numbered dots, drawn onto an exported picture: each note projected through
 // the camera that drew it. In 3D a note sits on whatever is under it; off the board it's left out.
 // `height` is the picture's, which may sit above a list of notes on the same canvas.
-function drawDots(ctx: CanvasRenderingContext2D, notes: Annotation[], camera: THREE.Camera, is3D: boolean, scale: number, height = ctx.canvas.height) {
+function drawDots(ctx: CanvasRenderingContext2D, notes: Annotation[], camera: THREE.Camera, is3D: boolean, scale: number, height = ctx.canvas.height, view = mainView) {
 	const width = ctx.canvas.width;
 	const r = 14 * scale;
 	for (const a of notes) {
-		const y = is3D ? topBelow(a.x, a.y) : 0;
+		const y = is3D ? topBelow(a.x, a.y, view) : 0;
 		if (y === null) continue;
 		const v = new THREE.Vector3(a.x, y + (is3D ? 0.5 : 0), a.y).project(camera);
 		if (v.z > 1) continue;
@@ -91,10 +91,10 @@ function withNotes(source: HTMLCanvasElement, notes: Annotation[], camera: THREE
 	return out;
 }
 
-// Notes: the plan's, to draw their dots on the picture (the analysis); none for a clean one
-export function capturePlanImage(plan: Plan, notes: Annotation[] = []): string | null {
-	const renderer = getRenderer();
-	const scene = mainScene;
+// Notes: the plan's, to draw their dots on the picture (the analysis); none for a clean one.
+// View: the canvas to draw with, the editor's unless comparing.
+export function capturePlanImage(plan: Plan, notes: Annotation[] = [], view: SceneView = mainView): string | null {
+	const { renderer, scene, planCamera } = view;
 	if (!renderer || !planCamera || !scene) return null;
 
 	// Collect site content bounds (structures, open spaces, trees)
@@ -200,9 +200,7 @@ function withCredits(source: HTMLCanvasElement, credit: string, bottom = source.
 
 // Notes: the ones on screen (the Notes drawer open), drawn as dots with their list beneath
 export function exportPNG(filename = 'site-model.png', credit: string | null = null, notes: Annotation[] = []) {
-	const renderer = getRenderer();
-	const camera = getPerspCamera();
-	const scene = mainScene;
+	const { renderer, perspCamera: camera, scene } = mainView;
 	if (!renderer || !camera || !scene) return;
 
 	renderer.render(scene, camera);
@@ -220,13 +218,13 @@ const THUMB_WIDTH = 480;
 // A small picture of what's on screen, saved with the plan for its pattern-page card: the
 // tight plan crop in plan view, the orbit view as it stands in 3D. A JPEG data URL, ~30 KB.
 export async function captureThumbnail(plan: Plan, is3D: boolean): Promise<string | null> {
-	const renderer = getRenderer();
-	if (!renderer || !mainScene) return null;
+	const { renderer, scene } = mainView;
+	if (!renderer || !scene) return null;
 	let source: string | null;
 	if (is3D) {
-		const camera = getPerspCamera();
+		const camera = mainView.perspCamera;
 		if (!camera) return null;
-		renderer.render(mainScene, camera);
+		renderer.render(scene, camera);
 		source = renderer.domElement.toDataURL('image/png');
 	} else {
 		source = capturePlanImage(plan);

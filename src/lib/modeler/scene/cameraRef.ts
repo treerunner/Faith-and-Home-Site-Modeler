@@ -1,31 +1,42 @@
 import * as THREE from 'three';
+import { getContext } from 'svelte';
 
-export let planCamera: THREE.OrthographicCamera | null = null;
-export let rendererEl: HTMLCanvasElement | null = null;
-export let mainScene: THREE.Scene | null = null;
-let perspCamera: THREE.PerspectiveCamera | null = null;
-let mainRenderer: THREE.WebGLRenderer | null = null;
+// One canvas: its element, scene, renderer and cameras. The editor draws one (`mainView`);
+// compare mode draws two, each with its own. Code that needs a camera, the scene or the
+// canvas takes the view it works in, defaulting to the editor's.
+export interface SceneView {
+	el: HTMLCanvasElement | null;
+	scene: THREE.Scene | null;
+	renderer: THREE.WebGLRenderer | null;
+	planCamera: THREE.OrthographicCamera | null;
+	perspCamera: THREE.PerspectiveCamera | null;
+}
 
-export function setPlanCamera(cam: THREE.OrthographicCamera): void {
-	planCamera = cam;
+export function sceneView(): SceneView {
+	return { el: null, scene: null, renderer: null, planCamera: null, perspCamera: null };
 }
-export function setRendererEl(el: HTMLCanvasElement): void {
-	rendererEl = el;
+
+export const mainView: SceneView = sceneView();
+
+// The view a Scene's pieces register into, passed down by context
+export const SCENE_VIEW = Symbol('sceneView');
+export function useSceneView(): SceneView {
+	return getContext<SceneView | undefined>(SCENE_VIEW) ?? mainView;
 }
-export function setMainScene(s: THREE.Scene): void {
-	mainScene = s;
+
+// Two views orbiting together (compare): the last orbit, and which view made it
+export interface OrbitSync {
+	position: [number, number, number];
+	target: [number, number, number];
+	source: SceneView | null;
+	version: number;
 }
-export function setPerspCamera(cam: THREE.PerspectiveCamera): void {
-	perspCamera = cam;
+
+export function getRenderer(view = mainView): THREE.WebGLRenderer | null {
+	return view.renderer;
 }
-export function setRenderer(r: THREE.WebGLRenderer): void {
-	mainRenderer = r;
-}
-export function getRenderer(): THREE.WebGLRenderer | null {
-	return mainRenderer;
-}
-export function getPerspCamera(): THREE.PerspectiveCamera | null {
-	return perspCamera;
+export function getPerspCamera(view = mainView): THREE.PerspectiveCamera | null {
+	return view.perspCamera;
 }
 
 export type HitResult =
@@ -39,9 +50,9 @@ export type HitResult =
 	| { kind: 'ground'; x: number; y: number };
 
 // The first visible surface of the model a ray meets (not lines, not invisible hit planes)
-function firstSurface(rc: THREE.Raycaster): THREE.Vector3 | null {
-	if (!mainScene) return null;
-	for (const hit of rc.intersectObjects(mainScene.children, true)) {
+function firstSurface(rc: THREE.Raycaster, view: SceneView): THREE.Vector3 | null {
+	if (!view.scene) return null;
+	for (const hit of rc.intersectObjects(view.scene.children, true)) {
 		const obj = hit.object as THREE.Mesh;
 		const material = obj.material as THREE.Material | undefined;
 		if (obj.isMesh && material?.visible !== false) return hit.point;
@@ -51,25 +62,27 @@ function firstSurface(rc: THREE.Raycaster): THREE.Vector3 | null {
 
 // The highest visible surface of the model straight below (x, z), or null over nothing
 const down = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
-export function topBelow(x: number, z: number): number | null {
+export function topBelow(x: number, z: number, view = mainView): number | null {
 	down.ray.origin.set(x, 10000, z);
-	return firstSurface(down)?.y ?? null;
+	return firstSurface(down, view)?.y ?? null;
 }
 
 // 3D: the surface of the model under the cursor, or null over the backdrop
 const pick = new THREE.Raycaster();
-export function surfaceUnder(clientX: number, clientY: number): THREE.Vector3 | null {
-	if (!perspCamera || !rendererEl) return null;
-	const rect = rendererEl.getBoundingClientRect();
+export function surfaceUnder(clientX: number, clientY: number, view = mainView): THREE.Vector3 | null {
+	const { perspCamera, el } = view;
+	if (!perspCamera || !el) return null;
+	const rect = el.getBoundingClientRect();
 	if (rect.width === 0 || rect.height === 0) return null;
 	const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
 	pick.setFromCamera(ndc, perspCamera);
-	return firstSurface(pick)?.clone() ?? null;
+	return firstSurface(pick, view)?.clone() ?? null;
 }
 
-function makeRaycaster(clientX: number, clientY: number): THREE.Raycaster | null {
-	if (!planCamera || !rendererEl) return null;
-	const rect = rendererEl.getBoundingClientRect();
+function makeRaycaster(clientX: number, clientY: number, view: SceneView): THREE.Raycaster | null {
+	const { planCamera, el } = view;
+	if (!planCamera || !el) return null;
+	const rect = el.getBoundingClientRect();
 	if (rect.width === 0 || rect.height === 0) return null;
 	const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
 	const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -80,12 +93,12 @@ function makeRaycaster(clientX: number, clientY: number): THREE.Raycaster | null
 
 // Hit-test: returns the nearest interactive object under the pointer.
 // Falls through to a ground-plane intersection when no part/handle is hit.
-export function hitTest(clientX: number, clientY: number): HitResult | null {
-	const rc = makeRaycaster(clientX, clientY);
+export function hitTest(clientX: number, clientY: number, view = mainView): HitResult | null {
+	const rc = makeRaycaster(clientX, clientY, view);
 	if (!rc) return null;
 
-	if (mainScene) {
-		const hits = rc.intersectObjects(mainScene.children, true);
+	if (view.scene) {
+		const hits = rc.intersectObjects(view.scene.children, true);
 		for (const hit of hits) {
 			const ud = hit.object.userData as Record<string, unknown>;
 			if (ud.rotateHandle === true && typeof ud.partId === 'string') {
@@ -124,13 +137,13 @@ export function hitTest(clientX: number, clientY: number): HitResult | null {
 }
 
 // Project a world (site) point to screen (client) coordinates.
-// Pass a camera to override the default plan camera (e.g. persp cam in 3D mode).
-export function worldToScreen(wx: number, wz: number, cam?: THREE.Camera, wy = 0): { x: number; y: number } | null {
-	const camera = cam ?? planCamera;
-	if (!camera || !rendererEl) return null;
+// Pass a camera to override the view's plan camera (e.g. persp cam in 3D mode).
+export function worldToScreen(wx: number, wz: number, cam?: THREE.Camera, wy = 0, view = mainView): { x: number; y: number } | null {
+	const camera = cam ?? view.planCamera;
+	if (!camera || !view.el) return null;
 	const v = new THREE.Vector3(wx, wy, wz).project(camera);
 	if (v.z > 1) return null; // behind camera
-	const rect = rendererEl.getBoundingClientRect();
+	const rect = view.el.getBoundingClientRect();
 	return {
 		x: rect.left + ((v.x + 1) / 2) * rect.width,
 		y: rect.top + ((-v.y + 1) / 2) * rect.height,
@@ -138,8 +151,8 @@ export function worldToScreen(wx: number, wz: number, cam?: THREE.Camera, wy = 0
 }
 
 // Convenience: just the site coordinates of the ground intersection.
-export function clientToSite(clientX: number, clientY: number): { x: number; y: number } | null {
-	const rc = makeRaycaster(clientX, clientY);
+export function clientToSite(clientX: number, clientY: number, view = mainView): { x: number; y: number } | null {
+	const rc = makeRaycaster(clientX, clientY, view);
 	if (!rc) return null;
 	const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 	const target = new THREE.Vector3();

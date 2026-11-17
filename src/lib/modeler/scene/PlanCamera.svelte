@@ -2,13 +2,14 @@
 	import { untrack } from 'svelte';
 	import { T, useThrelte } from '@threlte/core';
 	import * as THREE from 'three';
-	import { setPlanCamera } from './cameraRef';
+	import { useSceneView } from './cameraRef';
 	import { store } from '../store.svelte';
 
 	// useThrelte().size is a CurrentReadable backed by a $state.raw; reading
 	// .current inside $effect registers it as a reactive dependency.
 	const { size: sizeStore, invalidate } = useThrelte();
 
+	const view = useSceneView();
 	let cam: THREE.OrthographicCamera | undefined = $state();
 
 	$effect(() => {
@@ -26,7 +27,7 @@
 		cam.rotation.set(-Math.PI / 2, 0, 0);
 		cam.updateProjectionMatrix();
 		cam.updateMatrixWorld();
-		setPlanCamera(cam);
+		view.planCamera = cam;
 		// Rendering is on demand; a camera changed by hand (like a wheel zoom) needs a new frame
 		invalidate();
 	});

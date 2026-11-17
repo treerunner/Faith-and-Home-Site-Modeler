@@ -19,14 +19,27 @@
 	import { buildingFooting } from '../terrain';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
-	import { setMainScene } from './cameraRef';
+	import { useSceneView, type OrbitSync } from './cameraRef';
 	import { applyGrain, GRAIN_BOARD, loadGrain, setGrainOn } from './grain';
-	import type { Status, Structure } from '../types';
+	import type { Plan, Status, Structure } from '../types';
+	import type { InteractionMode } from '../interaction';
 
+	interface Props {
+		plan?: Plan; // the plan to draw; the one being edited by default
+		interactive?: boolean; // false: just the model, no selection, handles or drawing (compare)
+		orbit?: OrbitSync; // compare: orbit with the other view
+	}
+	let { plan: shown, interactive = true, orbit }: Props = $props();
+	let plan = $derived(shown ?? store.plan);
+	const IDLE: InteractionMode = { type: 'idle' };
+	let mode = $derived(interactive ? store.mode : IDLE);
+	let selectedPartId = $derived(interactive ? store.selectedPartId : null);
+
+	const view = useSceneView();
 	const { scene, invalidate } = useThrelte();
 
 	$effect(() => {
-		setMainScene(scene);
+		view.scene = scene;
 	});
 
 	// 3D: a backdrop behind the model, linen at the bottom darkening upward like a studio sweep,
@@ -61,13 +74,13 @@
 	// Per-part lookup maps derived from structures
 	let partStatusMap = $derived<Map<string, Status>>(
 		new Map(
-			store.plan.structures.flatMap((s) => s.parts.map((p) => [p.id, s.status] as [string, Status])),
+			plan.structures.flatMap((s) => s.parts.map((p) => [p.id, s.status] as [string, Status])),
 		),
 	);
 
 	let partHeightMap = $derived<Map<string, number>>(
 		new Map(
-			store.plan.structures.flatMap((s) =>
+			plan.structures.flatMap((s) =>
 				s.parts.map((p) => [p.id, partTotalHeight(s)] as [string, number]),
 			),
 		),
@@ -75,11 +88,11 @@
 
 	let partStructureMap = $derived<Map<string, Structure>>(
 		new Map(
-			store.plan.structures.flatMap((s) => s.parts.map((p) => [p.id, s] as [string, Structure])),
+			plan.structures.flatMap((s) => s.parts.map((p) => [p.id, s] as [string, Structure])),
 		),
 	);
 
-	let allParts = $derived(store.plan.structures.flatMap((s) => s.parts));
+	let allParts = $derived(plan.structures.flatMap((s) => s.parts));
 
 	// In 3D on terrain, the ground meets each building flush. Its floors start at the highest
 	// ground under any of its pieces, so it shows its full height uphill; a plinth reaches down to
@@ -88,14 +101,14 @@
 		const out = new Map<string, { base: number; floor: number }>();
 		const model = store.ground ? store.terrain : null;
 		// Rooftop pieces don't touch the ground: no footing, no plinth
-		if (model) for (const s of store.plan.structures) if (s.parts.length && !s.onRoofOf) out.set(s.id, buildingFooting(model, s.parts.map(partOutline)));
+		if (model) for (const s of plan.structures) if (s.parts.length && !s.onRoofOf) out.set(s.id, buildingFooting(model, s.parts.map(partOutline)));
 		return out;
 	});
 	// Where a structure's floors start. A rooftop piece starts on its host's roof in 3D; in plan
 	// it draws just above its host, so it shows and is picked first.
 	const PLAN_ROOF_STEP = 0.15;
 	function groundOf(s: Structure): Structure {
-		const all = store.plan.structures;
+		const all = plan.structures;
 		let g = s;
 		for (let i = 0; i < all.length && g.onRoofOf; i++) g = all.find((h) => h.id === g.onRoofOf) ?? g;
 		return g;
@@ -103,14 +116,14 @@
 	const baseFor = (s: Structure | undefined) => {
 		if (!s) return 0;
 		if (!s.onRoofOf) return footings.get(s.id)?.floor ?? 0;
-		if (store.viewMode !== '3d') return roofLevel(s, store.plan.structures) * PLAN_ROOF_STEP;
-		return (footings.get(groundOf(s).id)?.floor ?? 0) + roofBase(s, store.plan.structures);
+		if (store.viewMode !== '3d') return roofLevel(s, plan.structures) * PLAN_ROOF_STEP;
+		return (footings.get(groundOf(s).id)?.floor ?? 0) + roofBase(s, plan.structures);
 	};
 
 	// Cutting: the building being cut is highlighted, with a dashed line from the first click
-	let cutting = $derived(store.mode.type === 'cutting' ? store.mode : null);
+	let cutting = $derived(mode.type === 'cutting' ? mode : null);
 	let cutPartIds = $derived(
-		new Set(cutting ? (store.plan.structures.find((s) => s.id === cutting.structureId)?.parts.map((p) => p.id) ?? []) : []),
+		new Set(cutting ? (plan.structures.find((s) => s.id === cutting.structureId)?.parts.map((p) => p.id) ?? []) : []),
 	);
 	let cutLine = $derived.by(() => {
 		if (!cutting?.start || !cutting.cursor) return null;
@@ -125,12 +138,12 @@
 	});
 
 	let ghostPart = $derived(
-		store.mode.type === 'placing'
+		mode.type === 'placing'
 			? ({
 					id: '__ghost__',
-					shape: store.mode.shape,
-					x: store.mode.ghostX,
-					y: store.mode.ghostY,
+					shape: mode.shape,
+					x: mode.ghostX,
+					y: mode.ghostY,
 					w: 6,
 					d: 6,
 					rotation: 0,
@@ -142,36 +155,36 @@
 
 	// Open spaces, parcels and reuse zones are traced point by point and share the vertex markers
 	let drawingMode = $derived(
-		store.mode.type === 'drawingOpenSpace' || store.mode.type === 'drawingParcel' || store.mode.type === 'drawingZone' || store.mode.type === 'drawingStructure'
-			? store.mode
+		mode.type === 'drawingOpenSpace' || mode.type === 'drawingParcel' || mode.type === 'drawingZone' || mode.type === 'drawingStructure'
+			? mode
 			: null,
 	);
 
 	let zoneDraft = $derived(
-		store.mode.type === 'drawingZone'
-			? store.mode.cursorPoint
-				? [...store.mode.points, store.mode.cursorPoint]
-				: store.mode.points
+		mode.type === 'drawingZone'
+			? mode.cursorPoint
+				? [...mode.points, mode.cursorPoint]
+				: mode.points
 			: null,
 	);
 
 	// Drawing a structure's outline: the line so far, and where the next point would snap
 	let structureDraft = $derived(
-		store.mode.type === 'drawingStructure'
-			? store.mode.cursorPoint
-				? [...store.mode.points, store.mode.cursorPoint]
-				: store.mode.points
+		mode.type === 'drawingStructure'
+			? mode.cursorPoint
+				? [...mode.points, mode.cursorPoint]
+				: mode.points
 			: null,
 	);
 	let snapRing = $derived(
-		(store.mode.type === 'drawingStructure' || store.mode.type === 'draggingVertex') && store.mode.snap ? store.mode.snap.point : null,
+		(mode.type === 'drawingStructure' || mode.type === 'draggingVertex') && mode.snap ? mode.snap.point : null,
 	);
 
 	let parcelDraft = $derived(
-		store.mode.type === 'drawingParcel'
-			? store.mode.cursorPoint
-				? [...store.mode.points, store.mode.cursorPoint]
-				: store.mode.points
+		mode.type === 'drawingParcel'
+			? mode.cursorPoint
+				? [...mode.points, mode.cursorPoint]
+				: mode.points
 			: null,
 	);
 
@@ -235,7 +248,7 @@
 	const PAD = 20, MIN_SIDE = 30, DEPTH = 4;
 	let pedestal = $derived.by(() => {
 		if (isAddress) return { cx: 0, cz: 0, w: store.boardHalf * 2, d: store.boardHalf * 2 };
-		const parts = store.plan.structures.flatMap((s) => s.parts);
+		const parts = plan.structures.flatMap((s) => s.parts);
 		if (parts.length === 0) return { cx: 0, cz: 0, w: MIN_SIDE, d: MIN_SIDE };
 		const xs = parts.flatMap((p) => [p.x - p.w / 2, p.x + p.w / 2]);
 		const zs = parts.flatMap((p) => [p.y - p.d / 2, p.y + p.d / 2]);
@@ -251,7 +264,7 @@
 </script>
 
 <PlanCamera />
-<PerspCamera />
+<PerspCamera sync={orbit} />
 
 <T.DirectionalLight
 	bind:ref={dirLight}
@@ -291,14 +304,14 @@
 
 {#if store.site.parcel && store.site.parcel.length >= 3}
 	<ParcelLine polygon={store.site.parcel} />
-	{#if isAddress && store.mode.type !== 'choosingParcel'}
+	{#if isAddress && mode.type !== 'choosingParcel'}
 		<ParcelMask parcel={store.site.parcel} half={store.boardHalf} is3D={store.viewMode === '3d'} surface={store.ground} />
 	{/if}
 {/if}
 
 <!-- Choosing parcels: selected ones tinted, the one under the cursor outlined, others dashed -->
-{#if store.mode.type === 'choosingParcel' && store.setup}
-	{@const hoverId = store.mode.hoverId}
+{#if mode.type === 'choosingParcel' && store.setup}
+	{@const hoverId = mode.hoverId}
 	{@const selected = store.setup.selected}
 	{#each store.setup.context.parcels as parcel (parcel.id)}
 		{@const isSelected = selected.includes(parcel.id)}
@@ -326,8 +339,8 @@
 	<ParcelLine polygon={parcelDraft} highlight fill />
 {/if}
 
-{#each store.plan.openSpaces as os (os.id)}
-	<OpenSpacePolygon openSpace={os} selected={store.selectedOpenSpaceId === os.id} />
+{#each plan.openSpaces as os (os.id)}
+	<OpenSpacePolygon openSpace={os} selected={interactive && store.selectedOpenSpaceId === os.id} />
 {/each}
 
 {#if draftOpenSpace}
@@ -353,7 +366,7 @@
 		<T.Group position.y={footing.base}>
 			<PartMesh
 				{part}
-				selected={store.selectedPartId === part.id || cutPartIds.has(part.id)}
+				selected={selectedPartId === part.id || cutPartIds.has(part.id)}
 				status={partStatusMap.get(part.id) ?? 'existing'}
 				height={footing.floor - footing.base}
 			/>
@@ -362,9 +375,9 @@
 	<T.Group position.y={baseFor(struct)}>
 		<PartMesh
 			{part}
-			selected={store.selectedPartId === part.id || cutPartIds.has(part.id)}
+			selected={selectedPartId === part.id || cutPartIds.has(part.id)}
 			status={partStatusMap.get(part.id) ?? 'existing'}
-			cloning={store.mode.type === 'dragging' && store.mode.cloning === true && store.mode.companions.some((c) => c.id === part.id)}
+			cloning={mode.type === 'dragging' && mode.cloning === true && mode.companions.some((c) => c.id === part.id)}
 			height={store.viewMode === '3d' ? (struct ? struct.stories * struct.floorHeight : 3.5) : undefined}
 			stories={struct?.stories ?? 1}
 			raised={!!struct?.onRoofOf}
@@ -374,7 +387,7 @@
 			<T.Group position.y={struct.stories * struct.floorHeight}>
 				<PartMesh
 					{part}
-					selected={store.selectedPartId === part.id}
+					selected={selectedPartId === part.id}
 					status="new"
 					height={addedStories(struct) * struct.floorHeight}
 					stories={addedStories(struct)}
@@ -398,7 +411,7 @@
 	</T.Line>
 {/if}
 
-{#each store.plan.structures as s (s.id)}
+{#each plan.structures as s (s.id)}
 	{#each s.reuseZones ?? [] as zone (zone.id)}
 		{@const part = s.parts.find((p) => p.id === zone.partId)}
 		{#if part}
@@ -418,15 +431,15 @@
 {/if}
 
 <!-- A plan's copies of the site's buildings can't be moved or reshaped -->
-{#if store.selectedPart && store.viewMode === 'plan' && !store.readOnly && !(store.selectedStructure && store.isLocked(store.selectedStructure.id))}
+{#if interactive && store.selectedPart && store.viewMode === 'plan' && !store.readOnly && !(store.selectedStructure && store.isLocked(store.selectedStructure.id))}
 	<ResizeHandles part={store.selectedPart} corners={store.selectedPart.shape !== 'poly'} />
 	{#if store.selectedPart.shape === 'poly'}
 		<OutlineHandles part={store.selectedPart} />
 	{/if}
 {/if}
 
-{#each store.plan.trees as tree (tree.id)}
+{#each plan.trees as tree (tree.id)}
 	<T.Group position.y={store.ground?.groundAt(tree.x, tree.y) ?? 0}>
-		<TreeMesh {tree} selected={store.selectedTreeId === tree.id} is3D={store.viewMode === '3d'} />
+		<TreeMesh {tree} selected={interactive && store.selectedTreeId === tree.id} is3D={store.viewMode === '3d'} />
 	</T.Group>
 {/each}

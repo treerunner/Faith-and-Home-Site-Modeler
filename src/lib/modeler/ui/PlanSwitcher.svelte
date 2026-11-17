@@ -49,6 +49,13 @@
 		}
 	}
 
+	// Side by side with existing conditions (or, from the site view, the first plan)
+	function compare() {
+		close();
+		store.startCompare();
+		syncUrl();
+	}
+
 	function remove() {
 		store.deletePlan(store.plan.id);
 		syncUrl();
@@ -124,6 +131,12 @@
 				</ul>
 			{:else}
 				<p class="plan-empty">No plans yet. A plan starts from existing conditions.</p>
+			{/if}
+
+			{#if store.site.plans.length}
+				<div class="plan-actions">
+					<button class="menu-btn" onclick={compare} title="See two plans side by side">Compare</button>
+				</div>
 			{/if}
 
 			{#if !store.readOnly}
