@@ -97,28 +97,24 @@
 		<span class="sep" aria-hidden="true">›</span>
 		<span class="crumb crumb--site">Compare</span>
 
-		<div class="pickers">
-			<label class="picker">
-				<span class="side">A</span>
-				<select aria-label="Plan A" value={a.id} onchange={(e) => pick('a', (e.target as HTMLSelectElement).value)}>
-					{#each choices as p (p.id)}<option value={p.id}>{nameOf(p)}</option>{/each}
-				</select>
-			</label>
-			<button class="swap" onclick={swap} aria-label="Swap A and B" title="Swap A and B">⇄</button>
-			<label class="picker">
-				<span class="side">B</span>
-				<select aria-label="Plan B" value={b.id} onchange={(e) => pick('b', (e.target as HTMLSelectElement).value)}>
-					{#each choices as p (p.id)}<option value={p.id}>{nameOf(p)}</option>{/each}
-				</select>
-			</label>
-		</div>
+		<button class="swap" onclick={swap} aria-label="Swap A and B" title="Swap A and B">⇄ Swap</button>
 		<button class="exit" onclick={exit} title="Back to {nameOf(b)} (Esc)">Exit compare</button>
 	</nav>
 
 	<div class="views">
 		{#each [{ side: 'A', plan: a, view: views.a }, { side: 'B', plan: b, view: views.b }] as v (v.side)}
 			<section class="view" aria-label="{v.side}: {nameOf(v.plan)}">
-				<div class="view-label"><span class="side">{v.side}</span> {nameOf(v.plan)}</div>
+				<!-- The plan's name on its view is also where you choose it -->
+				<label class="view-label">
+					<span class="side">{v.side}</span>
+					<select
+						aria-label="Plan {v.side}"
+						value={v.plan.id}
+						onchange={(e) => pick(v.side === 'A' ? 'a' : 'b', (e.target as HTMLSelectElement).value)}
+					>
+						{#each choices as p (p.id)}<option value={p.id}>{nameOf(p)}</option>{/each}
+					</select>
+				</label>
 				<Scene
 					view={v.view}
 					label="Plan {v.side}: {nameOf(v.plan)}"
@@ -197,17 +193,6 @@
 	.crumb--site { font-weight: 600; }
 	.sep { color: var(--fh-stone); }
 
-	.pickers { display: flex; align-items: center; gap: 0.35rem; margin-left: 1rem; }
-	.picker { display: flex; align-items: center; gap: 0.3rem; }
-	.picker select {
-		font: inherit;
-		font-size: 0.8rem;
-		padding: 0.1rem 0.3rem;
-		border: 1px solid var(--color-border);
-		border-radius: 3px;
-		background: #fff;
-		max-width: 14rem;
-	}
 	.side {
 		display: inline-flex;
 		align-items: center;
@@ -220,6 +205,7 @@
 		font-size: 0.65rem;
 		font-weight: 700;
 	}
+	.swap { margin-left: 1rem; }
 	.swap, .exit, .tool-btn {
 		padding: 0.15rem 0.55rem;
 		border: 1px solid var(--color-border);
@@ -258,12 +244,24 @@
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
-		padding: 0.15rem 0.5rem 0.15rem 0.2rem;
+		padding: 0.15rem 0.2rem;
+		border: 1px solid transparent;
 		border-radius: 4px;
 		background: rgba(247 247 242 / 0.9);
 		font-size: 0.8rem;
 		font-weight: 600;
-		pointer-events: none;
+		cursor: pointer;
+	}
+	.view-label:hover, .view-label:focus-within { border-color: var(--color-border); background: var(--color-surface); }
+	.view-label select {
+		field-sizing: content; /* as wide as the plan's name, like the breadcrumb's */
+		max-width: 16rem;
+		border: none;
+		background: transparent;
+		font: inherit;
+		color: var(--color-text);
+		cursor: pointer;
+		outline: none;
 	}
 	@media (max-width: 800px) {
 		.views { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
