@@ -204,7 +204,10 @@
 			if (!press.panning && Math.hypot(dx, dy) > PAN_THRESHOLD) press.panning = true;
 			if (press.panning) {
 				// From the view at press time, so the drag never drifts
-				store.planView = panBy(press.view, dx, dy, rendererEl?.clientHeight || 1, store.boardHalf);
+				// From the view at the press, so the drag stays under the pointer; held to the board
+				// on the canvas's wider side
+				const [w, h] = [rendererEl?.clientWidth || 1, rendererEl?.clientHeight || 1];
+				store.planView = panBy(press.view, dx, dy, h, store.boardHalf, w / h);
 				return;
 			}
 		}

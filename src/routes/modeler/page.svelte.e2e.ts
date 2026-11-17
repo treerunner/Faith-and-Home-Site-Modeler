@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { decodePng } from '../../lib/server/png';
 
 test('modeler page loads with palette', async ({ page }) => {
 	await page.goto('/modeler');
@@ -147,4 +148,30 @@ test('palette sections collapse, and stay collapsed', async ({ page }) => {
 	await expect(page.getByRole('button', { name: 'Open Spaces' })).toHaveAttribute('aria-expanded', 'false');
 	await page.getByRole('button', { name: 'Open Spaces' }).click();
 	await expect(page.getByLabel('Draw Parking')).toBeVisible();
+});
+
+test("dragging the plan view stops at the board's edge, side to side as well as up and down", async ({ page }) => {
+	await page.goto('/modeler');
+	const canvas = page.locator('.canvas-area canvas');
+	const box = (await canvas.boundingBox())!;
+	// A square at the middle of the ground (the view starts centered on it, 100 m tall)
+	await page.getByLabel('Drag to place Square').dragTo(canvas, { targetPosition: { x: box.width / 2, y: box.height / 2 } });
+	await canvas.click({ position: { x: box.width / 2, y: 20 } }); // deselect
+
+	// Drag far to the left: the view stops when its right edge meets the ground's (200 m out)
+	for (let i = 0; i < 3; i++) {
+		await page.mouse.move(box.x + box.width - 300, box.y + box.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(box.x + 20, box.y + box.height / 2, { steps: 5 });
+		await page.mouse.up();
+	}
+	// The view is 100 m tall and width / height wide, so its center stops at 200 - 50 × aspect.
+	// The square sits that far left of the canvas's middle, still on screen
+	const pxPerM = box.height / 100;
+	const stop = 200 - 50 * (box.width / box.height);
+	const squareX = box.x + box.width / 2 - stop * pxPerM;
+	expect(squareX).toBeGreaterThan(box.x);
+	const buf = await page.screenshot({ clip: { x: squareX - 2, y: box.y + box.height / 2 - 2, width: 4, height: 4 } });
+	const png = await decodePng(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
+	expect(png.data[0]).toBeLessThan(0xb0); // the square's dark chipboard, not the near-white grid
 });
