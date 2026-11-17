@@ -25,6 +25,7 @@ async function siteWithPlan(page: Page, name: string) {
 	const site = {
 		id,
 		name,
+		context: { buildings: [], roads: [], sources: ['overture'] }, // so the data credits show
 		existing: {
 			id: 'existing',
 			name: 'Existing conditions',
@@ -62,6 +63,13 @@ test('compare two plans side by side: synced views, what changed, the compare an
 	await expect(views(page)).toHaveCount(2);
 	await expect(page.getByLabel('Plan A', { exact: true }).locator('option:checked')).toHaveText('Existing conditions');
 	await expect(page.getByLabel('Plan B', { exact: true }).locator('option:checked')).toHaveText('Cottages');
+
+	// The data credits sit in B's bottom-left corner, clear of its label
+	const label = (await page.locator('.view-label').nth(1).boundingBox())!;
+	const credits = (await page.getByRole('button', { name: 'Data credits' }).boundingBox())!;
+	const viewB = (await views(page).nth(1).boundingBox())!;
+	expect(credits.y).toBeGreaterThan(label.y + label.height);
+	expect(credits.y + credits.height).toBeGreaterThan(viewB.y + viewB.height - 40);
 
 	// What changed, in the strip
 	await expect(metric(page, 'Development type')).toContainText('Existing conditions → New development');

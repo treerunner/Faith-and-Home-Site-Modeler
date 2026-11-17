@@ -49,10 +49,11 @@
 {/if}
 
 <style>
+	/* The canvas's bottom-left corner, above the editor's toolbar: nothing else lives there */
 	.credits {
 		position: absolute;
 		left: 0.5rem;
-		top: 0.5rem;
+		bottom: calc(var(--toolbar-h, 0px) + 0.5rem);
 		z-index: 5;
 	}
 
@@ -76,7 +77,7 @@
 
 	.credits__card {
 		position: absolute;
-		top: calc(100% + 0.35rem);
+		bottom: calc(100% + 0.35rem);
 		left: 0;
 		width: max-content;
 		max-width: 18rem;
