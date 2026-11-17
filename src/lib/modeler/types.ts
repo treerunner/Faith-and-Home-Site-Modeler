@@ -76,6 +76,8 @@ export interface OpenSpace {
 	label?: string;
 }
 
+export type NeighborhoodRole = 'gathering' | 'service' | 'housing_partner';
+
 export interface CongregationProfile {
 	size?: 'small' | 'medium' | 'large';
 	tradition?: string;
@@ -86,7 +88,7 @@ export interface CongregationProfile {
 	partnering?: 'open' | 'unsure' | 'not_now'; // would partner with a housing or community organization
 	capacity?: 'volunteers' | 'some_staff' | 'staffed'; // who would steward a project
 	change?: 'preserve' | 'adapt' | 'transform'; // how much change to the property feels right
-	role?: 'gathering' | 'service' | 'housing_partner'; // role wanted in the neighborhood
+	role?: NeighborhoodRole[]; // roles wanted in the neighborhood: any number of them
 }
 
 export interface Tree {

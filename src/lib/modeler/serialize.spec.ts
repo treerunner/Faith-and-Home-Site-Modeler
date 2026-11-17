@@ -194,9 +194,15 @@ describe('normalizeSite', () => {
 		expect(() => normalizeSite({ ...makeSite(), mainBuildingFront: 'sideways' })).toThrow('site.mainBuildingFront');
 	});
 
-	it('keeps the culture answers', () => {
-		const profile = { size: 'small', partnering: 'open', capacity: 'volunteers', change: 'adapt', role: 'housing_partner' } as const;
-		expect(normalizeSite(makeSite({ congregationProfile: profile })).congregationProfile).toEqual(profile);
+	it('keeps the culture answers; roles are any number', () => {
+		const profile = { size: 'small', partnering: 'open', capacity: 'volunteers', change: 'adapt', role: ['housing_partner', 'service'] } as const;
+		expect(normalizeSite(makeSite({ congregationProfile: { ...profile, role: [...profile.role] } })).congregationProfile).toEqual(profile);
+	});
+
+	it('a role saved as one answer becomes a list of one', () => {
+		const raw = { ...makeSite(), congregationProfile: { role: 'gathering' } };
+		expect(normalizeSite(raw).congregationProfile).toEqual({ role: ['gathering'] });
+		expect(normalizeSite({ ...makeSite(), congregationProfile: { role: ['nope'] } }).congregationProfile).toEqual({});
 	});
 
 	it('drops unknown fields', () => {

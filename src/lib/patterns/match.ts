@@ -99,13 +99,15 @@ export function nearestPattern(patterns: Pattern[], cell: CompleteCell): { patte
 	return best ? { pattern: best.pattern, differs: best.differs } : null;
 }
 
-// The first variant, in editorial order, whose every condition is answered and allowed
+// The first variant, in editorial order, whose every condition is answered and allowed. A
+// question answered with several (roles) meets a condition when any of them is allowed.
 export function selectVariant(pattern: Pattern, profile: CongregationProfile = {}): Variant | null {
 	return (
 		pattern.variants?.find((v) =>
 			(Object.entries(v.when) as [keyof SocialConditions, string[]][]).every(([key, allowed]) => {
 				const answer = profile[key];
-				return answer !== undefined && allowed.includes(answer);
+				const answers: string[] = answer === undefined ? [] : Array.isArray(answer) ? answer : [answer];
+				return answers.some((a) => allowed.includes(a));
 			}),
 		) ?? null
 	);

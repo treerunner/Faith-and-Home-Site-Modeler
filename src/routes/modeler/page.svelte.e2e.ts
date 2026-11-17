@@ -88,6 +88,17 @@ test('the Social tab scrolls to the end, and long notes show in full', async ({ 
 	expect(box!.y + box!.height).toBeLessThanOrEqual(panel!.y + panel!.height);
 });
 
+test('the neighborhood roles are any number', async ({ page }) => {
+	await page.goto('/modeler');
+	await page.getByRole('tab', { name: 'Social' }).click();
+	const roles = page.getByRole('group', { name: 'What roles do you want in the neighborhood? Choose any.' });
+	await roles.getByRole('button', { name: 'Gathering place' }).click();
+	await roles.getByRole('button', { name: 'Housing partner' }).click();
+	await expect(roles.getByRole('button', { pressed: true })).toHaveText(['Gathering place', 'Housing partner']);
+	await roles.getByRole('button', { name: 'Gathering place' }).click();
+	await expect(roles.getByRole('button', { pressed: true })).toHaveText(['Housing partner']);
+});
+
 test('the right drawer slides over the canvas, reopens on a selection, and is remembered', async ({ page }) => {
 	await page.goto('/modeler');
 	const canvas = page.locator('.canvas-area canvas');

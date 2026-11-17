@@ -104,6 +104,14 @@ describe('selectVariant', () => {
 		expect(selectVariant(p, {})).toBeNull();
 		expect(selectVariant(pattern('plain', {}))).toBeNull();
 	});
+
+	it('roles are any number: a role condition holds when any chosen role is allowed', () => {
+		const housing: Variant = { key: 'housing', name: 'Housing partner', summary: 's', when: { role: ['housing_partner'] } };
+		const q = pattern('q', {}, [housing]);
+		expect(selectVariant(q, { role: ['gathering', 'housing_partner'] })?.key).toBe('housing');
+		expect(selectVariant(q, { role: ['gathering'] })).toBeNull();
+		expect(selectVariant(q, { role: [] })).toBeNull();
+	});
 });
 
 describe('coverage', () => {

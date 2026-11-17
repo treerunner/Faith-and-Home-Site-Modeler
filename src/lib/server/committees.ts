@@ -30,9 +30,9 @@ const cleanDescription = (raw: unknown) => (typeof raw === 'string' ? raw.trim()
 // Committees: who's in them, invitations, and the team's switches
 
 // An invitation whose email can't be sent stays listed (it can be cancelled and sent again)
-async function sendInvite(committeeId: string, email: string, role: Role, invitedBy: string, origin: string): Promise<boolean> {
+async function sendInvite(committeeId: string, email: string, role: Role, invitedBy: string, origin: string, note = ''): Promise<boolean> {
 	try {
-		return await invite(committeeId, email, role, invitedBy, origin);
+		return await invite(committeeId, email, role, invitedBy, origin, note);
 	} catch (e) {
 		console.error('Invitation email failed:', e);
 		error(502, 'The invitation is saved, but its email couldn’t be sent. Cancel it and try again in a few minutes.');
@@ -154,10 +154,11 @@ export async function updateCommittee(id: string, user: CurrentUser | null, patc
 	return { slug: set.slug ?? c.slug };
 }
 
-export async function inviteMember(id: string, user: CurrentUser | null, email: string, role: unknown, origin: string): Promise<void> {
+export async function inviteMember(id: string, user: CurrentUser | null, email: string, role: unknown, origin: string, note: unknown = ''): Promise<void> {
 	mustManage(id, user);
 	if (role !== 'lead' && role !== 'member') error(400, 'role is lead or member');
-	if (!(await sendInvite(id, email, role, user!.id, origin))) error(400, 'That doesn’t look like an email address');
+	if (typeof note !== 'string') error(400, 'note is text');
+	if (!(await sendInvite(id, email, role, user!.id, origin, note))) error(400, 'That doesn’t look like an email address');
 }
 
 export async function cancelInvitation(id: string, user: CurrentUser | null, invitationId: string): Promise<void> {
