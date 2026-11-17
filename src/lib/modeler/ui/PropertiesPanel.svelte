@@ -375,7 +375,7 @@
 				</fieldset>
 			{/each}
 
-			<label class="field-label" for="profile-notes">Notes</label>
+			<label class="field-label" for="profile-notes">Context</label>
 			<textarea
 				id="profile-notes"
 				class="text-input textarea-input"

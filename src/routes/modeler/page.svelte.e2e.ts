@@ -79,7 +79,7 @@ test('the scale bar follows the zoom', async ({ page }) => {
 test('the Social tab scrolls to the end, and long notes show in full', async ({ page }) => {
 	await page.goto('/modeler');
 	await page.getByRole('tab', { name: 'Social' }).click();
-	const notes = page.locator('#profile-notes'); // the congregation's notes (not the Notes tab)
+	const notes = page.locator('#profile-notes'); // the congregation's Context field (not the Notes tab)
 	await notes.fill(Array.from({ length: 12 }, (_, i) => `Line ${i + 1} of the congregation notes, long enough to wrap.`).join('\n'));
 	await page.locator('.drawer').evaluate((el) => (el.scrollTop = el.scrollHeight));
 	// The box grows with its text, and the drawer scrolls to its bottom edge

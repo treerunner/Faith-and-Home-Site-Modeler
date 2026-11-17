@@ -6,6 +6,7 @@
 	import AnnotationDots from './AnnotationDots.svelte';
 	import Attribution from './Attribution.svelte';
 	import CompareAnalysis from './CompareAnalysis.svelte';
+	import PlanPicker from './PlanPicker.svelte';
 	import { clientToSite, sceneView, type OrbitSync, type SceneView } from '../scene/cameraRef';
 	import { store } from '../store.svelte';
 	import { syncUrl } from './SiteBar.svelte';
@@ -24,7 +25,6 @@
 	let rows = $derived(compareRows(planSummary(a, store.site), planSummary(b, store.site)));
 	let short = $derived(rows.filter((r) => r.short));
 
-	let choices = $derived([store.site.existing, ...store.site.plans]);
 	const nameOf = (p: Plan) => (p.id === store.site.existing.id ? p.name : p.name || 'Untitled plan');
 
 	function pick(side: 'a' | 'b', id: string) {
@@ -97,28 +97,15 @@
 		<span class="sep" aria-hidden="true">›</span>
 		<span class="crumb crumb--site">Compare</span>
 
-		<div class="pickers">
-			<label class="picker">
-				<span class="side">A</span>
-				<select aria-label="Plan A" value={a.id} onchange={(e) => pick('a', (e.target as HTMLSelectElement).value)}>
-					{#each choices as p (p.id)}<option value={p.id}>{nameOf(p)}</option>{/each}
-				</select>
-			</label>
-			<button class="swap" onclick={swap} aria-label="Swap A and B" title="Swap A and B">⇄</button>
-			<label class="picker">
-				<span class="side">B</span>
-				<select aria-label="Plan B" value={b.id} onchange={(e) => pick('b', (e.target as HTMLSelectElement).value)}>
-					{#each choices as p (p.id)}<option value={p.id}>{nameOf(p)}</option>{/each}
-				</select>
-			</label>
-		</div>
+		<button class="swap" onclick={swap} aria-label="Swap A and B" title="Swap A and B">⇄ Swap</button>
 		<button class="exit" onclick={exit} title="Back to {nameOf(b)} (Esc)">Exit compare</button>
 	</nav>
 
 	<div class="views">
-		{#each [{ side: 'A', plan: a, view: views.a }, { side: 'B', plan: b, view: views.b }] as v (v.side)}
+		{#each [{ side: 'A' as const, plan: a, view: views.a }, { side: 'B' as const, plan: b, view: views.b }] as v (v.side)}
 			<section class="view" aria-label="{v.side}: {nameOf(v.plan)}">
-				<div class="view-label"><span class="side">{v.side}</span> {nameOf(v.plan)}</div>
+				<!-- The plan's name on its view is also where you choose it -->
+				<PlanPicker side={v.side} plan={v.plan} name={nameOf(v.plan)} onchoose={(id) => pick(v.side === 'A' ? 'a' : 'b', id)} />
 				<Scene
 					view={v.view}
 					label="Plan {v.side}: {nameOf(v.plan)}"
@@ -197,29 +184,7 @@
 	.crumb--site { font-weight: 600; }
 	.sep { color: var(--fh-stone); }
 
-	.pickers { display: flex; align-items: center; gap: 0.35rem; margin-left: 1rem; }
-	.picker { display: flex; align-items: center; gap: 0.3rem; }
-	.picker select {
-		font: inherit;
-		font-size: 0.8rem;
-		padding: 0.1rem 0.3rem;
-		border: 1px solid var(--color-border);
-		border-radius: 3px;
-		background: #fff;
-		max-width: 14rem;
-	}
-	.side {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.2rem;
-		height: 1.2rem;
-		border-radius: 3px;
-		background: var(--color-text);
-		color: var(--color-surface);
-		font-size: 0.65rem;
-		font-weight: 700;
-	}
+	.swap { margin-left: 1rem; }
 	.swap, .exit, .tool-btn {
 		padding: 0.15rem 0.55rem;
 		border: 1px solid var(--color-border);
@@ -249,21 +214,6 @@
 		min-height: 0;
 		overflow: hidden;
 		background: var(--color-base);
-	}
-	.view-label {
-		position: absolute;
-		top: 0.5rem;
-		left: 0.6rem;
-		z-index: 1;
-		display: flex;
-		align-items: center;
-		gap: 0.35rem;
-		padding: 0.15rem 0.5rem 0.15rem 0.2rem;
-		border-radius: 4px;
-		background: rgba(247 247 242 / 0.9);
-		font-size: 0.8rem;
-		font-weight: 600;
-		pointer-events: none;
 	}
 	@media (max-width: 800px) {
 		.views { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }

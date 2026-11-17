@@ -12,6 +12,7 @@ test.afterAll(async ({ request, baseURL }) => {
 });
 
 const views = (page: Page) => page.getByRole('application');
+const picker = (page: Page, side: 'A' | 'B') => page.getByRole('button', { name: new RegExp(`^Plan ${side} \\(`) });
 const metric = (page: Page, label: string) => page.locator('.metric').filter({ has: page.getByText(label, { exact: true }) });
 
 async function openPlanMenu(page: Page) {
@@ -61,11 +62,11 @@ test('compare two plans side by side: synced views, what changed, the compare an
 	await page.locator('.plan-menu').getByRole('button', { name: 'Compare', exact: true }).click();
 	await expect(page).toHaveURL(new RegExp(`/modeler/${slug}/cottages\\?compare=$`));
 	await expect(views(page)).toHaveCount(2);
-	await expect(page.getByLabel('Plan A', { exact: true }).locator('option:checked')).toHaveText('Existing conditions');
-	await expect(page.getByLabel('Plan B', { exact: true }).locator('option:checked')).toHaveText('Cottages');
+	await expect(picker(page, 'A')).toHaveText(/Existing conditions/);
+	await expect(picker(page, 'B')).toHaveText(/Cottages/);
 
 	// The data credits sit in B's bottom-left corner, clear of its label
-	const label = (await page.locator('.view-label').nth(1).boundingBox())!;
+	const label = (await picker(page, 'B').boundingBox())!;
 	const credits = (await page.getByRole('button', { name: 'Data credits' }).boundingBox())!;
 	const viewB = (await views(page).nth(1).boundingBox())!;
 	expect(credits.y).toBeGreaterThan(label.y + label.height);
@@ -117,7 +118,10 @@ test('compare two plans side by side: synced views, what changed, the compare an
 	await page.getByRole('button', { name: 'Swap A and B' }).click();
 	await expect(page).toHaveURL(new RegExp(`/modeler/${slug}\\?compare=cottages$`));
 	await expect(metric(page, 'Development type')).toContainText('New development → Existing conditions');
-	await page.getByLabel('Plan B', { exact: true }).selectOption({ label: 'Cottages' });
+	// Each view's label opens the plan menu's list; picking A's plan for B swaps them back
+	await picker(page, 'B').click();
+	await page.screenshot({ path: 'tests/screenshots/compare-picker.png' });
+	await page.getByRole('group', { name: 'Choose plan B' }).getByRole('button', { name: 'Cottages', exact: true }).click();
 	await expect(page).toHaveURL(new RegExp(`/modeler/${slug}/cottages\\?compare=$`));
 
 	// Exit: back on the plan, the unsaved edit still there
@@ -134,7 +138,7 @@ test('a compare link opens for anyone who can view the site', async ({ page, bro
 	const p = await anon.newPage();
 	await p.goto(`/modeler/${slug}/cottages/view?compare=`);
 	await expect(views(p)).toHaveCount(2);
-	await expect(p.getByLabel('Plan A', { exact: true }).locator('option:checked')).toHaveText('Existing conditions');
+	await expect(picker(p, 'A')).toHaveText(/Existing conditions/);
 
 	// A private site stays not found
 	await sql`UPDATE sites SET visibility = 'members' WHERE id = ${id}`;
