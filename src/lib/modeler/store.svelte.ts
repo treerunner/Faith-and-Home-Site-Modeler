@@ -1090,6 +1090,7 @@ class ModelerStore {
 	}
 
 	startDrawingOpenSpace(kind: OpenSpace['kind']) {
+		if (kind === 'sale' && this.onSite) return; // land to sell is a plan's proposal
 		this.mode = { type: 'drawingOpenSpace', kind, points: [] };
 	}
 

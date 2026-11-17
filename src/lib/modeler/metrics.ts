@@ -1,5 +1,5 @@
 import type { BuildingType, DevelopmentType, OpenSpace, Part, Plan, ReuseZone, Site, Structure, Use } from './types';
-import { partOutline, polygonDistance, zoneOutline } from './geo';
+import { partOutline, pointInPolygon, polygonCentroid, polygonDistance, zoneOutline } from './geo';
 import { AVG_UNIT_SQFT, sqmToSqft } from './units';
 import { addedStories, totalStories } from './geometry';
 
@@ -47,16 +47,19 @@ export function polygonArea(polygon: [number, number][]): number {
 	return Math.abs(area) / 2;
 }
 
+// Land to sell isn't open space: it leaves the property
+const openSpacesOf = (plan: Plan) => plan.openSpaces.filter((os) => os.kind !== 'sale');
+
 export function openSpaceAreaByKind(plan: Plan): Partial<Record<OpenSpace['kind'], number>> {
 	const result: Partial<Record<OpenSpace['kind'], number>> = {};
-	for (const os of plan.openSpaces) {
+	for (const os of openSpacesOf(plan)) {
 		result[os.kind] = (result[os.kind] ?? 0) + polygonArea(os.polygon);
 	}
 	return result;
 }
 
 export function openSpaceArea(plan: Plan): number {
-	return plan.openSpaces.reduce((sum, os) => sum + polygonArea(os.polygon), 0);
+	return openSpacesOf(plan).reduce((sum, os) => sum + polygonArea(os.polygon), 0);
 }
 
 export function parkingArea(plan: Plan): number {
@@ -73,12 +76,61 @@ export function greenSpaceArea(plan: Plan): number {
 		.reduce((sum, os) => sum + polygonArea(os.polygon), 0);
 }
 
-// Returns footprint as a percentage of parcel area, or null if no parcel defined
+// Footprint as a percentage of the property, or null if no parcel defined. A plan that sells
+// land is measured on what it keeps: its kept buildings over the parcel less the land to sell.
 export function lotCoverage(plan: Plan, site: Site): number | null {
 	if (!site.parcel || site.parcel.length < 3) return null;
-	const parcel = polygonArea(site.parcel);
-	if (parcel === 0) return null;
-	return (siteFootprint(plan) / parcel) * 100;
+	const parcel = polygonArea(site.parcel) - saleArea(plan);
+	if (parcel <= 0) return null;
+	return (siteFootprint(keptPlan(plan)) / parcel) * 100;
+}
+
+// ── Land to sell ─────────────────────────────────────────────────────────────
+
+export function saleAreas(plan: Plan): OpenSpace[] {
+	return plan.openSpaces.filter((os) => os.kind === 'sale');
+}
+
+// m² of land the plan proposes to sell
+export function saleArea(plan: Plan): number {
+	return saleAreas(plan).reduce((sum, os) => sum + polygonArea(os.polygon), 0);
+}
+
+// The buildings sold with the land: a building (its touching pieces, rooftop pieces included)
+// whose area-weighted center lies on land to sell. Buildings to be removed aren't sold.
+export function soldStructures(plan: Plan): Set<string> {
+	const areas = saleAreas(plan);
+	const sold = new Set<string>();
+	if (!areas.length) return sold;
+	for (const building of planBuildings(plan)) {
+		const ground = building.filter((s) => !s.onRoofOf);
+		let x = 0, y = 0, total = 0;
+		for (const p of (ground.length ? ground : building).flatMap((s) => s.parts)) {
+			const a = partFootprint(p);
+			x += p.x * a;
+			y += p.y * a;
+			total += a;
+		}
+		if (total === 0) continue;
+		const center: [number, number] = [x / total, y / total];
+		if (areas.some((os) => pointInPolygon(center, os.polygon))) for (const s of building) sold.add(s.id);
+	}
+	return sold;
+}
+
+// What the congregation keeps: the plan without the land to sell and what's on it (buildings,
+// and open spaces whose center is on it, like a parking lot sold). The analysis, compare and
+// building type measure this.
+export function keptPlan(plan: Plan): Plan {
+	const areas = saleAreas(plan);
+	if (!areas.length) return plan;
+	const sold = soldStructures(plan);
+	const onSoldLand = (os: OpenSpace) => areas.some((a) => pointInPolygon(polygonCentroid(os.polygon), a.polygon));
+	return {
+		...plan,
+		structures: plan.structures.filter((s) => !sold.has(s.id)),
+		openSpaces: openSpacesOf(plan).filter((os) => !onSoldLand(os)),
+	};
 }
 
 // ── Reuse zones ──────────────────────────────────────────────────────────────
@@ -231,10 +283,12 @@ export interface ActionStep {
 	severity: 'info' | 'suggest' | 'flag';
 }
 
-export function generateActionSteps(plan: Plan, site: Site): ActionStep[] {
+export function generateActionSteps(whole: Plan, site: Site): ActionStep[] {
 	const steps: ActionStep[] = [];
+	// What the congregation keeps; coverage is on the land kept
+	const plan = keptPlan(whole);
 	const footprint = siteFootprint(plan);
-	const coverage = lotCoverage(plan, site);
+	const coverage = lotCoverage(whole, site);
 	const green = greenSpaceArea(plan);
 	const parking = parkingArea(plan);
 	const osArea = openSpaceArea(plan);
@@ -371,7 +425,8 @@ export function planBuildings(plan: Plan): Structure[][] {
 // main building looks like. The main building is an Object when the site says it has no clear
 // front (or several), or when it has a triangle or circle piece.
 export function inferBuildingType(plan: Plan, site?: Pick<Site, 'mainBuildingFront'>): BuildingType | null {
-	const buildings = planBuildings(plan);
+	// What the congregation keeps: buildings sold with the land don't count
+	const buildings = planBuildings(keptPlan(plan));
 	if (buildings.length === 0) return null;
 	// What stands on the ground decides: a drum or cupola on the roof doesn't make an Object or a Box-Plus
 	const grounded = (b: Structure[]) => b.filter((s) => !s.onRoofOf);
@@ -405,13 +460,16 @@ export const DEVELOPMENT_TYPE_LABELS: Record<DevelopmentType, string> = {
 // show in a model, so that comes from the override.
 export function inferDevelopmentType(plan: Plan): DevelopmentType | null {
 	if (plan.structures.length === 0) return null;
-	const areas = zonesOf(plan).map(({ z, s }) => zoneAreas(z, s));
-	const reuse = areas.some((a) => a.reuse > 0) || plan.structures.some((s) => sum(shareReuse(s)) > 0);
-	const added = plan.structures.some((s) => s.status === 'new' || addedStories(s) > 0) || areas.some((a) => a.new > 0);
+	// Reuse and new construction count on the land the congregation keeps; land to sell with
+	// nothing else proposed is downsizing
+	const kept = keptPlan(plan);
+	const areas = zonesOf(kept).map(({ z, s }) => zoneAreas(z, s));
+	const reuse = areas.some((a) => a.reuse > 0) || kept.structures.some((s) => sum(shareReuse(s)) > 0);
+	const added = kept.structures.some((s) => s.status === 'new' || addedStories(s) > 0) || areas.some((a) => a.new > 0);
 	if (reuse && added) return 'reuse_new';
 	if (reuse) return 'reuse';
 	if (added) return 'new';
-	if (plan.structures.some((s) => s.status === 'removed')) return 'downsize_sell';
+	if (saleAreas(plan).length || plan.structures.some((s) => s.status === 'removed')) return 'downsize_sell';
 	return 'existing';
 }
 

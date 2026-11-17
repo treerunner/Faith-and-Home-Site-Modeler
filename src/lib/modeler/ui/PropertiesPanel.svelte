@@ -8,7 +8,7 @@
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM, fmtSqft } from '../units';
 	import type { BuildingType, CongregationProfile, DevelopmentType, Roof, Site, Status, Structure, Use } from '../types';
-	import { BUILDING_TYPE_LABELS, DEVELOPMENT_TYPE_LABELS, inferBuildingType, inferDevelopmentType, programOf, shareDwellings, shareReuse, useShares, zoneDwellings, zoneFloorArea } from '../metrics';
+	import { BUILDING_TYPE_LABELS, DEVELOPMENT_TYPE_LABELS, inferBuildingType, inferDevelopmentType, partFootprint, polygonArea, programOf, soldStructures, shareDwellings, shareReuse, useShares, zoneDwellings, zoneFloorArea } from '../metrics';
 
 	let sidebarTab = $derived(store.sidebarTab);
 
@@ -218,6 +218,18 @@
 	}
 	const DEVELOPMENT_TYPES = Object.keys(DEVELOPMENT_TYPE_LABELS) as DevelopmentType[];
 	let selectedOS = $derived(store.selectedOpenSpace);
+	// Buildings sold with the land in this plan
+	let soldIds = $derived(soldStructures(store.plan));
+	function buildingCenter(s: Structure): [number, number] {
+		let x = 0, y = 0, t = 0;
+		for (const p of s.parts) {
+			const a = partFootprint(p);
+			x += p.x * a;
+			y += p.y * a;
+			t += a;
+		}
+		return t ? [x / t, y / t] : [0, 0];
+	}
 
 	// Track which structure is expanded — syncs when canvas selection changes
 	let expandedId = $state('');
@@ -576,6 +588,9 @@
 							{/if}
 							{#if s.planUses}
 								<span class="added-badge added-badge--reuse" title="Uses changed in this plan">uses</span>
+							{/if}
+							{#if soldIds.has(s.id)}
+								<span class="added-badge added-badge--sold" title="Sold with the land in this plan">sold</span>
 							{/if}
 							<span class="status-chip" style="background:{statusColor(s.status)}" aria-label={s.status}></span>
 						</button>
@@ -945,7 +960,7 @@
 	{#if selectedOS && sidebarTab === 'spatial'}
 		{@const os = selectedOS}
 		<div class="section section--props">
-			<h2 class="panel-heading">Open Space</h2>
+			<h2 class="panel-heading">{os.kind === 'sale' ? 'Land to sell' : 'Open Space'}</h2>
 			<fieldset class="ro-wrap" disabled={store.readOnly}>
 
 			<label class="field-label" for="os-label">Label</label>
@@ -953,12 +968,23 @@
 				id="os-label"
 				class="text-input"
 				type="text"
-				placeholder={os.kind.charAt(0).toUpperCase() + os.kind.slice(1)}
+				placeholder={os.kind === 'sale' ? 'Land to sell' : os.kind.charAt(0).toUpperCase() + os.kind.slice(1)}
 				value={os.label ?? ''}
 				oninput={(e) => store.updateOpenSpace(os.id, { label: (e.target as HTMLInputElement).value || undefined })}
 			/>
 
-			<p class="field-label" style="margin-top:0.4rem">Kind: {os.kind}</p>
+			{#if os.kind === 'sale'}
+				<!-- What leaves the property with it -->
+				{@const area = polygonArea(os.polygon)}
+				{@const parcel = store.site.parcel && store.site.parcel.length >= 3 ? polygonArea(store.site.parcel) : 0}
+				{@const going = store.plan.structures.filter((s) => soldIds.has(s.id) && !s.onRoofOf && pointInPolygon(buildingCenter(s), os.polygon))}
+				<p class="field-hint sale-note">
+					{fmtSqft(area)}{parcel ? `, ${Math.round((area / parcel) * 100)}% of the property` : ''}.
+					{going.length ? `Sold with the land: ${going.map((s) => s.label || 'Structure').join(', ')}.` : 'No buildings on it.'}
+				</p>
+			{:else}
+				<p class="field-label" style="margin-top:0.4rem">Kind: {os.kind}</p>
+			{/if}
 
 			<button
 				class="delete-btn"
@@ -1047,6 +1073,8 @@
 		color: var(--fh-black);
 	}
 	.added-badge--reuse { background: var(--color-reuse); }
+	.added-badge--sold { background: var(--color-sale); color: #fff; }
+	.sale-note { border-left: 2px solid var(--color-sale); padding-left: 0.35rem; margin: 0.4rem 0; }
 	.height-hint { display: block; margin: 0.15rem 0 0.35rem; }
 	.height-hint--confirm { color: #9a5a10; }
 

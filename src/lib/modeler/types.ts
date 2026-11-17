@@ -70,7 +70,8 @@ export interface Structure {
 
 export interface OpenSpace {
 	id: string;
-	kind: 'parking' | 'lawn' | 'courtyard' | 'garden' | 'cemetery' | 'walkway';
+	// sale: land a plan proposes to sell (plans only); the buildings on it go with it (`keptPlan` in metrics.ts)
+	kind: 'parking' | 'lawn' | 'courtyard' | 'garden' | 'cemetery' | 'walkway' | 'sale';
 	polygon: [number, number][];
 	label?: string;
 }

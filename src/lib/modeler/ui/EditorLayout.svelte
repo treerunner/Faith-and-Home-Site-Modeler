@@ -365,7 +365,9 @@
 		{/if}
 		{#if store.mode.type === 'drawingOpenSpace'}
 			<div class="drawing-hint">
-				{#if store.mode.points.length === 0}
+				{#if store.mode.kind === 'sale' && store.mode.points.length < 3}
+					Click to outline the land to sell. Esc to cancel.
+				{:else if store.mode.points.length === 0}
 					Click to place first point. Esc to cancel.
 				{:else if store.mode.points.length < 3}
 					{store.mode.points.length} point{store.mode.points.length > 1 ? 's' : ''} placed. Need at least 3.

@@ -3,7 +3,7 @@
 	import * as THREE from 'three';
 	import { applyGrain, GRAIN_BUILDING } from './grain';
 	import type { Part, Roof, Status } from '../types';
-	import { statusColor } from '../colors';
+	import { COLORS, statusColor } from '../colors';
 	import { roofHeight, gableRidgeAxis } from '../geometry';
 
 	interface Props {
@@ -11,9 +11,10 @@
 		roof: Roof;
 		status: Status;
 		totalHeight: number;
+		sold?: boolean; // sold with the land: terracotta tint
 	}
 
-	let { part, roof, status, totalHeight }: Props = $props();
+	let { part, roof, status, totalHeight, sold = false }: Props = $props();
 
 	const EDGE_COLOR = '#4a3f30';
 
@@ -117,7 +118,7 @@
 	});
 
 	let edgeGeo = $derived(new THREE.EdgesGeometry(roofGeo));
-	let color = $derived(statusColor(status));
+	let color = $derived(sold ? COLORS.saleTint : statusColor(status));
 	let yaw = $derived(-(part.rotation * Math.PI) / 180);
 </script>
 

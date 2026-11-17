@@ -16,6 +16,7 @@
 	import TerrainSurface from './TerrainSurface.svelte';
 	import { partOutline } from '../geo';
 	import { addedStories, partTotalHeight, roofBase, roofLevel } from '../geometry';
+	import { soldStructures } from '../metrics';
 	import { buildingFooting } from '../terrain';
 	import { store } from '../store.svelte';
 	import { COLORS } from '../colors';
@@ -93,6 +94,8 @@
 	);
 
 	let allParts = $derived(plan.structures.flatMap((s) => s.parts));
+	// Buildings sold with the land, tinted in 3D (plan view draws the hatch over them)
+	let sold = $derived(soldStructures(plan));
 
 	// In 3D on terrain, the ground meets each building flush. Its floors start at the highest
 	// ground under any of its pieces, so it shows its full height uphill; a plinth reaches down to
@@ -381,6 +384,7 @@
 			height={store.viewMode === '3d' ? (struct ? struct.stories * struct.floorHeight : 3.5) : undefined}
 			stories={struct?.stories ?? 1}
 			raised={!!struct?.onRoofOf}
+			sold={store.viewMode === '3d' && !!struct && sold.has(struct.id)}
 		/>
 		<!-- A plan's stories on top of an existing building are new construction -->
 		{#if store.viewMode === '3d' && struct && addedStories(struct) > 0}
@@ -400,6 +404,7 @@
 				roof={struct.roof}
 				status={addedStories(struct) > 0 ? 'new' : struct.status}
 				totalHeight={partHeightMap.get(part.id) ?? 3.5}
+				sold={sold.has(struct.id)}
 			/>
 		{/if}
 	</T.Group>
