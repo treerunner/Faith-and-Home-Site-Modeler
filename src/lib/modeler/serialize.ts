@@ -89,19 +89,24 @@ function parsePart(v: unknown, path: string): Part {
 	};
 }
 
+function parseUses(v: unknown, path: string): Use[] {
+	return arr(v, path).map((u, i) => oneOf(u, USES, `${path}[${i}]`));
+}
+
+function parseWeights(v: unknown, path: string): Structure['useWeights'] {
+	if (v === undefined || v === null) return undefined;
+	const w = obj(v, path);
+	const out: NonNullable<Structure['useWeights']> = {};
+	for (const [k, val] of Object.entries(w)) out[oneOf(k, USES, path)] = num(val, `${path}.${k}`);
+	return out;
+}
+
 function parseStructure(v: unknown, path: string): Structure {
 	const o = obj(v, path);
-	let useWeights: Structure['useWeights'];
-	if (o.useWeights !== undefined && o.useWeights !== null) {
-		const w = obj(o.useWeights, `${path}.useWeights`);
-		useWeights = {};
-		for (const [k, val] of Object.entries(w)) {
-			useWeights[oneOf(k, USES, `${path}.useWeights`)] = num(val, `${path}.useWeights.${k}`);
-		}
-	}
+	const useWeights = parseWeights(o.useWeights, `${path}.useWeights`);
 	// Before reuse zones, reuse was a status covering the whole building
 	const legacyReuse = o.status === 'adaptive_reuse';
-	const uses = arr(o.uses ?? [], `${path}.uses`).map((u, i) => oneOf(u, USES, `${path}.uses[${i}]`));
+	const uses = parseUses(o.uses ?? [], `${path}.uses`);
 	const stories = num(o.stories ?? 1, `${path}.stories`);
 	const parts = arr(o.parts, `${path}.parts`).map((p, i) => parsePart(p, `${path}.parts[${i}]`));
 	const dwellings = optional(o.dwellings, (n) => num(n, `${path}.dwellings`));
@@ -143,6 +148,8 @@ function parseStructure(v: unknown, path: string): Structure {
 		reuseZones: reuseZones?.length ? reuseZones : undefined,
 		addedStories: optional(o.addedStories, (n) => num(n, `${path}.addedStories`)) || undefined,
 		planRoof: optional(o.planRoof, (v) => oneOf(v, ROOFS, `${path}.planRoof`)),
+		planUses: optional(o.planUses, (v) => parseUses(v, `${path}.planUses`)),
+		planUseWeights: parseWeights(o.planUseWeights, `${path}.planUseWeights`),
 	};
 }
 
@@ -313,6 +320,11 @@ function parseChoices(v: unknown, path: string, existing: Plan): ExistingChoices
 		const roof = optional(c.roof, (r) => oneOf(r, ROOFS, `${path}.${id}.roof`));
 		if (roof) choice.roof = roof;
 		if (zones.length) choice.reuseZones = zones;
+		if (c.uses !== undefined && !choice.removed) {
+			choice.uses = parseUses(c.uses, `${path}.${id}.uses`);
+			const weights = parseWeights(c.useWeights, `${path}.${id}.useWeights`);
+			if (weights) choice.useWeights = weights;
+		}
 		if (Object.keys(choice).length) out[id] = choice;
 	}
 	return out;
@@ -323,7 +335,7 @@ function parseChoices(v: unknown, path: string, existing: Plan): ExistingChoices
 // that is just "Existing conditions", proposing nothing, becomes the site view.
 function migrateToSiteView(plans: Plan[]): { existing: Plan; plans: Plan[] } {
 	const [first] = plans;
-	const asBuilt = (s: Structure): Structure => ({ ...structuredClone(s), status: 'existing', reuseZones: undefined, addedStories: undefined, planRoof: undefined });
+	const asBuilt = (s: Structure): Structure => ({ ...structuredClone(s), status: 'existing', reuseZones: undefined, addedStories: undefined, planRoof: undefined, planUses: undefined, planUseWeights: undefined });
 	const existing: Plan = {
 		id: `${first.id}-existing`,
 		name: DEFAULT_PLAN_NAME,
@@ -376,7 +388,7 @@ export function normalizeSite(raw: unknown): Site {
 	if (o.existing !== undefined) {
 		existing = { ...parsePlan(o.existing, 'site.existing'), name: DEFAULT_PLAN_NAME, slug: '', oldSlugs: undefined };
 		// The site's pieces are as built: what happens to them is up to each plan
-		existing.structures = existing.structures.map((s) => ({ ...s, status: 'existing', reuseZones: undefined, addedStories: undefined, planRoof: undefined }));
+		existing.structures = existing.structures.map((s) => ({ ...s, status: 'existing', reuseZones: undefined, addedStories: undefined, planRoof: undefined, planUses: undefined, planUseWeights: undefined }));
 		plans = arr(o.plans ?? [], 'site.plans').map((v, i) => {
 			const path = `site.plans[${i}]`;
 			const plan = parsePlan(v, path);
@@ -384,7 +396,7 @@ export function normalizeSite(raw: unknown): Site {
 			const choices = pv.existingChoices === undefined ? {} : parseChoices(pv.existingChoices, `${path}.existingChoices`, existing);
 			const ids = new Set(existing.structures.map((s) => s.id));
 			// A plan's own pieces are new construction
-			const own = plan.structures.filter((s) => !ids.has(s.id)).map((s) => ({ ...s, status: 'new' as const, reuseZones: undefined, addedStories: undefined, planRoof: undefined }));
+			const own = plan.structures.filter((s) => !ids.has(s.id)).map((s) => ({ ...s, status: 'new' as const, reuseZones: undefined, addedStories: undefined, planRoof: undefined, planUses: undefined, planUseWeights: undefined }));
 			return expandPlan(existing, { ...plan, structures: own, existingChoices: choices });
 		});
 	} else {

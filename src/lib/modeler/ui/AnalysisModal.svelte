@@ -38,6 +38,7 @@
 		buildingType,
 		BUILDING_TYPE_LABELS,
 		reuseZoneCount,
+		reuseFloorArea,
 	} from '../metrics';
 	import type { Use } from '../types';
 	import { creditLine } from '../credits';
@@ -81,6 +82,7 @@
 	);
 
 	let reuseZones = $derived(reuseZoneCount(plan));
+	let reuseArea = $derived(reuseFloorArea(plan));
 
 	// The pattern matrix: the catalog loads async (Directus later), the matching is pure
 	let patterns = $state<Pattern[]>([]);
@@ -272,6 +274,9 @@
 					<tbody>
 						<tr><td class="met-label">Structure footprint</td><td class="met-value">{fmtSqft(footprint)}</td></tr>
 						<tr><td class="met-label">Gross floor area</td><td class="met-value">{fmtSqft(gfa)}</td></tr>
+						{#if reuseArea > 0}
+							<tr><td class="met-label">Adaptive reuse</td><td class="met-value">{fmtSqft(reuseArea)} <span class="met-sub">{pct(reuseArea, gfa)} of floor area</span></td></tr>
+						{/if}
 						<tr><td class="met-label">Lot coverage</td><td class="met-value">{coverage !== null ? Math.round(coverage) + '%' : '—'}</td></tr>
 						<tr><td class="met-label">Structures</td>
 							<td class="met-value">

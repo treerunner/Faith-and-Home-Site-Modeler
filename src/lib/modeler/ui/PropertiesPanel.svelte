@@ -8,7 +8,7 @@
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM, fmtSqft } from '../units';
 	import type { BuildingType, CongregationProfile, DevelopmentType, Roof, Site, Status, Structure, Use } from '../types';
-	import { BUILDING_TYPE_LABELS, DEVELOPMENT_TYPE_LABELS, inferBuildingType, inferDevelopmentType, zoneDwellings, zoneFloorArea } from '../metrics';
+	import { BUILDING_TYPE_LABELS, DEVELOPMENT_TYPE_LABELS, inferBuildingType, inferDevelopmentType, programOf, shareDwellings, shareReuse, useShares, zoneDwellings, zoneFloorArea } from '../metrics';
 
 	let sidebarTab = $derived(store.sidebarTab);
 
@@ -107,6 +107,7 @@
 			c.removed && `marked to be removed in ${c.removed} plan${c.removed === 1 ? '' : 's'}`,
 			c.zones && `reuse zones in ${c.zones} plan${c.zones === 1 ? '' : 's'}`,
 			c.added && `added stories in ${c.added} plan${c.added === 1 ? '' : 's'}`,
+			c.uses && `use changes in ${c.uses} plan${c.uses === 1 ? '' : 's'}`,
 		].filter(Boolean);
 		return parts.length ? `This building has ${parts.join(', ')}. Deleting it drops them.` : '';
 	}
@@ -235,23 +236,41 @@
 		}
 	}
 
+	// Uses and their sliders edit the building's mix: the site's on the site view, the plan's in a plan
 	function toggleUse(structureId: string, use: Use, checked: boolean) {
 		const s = store.plan.structures.find((s) => s.id === structureId);
 		if (!s) return;
-		const uses = checked ? [...s.uses, use] : s.uses.filter((u) => u !== use);
-		const useWeights = { ...s.useWeights };
+		const mix = programOf(s);
+		const uses = checked ? [...mix.uses, use] : mix.uses.filter((u) => u !== use);
+		const useWeights = { ...mix.weights };
 		if (checked) { if (!useWeights[use]) useWeights[use] = 50; }
 		else delete useWeights[use];
 		store.updateStructure(structureId, { uses, useWeights });
 	}
 
 	function setWeight(s: Structure, use: Use, weight: number) {
-		store.updateStructure(s.id, { useWeights: { ...s.useWeights, [use]: Math.max(1, weight) } });
+		store.updateStructure(s.id, { useWeights: { ...programOf(s).weights, [use]: Math.max(1, weight) } });
 	}
 
 	function allocPct(s: Structure, use: Use): number {
-		const total = s.uses.reduce((sum, u) => sum + (s.useWeights?.[u] ?? 50), 0);
-		return total > 0 ? ((s.useWeights?.[use] ?? 50) / total) * 100 : 0;
+		const { uses, weights } = programOf(s);
+		return (useShares(uses, weights)[use] ?? 0) * 100;
+	}
+
+	// The site's mix, as the plan's sliders are compared against it
+	function siteMixLabel(s: Structure): string {
+		const shares = useShares(s.uses, s.useWeights ?? {});
+		const parts = s.uses.map((u) => `${USE_OPTIONS.find((o) => o.value === u)?.label ?? u} ${Math.round((shares[u] ?? 0) * 100)}%`);
+		return parts.length ? parts.join(', ') : 'no uses';
+	}
+
+	// What a plan's mix reuses: "4,800 sq ft to housing, ~5 units"
+	function shareReuseLabel(s: Structure): string {
+		const gains = Object.entries(shareReuse(s)) as [Use, number][];
+		if (!gains.length) return '';
+		const to = gains.map(([u, a]) => `${fmtSqft(a)} to ${(USE_OPTIONS.find((o) => o.value === u)?.label ?? u).toLowerCase()}`).join(', ');
+		const units = shareDwellings(s);
+		return units ? `${to}, ~${units} unit${units === 1 ? '' : 's'}` : to;
 	}
 </script>
 
@@ -538,6 +557,7 @@
 					{@const locked = store.isLocked(s.id)}
 					{@const hosts = roofHosts(s)}
 					{@const host = hostOf(s)}
+					{@const mix = programOf(s)}
 					<li class="struct-item" class:struct-item--open={isOpen}>
 						<button
 							class="struct-row"
@@ -554,6 +574,9 @@
 							{#if s.status === 'existing' && s.addedStories}
 								<span class="added-badge" title="Stories added in this plan">+{s.addedStories}</span>
 							{/if}
+							{#if s.planUses}
+								<span class="added-badge" title="Uses changed in this plan">uses</span>
+							{/if}
 							<span class="status-chip" style="background:{statusColor(s.status)}" aria-label={s.status}></span>
 						</button>
 
@@ -561,7 +584,7 @@
 							<div class="struct-props">
 								<fieldset class="ro-wrap" disabled={store.readOnly}>
 								{#if locked}
-									<p class="field-hint site-note">Shape, height and uses are set on the site. <button class="link-btn" onclick={editOnSite}>Edit on site</button></p>
+									<p class="field-hint site-note">Shape and height are set on the site. <button class="link-btn" onclick={editOnSite}>Edit on site</button></p>
 								<fieldset class="fieldset">
 									<legend class="field-label">In this plan</legend>
 									<div class="pill-group">
@@ -629,6 +652,9 @@
 									oninput={(e) => store.updateStructure(s.id, { label: (e.target as HTMLInputElement).value })}
 								/>
 
+								</fieldset>
+								<!-- A plan can change a standing building's mix of uses: what a use gains is reuse -->
+								<fieldset class="ro-wrap" disabled={locked && s.status !== 'existing'}>
 								<fieldset class="fieldset">
 									<legend class="field-label">Uses</legend>
 									<div class="uses-grid">
@@ -636,7 +662,7 @@
 											<label class="use-label">
 												<input
 													type="checkbox"
-													checked={s.uses.includes(opt.value)}
+													checked={mix.uses.includes(opt.value)}
 													onchange={(e) => toggleUse(s.id, opt.value, (e.target as HTMLInputElement).checked)}
 												/>
 												{opt.label}
@@ -645,14 +671,14 @@
 									</div>
 								</fieldset>
 
-								{#if s.uses.length > 0}
+								{#if mix.uses.length > 0}
 									<div class="alloc-section">
 										<div class="alloc-bar" aria-hidden="true">
-											{#each s.uses as use (use)}
+											{#each mix.uses as use (use)}
 												<div class="alloc-seg" style="width:{allocPct(s, use)}%;background:{USE_COLORS[use]}"></div>
 											{/each}
 										</div>
-										{#each s.uses as use (use)}
+										{#each mix.uses as use (use)}
 											{@const opt = USE_OPTIONS.find(o => o.value === use)}
 											{@const pct = allocPct(s, use)}
 											<div class="alloc-row">
@@ -663,7 +689,8 @@
 													type="range"
 													min="1"
 													max="100"
-													value={s.useWeights?.[use] ?? 50}
+													aria-label="{opt?.label ?? use} share"
+													value={mix.weights[use] ?? 50}
 													oninput={(e) => setWeight(s, use, Number((e.target as HTMLInputElement).value))}
 												/>
 												<span class="alloc-pct">{Math.round(pct)}%</span>
@@ -671,6 +698,16 @@
 										{/each}
 									</div>
 								{/if}
+								{#if s.planUses}
+									{@const reuse = shareReuseLabel(s)}
+									<p class="field-hint mix-note">
+										On the site: {siteMixLabel(s)}.
+										{#if reuse}<span class="mix-reuse">Reuse: {reuse}</span>{/if}
+										<button class="link-btn" onclick={() => store.resetUses(s.id)}>Reset to site</button>
+									</p>
+								{/if}
+								</fieldset>
+								<fieldset class="ro-wrap" disabled={locked}>
 
 								{#if s.uses.includes('housing')}
 									<div class="field-group">
@@ -999,6 +1036,8 @@
 	}
 	.site-type-hint { display: block; margin-top: 0.35rem; }
 	.site-note { display: block; margin: 0 0 0.4rem; }
+	.field-hint.mix-note { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; margin: 0.35rem 0 0.4rem; }
+	.mix-reuse { border-left: 2px solid var(--color-reuse); padding-left: 0.35rem; }
 	.added-badge {
 		font-size: 0.62rem;
 		font-weight: 600;
