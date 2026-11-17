@@ -7,7 +7,7 @@
 	import { partOutline, pointInPolygon } from '../geo';
 	import { statusColor, USE_COLORS } from '../colors';
 	import { M_TO_FT, ftToM, fmtSqft } from '../units';
-	import type { BuildingType, CongregationProfile, DevelopmentType, Roof, Site, Status, Structure, Use } from '../types';
+	import type { BuildingType, CongregationProfile, DevelopmentType, NeighborhoodRole, Roof, Site, Status, Structure, Use } from '../types';
 	import { BUILDING_TYPE_LABELS, DEVELOPMENT_TYPE_LABELS, inferBuildingType, inferDevelopmentType, partFootprint, polygonArea, programOf, soldStructures, shareDwellings, shareReuse, useShares, zoneDwellings, zoneFloorArea } from '../metrics';
 
 	let sidebarTab = $derived(store.sidebarTab);
@@ -153,7 +153,7 @@
 		},
 		{
 			key: 'role',
-			question: 'What role do you want in the neighborhood?',
+			question: 'What roles do you want in the neighborhood? Choose any.',
 			options: [{ value: 'gathering', label: 'Gathering place' }, { value: 'service', label: 'Service provider' }, { value: 'housing_partner', label: 'Housing partner' }],
 		},
 	];
@@ -374,13 +374,19 @@
 					<legend class="field-label culture-question">{q.question}</legend>
 					<div class="pill-group">
 						{#each q.options as opt (opt.value)}
-							{@const on = profile[q.key] === opt.value}
+							{@const roles = q.key === 'role' ? (profile.role ?? []) : null}
+							{@const on = roles ? roles.includes(opt.value as NeighborhoodRole) : profile[q.key] === opt.value}
 							<button
 								class="pill"
 								class:pill--active={on}
 								aria-pressed={on}
 								style={on ? 'background:var(--fh-dusk);border-color:var(--fh-dusk);color:#fff' : ''}
-								onclick={() => store.updateCongregationProfile({ [q.key]: on ? undefined : opt.value } as Partial<CongregationProfile>)}
+								onclick={() => {
+									if (!roles) return store.updateCongregationProfile({ [q.key]: on ? undefined : opt.value } as Partial<CongregationProfile>);
+									// Roles: any number, toggled one by one
+									const next = on ? roles.filter((r) => r !== opt.value) : [...roles, opt.value as NeighborhoodRole];
+									store.updateCongregationProfile({ role: next.length ? next : undefined });
+								}}
 							>{opt.label}</button>
 						{/each}
 					</div>

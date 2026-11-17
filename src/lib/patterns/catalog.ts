@@ -22,8 +22,11 @@ export interface Cells {
 }
 
 // Social answers a variant fits, each a list of allowed answers to a congregation profile question
+// One answer to a social question (roles are answered as a list: each is one answer)
+type Answer<K extends keyof CongregationProfile> = NonNullable<CongregationProfile[K]> extends (infer A)[] ? A : NonNullable<CongregationProfile[K]>;
+
 export type SocialConditions = {
-	[K in 'size' | 'tenure' | 'ownership' | 'partnering' | 'capacity' | 'change' | 'role']?: NonNullable<CongregationProfile[K]>[];
+	[K in 'size' | 'tenure' | 'ownership' | 'partnering' | 'capacity' | 'change' | 'role']?: Answer<K>[];
 };
 
 export interface Variant {

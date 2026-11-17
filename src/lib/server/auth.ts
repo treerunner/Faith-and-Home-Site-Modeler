@@ -3,6 +3,7 @@ import { and, count, eq, gt, isNull } from 'drizzle-orm';
 import { db } from './db';
 import { committees, invitations, loginTokens, memberships, sessions, users } from './db/schema';
 import { sendEmail } from './email';
+import { inviteEmail } from './invite-email';
 import { days, hashToken, minutes, newToken, normalEmail, safeNext } from './tokens';
 import type { Role } from './access';
 
@@ -110,20 +111,17 @@ export async function readSession(cookies: Cookies, secure: boolean): Promise<Cu
 
 // ── Invitations ──────────────────────────────────────────────────────────────
 
-export async function invite(committeeId: string, rawEmail: string, role: Role, invitedBy: string, origin: string): Promise<boolean> {
+// The note is the inviter's own words, added to the email under their name; it isn't stored
+export async function invite(committeeId: string, rawEmail: string, role: Role, invitedBy: string, origin: string, note = ''): Promise<boolean> {
 	const email = normalEmail(rawEmail);
 	if (!email) return false;
 	const [committee] = await db.select({ name: committees.name }).from(committees).where(eq(committees.id, committeeId));
 	if (!committee) return false;
+	const [inviter] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, invitedBy));
 	const token = newToken();
 	await db.insert(invitations).values({ committeeId, email, role, tokenHash: await hashToken(token), invitedBy, expiresAt: days(14) });
-	const link = `${origin}/auth/invite?token=${token}`;
-	await sendEmail({
-		to: email,
-		subject: `You're invited to ${committee.name} on the Faith & Home site modeler`,
-		text: `You've been invited to join ${committee.name}, to work on its sites and plans together.\n\nOpen this link to accept and sign in (it works for 14 days):\n${link}`,
-		html: `<p>You've been invited to join <strong>${escapeHtml(committee.name)}</strong>, to work on its sites and plans together.</p><p><a href="${link}">Accept and sign in</a> (the link works for 14 days)</p>`,
-	});
+	const from = inviter?.name || inviter?.email || 'The person who invited you';
+	await sendEmail(inviteEmail(email, committee.name, `${origin}/auth/invite?token=${token}`, from, note));
 	return true;
 }
 
@@ -156,10 +154,6 @@ export async function acceptInvitation(token: string): Promise<{ userId: string;
 	}
 	const [c] = await db.select({ slug: committees.slug }).from(committees).where(eq(committees.id, inv.committeeId));
 	return { userId, committeeId: inv.committeeId, committeeSlug: c.slug };
-}
-
-function escapeHtml(s: string): string {
-	return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
 // ── Your account ─────────────────────────────────────────────────────────────

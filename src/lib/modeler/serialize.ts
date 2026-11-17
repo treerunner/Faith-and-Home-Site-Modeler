@@ -1,4 +1,4 @@
-import type { Annotation, ContextSource, OpenSpace, Part, Plan, ReuseZone, Site, SiteContext, Structure, Terrain, TerrainRegion, Tree, Use } from './types';
+import type { Annotation, ContextSource, NeighborhoodRole, OpenSpace, Part, Plan, ReuseZone, Site, SiteContext, Structure, Terrain, TerrainRegion, Tree, Use } from './types';
 import { slugify } from './slug';
 import { CONTEXT_HALF_SIZE, wholePartZone } from './geo';
 import { choicesOf, expandPlan, type ExistingChoice, type ExistingChoices } from './existing';
@@ -377,6 +377,15 @@ function migrateToSiteView(plans: Plan[]): { existing: Plan; plans: Plan[] } {
 	return { existing, plans: converted.map((c) => c.plan) };
 }
 
+// Answers are strings; roles are a list (saved before that as one role)
+const ROLES: NeighborhoodRole[] = ['gathering', 'service', 'housing_partner'];
+function parseProfile(profile: Obj): Site['congregationProfile'] {
+	const out = Object.fromEntries(Object.entries(profile).filter(([k, v]) => k !== 'role' && typeof v === 'string')) as NonNullable<Site['congregationProfile']>;
+	const roles = (Array.isArray(profile.role) ? profile.role : [profile.role]).filter((r): r is NeighborhoodRole => ROLES.includes(r as NeighborhoodRole));
+	if (roles.length) out.role = [...new Set(roles)];
+	return out;
+}
+
 export function normalizeSite(raw: unknown): Site {
 	const o = obj(raw, 'site');
 	const id = str(o.id, 'site.id');
@@ -439,11 +448,7 @@ export function normalizeSite(raw: unknown): Site {
 		),
 		context,
 		// Free-form questionnaire answers; keep only string values
-		congregationProfile: profile
-			? (Object.fromEntries(
-					Object.entries(profile).filter(([, v]) => typeof v === 'string'),
-				) as Site['congregationProfile'])
-			: undefined,
+		congregationProfile: profile ? parseProfile(profile) : undefined,
 		existing,
 		plans,
 	};

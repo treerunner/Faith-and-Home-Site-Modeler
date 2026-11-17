@@ -10,6 +10,7 @@
 
 	let email = $state('');
 	let role = $state<'member' | 'lead'>('member');
+	let note = $state('');
 	let message = $state('');
 	let error = $state('');
 	let editing = $state(false);
@@ -32,7 +33,7 @@
 
 	async function sendInvite(e: SubmitEvent) {
 		e.preventDefault();
-		if (await call(`/api/committees/${c.id}/invitations`, 'POST', { email, role }, `Invitation sent to ${email}.`)) email = '';
+		if (await call(`/api/committees/${c.id}/invitations`, 'POST', { email, role, note }, `Invitation sent to ${email}.`)) email = note = '';
 	}
 
 	async function leave() {
@@ -138,6 +139,14 @@
 						<option value="member">Member</option>
 						<option value="lead">Lead</option>
 					</select>
+					<textarea
+						class="text-input invite-note"
+						aria-label="Note"
+						placeholder="Add a note to the email (optional)"
+						maxlength="500"
+						rows="3"
+						bind:value={note}
+					></textarea>
 					<button class="btn btn--primary" type="submit">Send invitation</button>
 				</form>
 				<p class="meta">Members edit the committee's sites and plans. Leads also invite people and delete sites.</p>
@@ -173,6 +182,8 @@
 	.member-email { margin-left: 0.45rem; }
 	.role { font-size: 0.72rem; color: var(--fh-stone); margin-left: auto; }
 	.invite { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem; }
+	.invite-note { flex-basis: 100%; max-width: 32rem; resize: vertical; }
+	.invite .btn { align-self: flex-start; }
 	.details { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.5rem 0; max-width: 28rem; }
 	.details-actions { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
 	.field-label { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }

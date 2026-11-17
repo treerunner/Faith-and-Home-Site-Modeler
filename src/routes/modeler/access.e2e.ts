@@ -104,8 +104,10 @@ test('members edit, leads invite and delete, outsiders see only public view link
 	// The lead invites someone; the invitation is listed
 	await page.goto(`/committees/${c}`);
 	await page.getByLabel('Email').fill(`e2e-invitee-${Date.now()}@example.test`);
+	await page.getByLabel('Note').fill('Join us Tuesday to look at the plans.'); // goes in the email
 	await page.getByRole('button', { name: 'Send invitation' }).click();
 	await expect(page.getByText(/Invitation sent to/)).toBeVisible();
+	await expect(page.getByLabel('Note')).toHaveValue('');
 	await expect(page.getByRole('region', { name: 'Invite' }).getByText(', invited')).toHaveCount(1);
 	await page.screenshot({ path: 'tests/screenshots/auth-committee.png', fullPage: true });
 
