@@ -166,6 +166,11 @@ Each milestone is one Claude Code session or a few. Start each in plan mode, rev
 **Auth.** (Done, November 2026) Accounts in our own tables (Directus Core's 3 seats are for pattern editors). Committees own sites and plans so members collaborate; leads manage membership; the Faith & Home team committee can step into any committee, invite, set up demos and peg pattern examples. Three ways in: try without an account, sign up and start a committee (while the team allows it), or be invited. Email-link sign-in via Resend. Per-site visibility (public view link or members only). Optimistic saves: a save from an older version is refused rather than overwriting.
 
 **M7. Workshop features.** Side-by-side plans of one site (existing vs. proposal), numbered annotations in the pattern-book style, presenter mode for large screens.
+- (Done, November 2026) The editor's layout: a breadcrumb bar (committee › site › plan) and a right drawer with folder tabs (Spatial, Social, Notes) that slides over the canvas.
+- (Done) Notes: the book's numbered dots, placed and written in the Notes drawer, shown on the analysis and PNG exports.
+- (Done) Use shares: a plan changes a standing building's mix of uses, and what a use gains over the site's mix is adaptive reuse, without drawing a zone.
+- (Done) Compare: two plans side by side (`?compare=` on the plan's URL), synced in plan view and 3D, a strip of what changed, and a printable compare analysis.
+- Next: marking part of the property to be sold (downsize / sell), drawn like an open space; presenter mode.
 
 **M8. Experimental.** Stylized AI sketch renders from depth/edge passes; a splat capture of a real church placed beside chipboard massing. Separate module, off by default.
 
