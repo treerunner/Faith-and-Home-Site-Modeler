@@ -575,7 +575,7 @@
 								<span class="added-badge" title="Stories added in this plan">+{s.addedStories}</span>
 							{/if}
 							{#if s.planUses}
-								<span class="added-badge" title="Uses changed in this plan">uses</span>
+								<span class="added-badge added-badge--reuse" title="Uses changed in this plan">uses</span>
 							{/if}
 							<span class="status-chip" style="background:{statusColor(s.status)}" aria-label={s.status}></span>
 						</button>
@@ -1046,6 +1046,7 @@
 		background: var(--color-new);
 		color: var(--fh-black);
 	}
+	.added-badge--reuse { background: var(--color-reuse); }
 	.height-hint { display: block; margin: 0.15rem 0 0.35rem; }
 	.height-hint--confirm { color: #9a5a10; }
 
