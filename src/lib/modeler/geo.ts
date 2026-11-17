@@ -321,6 +321,17 @@ export function buildingsInParcel<B extends { polygon: Pt[] }>(buildings: B[], p
 	return buildings.filter((b) => pointInPolygon(polygonCentroid(b.polygon), parcel));
 }
 
+// A grown board's buildings: the old board's exactly as they were (the parcel's own left the
+// foam when they became chipboard, and must not come back), plus the fetched ones in the new
+// ring around it. A building belongs to the board its center is on.
+export function grownBuildings<B extends { polygon: Pt[] }>(old: B[], oldHalf: number, fetched: B[]): B[] {
+	const onOld = (b: B) => {
+		const [x, y] = polygonCentroid(b.polygon);
+		return Math.abs(x) <= oldHalf && Math.abs(y) <= oldHalf;
+	};
+	return [...old, ...fetched.filter((b) => !onOld(b))];
+}
+
 // Joins neighboring parcels into one outline, or null if they don't form a single piece
 // (lots that don't touch). County parcels share edges exactly, so no tolerance is needed.
 export function mergeParcels(parcels: Pt[][]): Pt[] | null {

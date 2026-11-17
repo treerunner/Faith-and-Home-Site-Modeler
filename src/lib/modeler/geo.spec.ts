@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	boardHalfFor,
+	grownBuildings,
 	offsetPolygon,
 	partOutline,
 	splitPart,
@@ -245,6 +246,17 @@ describe('boardHalfFor', () => {
 	it('stops at the largest board', () => {
 		expect(boardHalfFor(square(900), 150)).toBe(400);
 		expect(boardHalfFor(square(900), 400)).toBeNull();
+	});
+});
+
+describe('grownBuildings', () => {
+	const box = (x: number, y: number, id: string) => ({ id, polygon: [[x - 5, y - 5], [x + 5, y - 5], [x + 5, y + 5], [x - 5, y + 5]] as Pt[] });
+
+	it("keeps the old board as it was and adds only the new ring's buildings", () => {
+		// The church at the origin became chipboard and left the old foam
+		const old = [box(100, 0, 'neighbor')];
+		const fetched = [box(0, 0, 'church again'), box(100, 0, 'neighbor again'), box(200, 0, 'new ring'), box(149, 0, 'edge again')];
+		expect(grownBuildings(old, 150, fetched).map((b) => b.id)).toEqual(['neighbor', 'new ring']);
 	});
 });
 

@@ -6,6 +6,7 @@ import { terrainModel, terrainSurface, type TerrainModel, type TerrainSurface } 
 import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
 import {
 	boardHalfFor,
+	grownBuildings,
 	buildingsInParcel,
 	clipToPart,
 	mergeParcels,
@@ -1484,8 +1485,9 @@ class ModelerStore {
 		try {
 			const context = await fetchContext(origin.lat, origin.lng, half);
 			if (version !== this.#parcelVersion) return; // the parcel changed while loading
+			const fetched = context.buildings.map((b) => ({ polygon: b.polygon, height: b.height }));
 			this.site.context = {
-				buildings: context.buildings.map((b) => ({ polygon: b.polygon, height: b.height })),
+				buildings: grownBuildings(this.site.context.buildings, this.boardHalf, fetched),
 				roads: context.roads,
 				sources: this.site.context.sources, // parcel credit stays with the original fetch
 				buildingSources: context.buildingSources,
