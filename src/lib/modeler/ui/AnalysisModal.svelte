@@ -581,7 +581,7 @@
 		line-height: 1.4;
 	}
 	.report-notes li { display: flex; gap: 0.5rem; align-items: flex-start; }
-	/* The book's dot: a lantern-orange circle with a bold white number */
+	/* The book's dot, in dusk blue, with a bold white number */
 	.report-note-num {
 		flex-shrink: 0;
 		display: inline-flex;
@@ -590,7 +590,7 @@
 		width: 1.35rem;
 		height: 1.35rem;
 		border-radius: 50%;
-		background: var(--color-new);
+		background: var(--color-note);
 		color: #fff;
 		font-size: 0.72rem;
 		font-weight: 800;

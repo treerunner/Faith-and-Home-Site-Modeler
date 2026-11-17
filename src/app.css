@@ -28,6 +28,7 @@
   --color-parcel:    var(--fh-black);
   --color-grid:      #d9d8d7;
   --color-selection: var(--fh-dusk);
+  --color-note:      var(--fh-dusk);  /* numbered note dots: orange is new construction in the model */
   --color-cut:       #a29e97;
   --color-backdrop-mid: #e9e6df;
   --color-backdrop-top: #b9b4ab;

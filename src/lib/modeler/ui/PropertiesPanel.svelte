@@ -1389,7 +1389,7 @@
 	.place-note--active { border-color: var(--color-selection); background: var(--fh-dusk-tint); }
 	.place-note:disabled { opacity: 0.5; cursor: default; }
 
-	/* The book's dot, small: a lantern-orange circle with a bold white number */
+	/* The book's dot, small: a dusk-blue circle with a bold white number */
 	.note-num {
 		flex-shrink: 0;
 		display: inline-flex;
@@ -1398,7 +1398,7 @@
 		width: 20px;
 		height: 20px;
 		border-radius: 50%;
-		background: var(--color-new);
+		background: var(--color-note);
 		color: #fff;
 		font-size: 0.68rem;
 		font-weight: 800;
@@ -1422,7 +1422,7 @@
 		margin: -0.3rem;
 		border-radius: 4px;
 	}
-	.note--hover { background: var(--fh-lantern-tint); }
+	.note--hover { background: var(--fh-dusk-tint); }
 
 	.note-input {
 		flex: 1;

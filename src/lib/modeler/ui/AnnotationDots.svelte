@@ -91,7 +91,7 @@
 {/each}
 
 <style>
-	/* As in the book: a lantern-orange circle with a bold white number */
+	/* The book's dot, in dusk blue (orange is new construction in the model), with a bold white number */
 	.note-dot {
 		position: fixed;
 		z-index: 4; /* over the canvas and labels, under the drawer */
@@ -101,7 +101,7 @@
 		padding: 0;
 		border: 2px solid #fff;
 		border-radius: 50%;
-		background: var(--color-new);
+		background: var(--color-note);
 		color: #fff;
 		font: inherit;
 		font-size: 0.85rem;
@@ -115,5 +115,5 @@
 	}
 	.note-dot--draggable { cursor: grab; }
 	.note-dot--draggable:active { cursor: grabbing; }
-	.note-dot--hover { outline: 3px solid color-mix(in srgb, var(--color-new) 40%, transparent); }
+	.note-dot--hover { outline: 3px solid color-mix(in srgb, var(--color-note) 40%, transparent); }
 </style>
