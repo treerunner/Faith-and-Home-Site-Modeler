@@ -93,8 +93,8 @@ function withNotes(source: HTMLCanvasElement, notes: Annotation[], camera: THREE
 }
 
 // Notes: the plan's, to draw their dots on the picture (the analysis); none for a clean one.
-// View: the canvas to draw with, the editor's unless comparing.
-export function capturePlanImage(plan: Plan, notes: Annotation[] = [], view: SceneView = mainView): string | null {
+// View: the canvas to draw with, the editor's unless comparing. Aspect: the picture's width / height.
+export function capturePlanImage(plan: Plan, notes: Annotation[] = [], view: SceneView = mainView, aspect = 1): string | null {
 	const { renderer, scene, planCamera } = view;
 	if (!renderer || !planCamera || !scene) return null;
 
@@ -111,17 +111,22 @@ export function capturePlanImage(plan: Plan, notes: Annotation[] = [], view: Sce
 	const { left, right, top, bottom } = planCamera;
 	const position = planCamera.position.clone();
 
+	// The picture is `aspect` (width / height), the frame it's shown in; the canvas has its own
+	// shape, so the content is fitted to the picture, the canvas rendered around it, then cropped
+	const canvas = renderer.domElement;
+	const canvasAspect = canvas.width / canvas.height;
 	if (xs.length > 0) {
 		const minX = Math.min(...xs) - PAD, maxX = Math.max(...xs) + PAD;
 		const minZ = Math.min(...zs) - PAD, maxZ = Math.max(...zs) + PAD;
 		const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
 
-		const size = renderer.getSize(new THREE.Vector2());
-		const aspect = size.x / size.y;
 		let halfW = (maxX - minX) / 2;
 		let halfD = (maxZ - minZ) / 2;
 		if (halfW / halfD > aspect) halfD = halfW / aspect;
 		else halfW = halfD * aspect;
+		// Out to the canvas's shape, around the picture
+		if (canvasAspect > aspect) halfW = halfD * canvasAspect;
+		else halfD = halfW / canvasAspect;
 
 		// Center the camera on the content rather than offsetting the frustum from a panned view
 		planCamera.position.set(cx, position.y, cz);
@@ -134,17 +139,23 @@ export function capturePlanImage(plan: Plan, notes: Annotation[] = [], view: Sce
 	}
 
 	renderer.render(scene, planCamera);
-	let dataURL: string;
+	let picture: HTMLCanvasElement = canvas;
 	if (notes.length) {
-		const out = document.createElement('canvas');
-		out.width = renderer.domElement.width;
-		out.height = renderer.domElement.height;
-		const ctx = out.getContext('2d')!;
-		ctx.drawImage(renderer.domElement, 0, 0);
+		picture = document.createElement('canvas');
+		picture.width = canvas.width;
+		picture.height = canvas.height;
+		const ctx = picture.getContext('2d')!;
+		ctx.drawImage(canvas, 0, 0);
 		// Sized to the picture, which the report shows small
-		drawDots(ctx, notes, planCamera, false, out.width / 320);
-		dataURL = out.toDataURL('image/png');
-	} else dataURL = renderer.domElement.toDataURL('image/png');
+		drawDots(ctx, notes, planCamera, false, Math.min(canvas.width, canvas.height * aspect) / 320, undefined, view);
+	}
+	// The middle of the canvas, in the picture's shape
+	const [w, h] = canvasAspect > aspect ? [Math.round(canvas.height * aspect), canvas.height] : [canvas.width, Math.round(canvas.width / aspect)];
+	const out = document.createElement('canvas');
+	out.width = w;
+	out.height = h;
+	out.getContext('2d')!.drawImage(picture, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h, 0, 0, w, h);
+	const dataURL = out.toDataURL('image/png');
 
 	// Restore camera and grid before anything else can paint.
 	// All of this is synchronous in one JS task, so the browser never
