@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
 	boardHalfFor,
-	grownBuildings,
+	foamOff,
+	widerBoard,
 	offsetPolygon,
 	partOutline,
 	splitPart,
@@ -249,14 +250,29 @@ describe('boardHalfFor', () => {
 	});
 });
 
-describe('grownBuildings', () => {
-	const box = (x: number, y: number, id: string) => ({ id, polygon: [[x - 5, y - 5], [x + 5, y - 5], [x + 5, y + 5], [x - 5, y + 5]] as Pt[] });
+describe('widerBoard', () => {
+	it('steps up to the largest board, then stops', () => {
+		expect(widerBoard(150)).toBe(250);
+		expect(widerBoard(190)).toBe(250);
+		expect(widerBoard(250)).toBe(400);
+		expect(widerBoard(400)).toBeNull();
+	});
+});
 
-	it("keeps the old board as it was and adds only the new ring's buildings", () => {
-		// The church at the origin became chipboard and left the old foam
-		const old = [box(100, 0, 'neighbor')];
-		const fetched = [box(0, 0, 'church again'), box(100, 0, 'neighbor again'), box(200, 0, 'new ring'), box(149, 0, 'edge again')];
-		expect(grownBuildings(old, 150, fetched).map((b) => b.id)).toEqual(['neighbor', 'new ring']);
+describe('foamOff', () => {
+	const box = (x: number, y: number, w: number, d: number): Pt[] => [[x, y], [x + w, y], [x + w, y + d], [x, y + d]];
+
+	it('drops foam standing on a footprint, even when the board moved it by a hair', () => {
+		const church = { id: 'church', polygon: box(100.0000001, 0, 40, 30) };
+		const neighbor = { id: 'neighbor', polygon: box(200, 0, 10, 10) };
+		expect(foamOff([church, neighbor], [box(100, 0, 40, 30)]).map((b) => b.id)).toEqual(['neighbor']);
+	});
+
+	it('drops a U whose center is outside itself', () => {
+		const u: Pt[] = [[0, 0], [30, 0], [30, 20], [20, 20], [20, 5], [10, 5], [10, 20], [0, 20]];
+		const foam = { id: 'u', polygon: u.map(([x, y]): Pt => [x + 1e-7, y]) };
+		expect(pointInPolygon(polygonCentroid(u), u)).toBe(false);
+		expect(foamOff([foam], [u])).toEqual([]);
 	});
 });
 

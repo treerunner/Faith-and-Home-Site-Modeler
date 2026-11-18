@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { ContextResponse, Suggestion } from '../../lib/modeler/address';
 import type { Terrain } from '../../lib/modeler/types';
 import { decodePng } from '../../lib/server/png';
+import { toLocal } from '../../lib/modeler/geo';
 
 // Address mode with our own /api/geocode*, /api/context and /api/terrain mocked, so this never
 // depends on Photon, Census, Overture, PASDA or USGS being up. Those are covered by fixture tests in
@@ -33,6 +34,20 @@ const CONTEXT: ContextResponse = {
 	parcelsFailed: false,
 };
 
+// The neighborhood as fetched around the requested origin: the board moves to the parcel's
+// center once there is one, and the mock's buildings must stay put on the ground
+function contextAt(context: ContextResponse, url: string): ContextResponse {
+	const q = new URL(url).searchParams;
+	const [dx, dy] = toLocal(Number(q.get('lat')), Number(q.get('lng')), PLACE);
+	const at = (pts: Pt[]) => pts.map(([x, y]): Pt => [x - dx, y - dy]);
+	return {
+		...context,
+		buildings: context.buildings.map((b) => ({ ...b, polygon: at(b.polygon) })),
+		roads: context.roads.map((r) => ({ ...r, line: at(r.line) })),
+		parcels: context.parcels.map((p) => ({ ...p, polygon: at(p.polygon) })),
+	};
+}
+
 // A hillside for a 150 m board at 5 m, like the Lehigh Valley's: rising 1 m every 20 m to the
 // south, with a knoll to the northeast. About 24 m of relief: 2 m layers.
 function hillside(half = 150): Terrain {
@@ -51,15 +66,15 @@ function hillside(half = 150): Terrain {
 async function mockAddressApi(page: Page, context: ContextResponse, terrain: Terrain | null = null) {
 	await page.route('**/api/geocode/suggest?**', (r) => r.fulfill({ json: [PLACE] }));
 	await page.route('**/api/geocode?**', (r) => r.fulfill({ json: PLACE }));
-	await page.route('**/api/context?**', (r) => r.fulfill({ json: context }));
+	await page.route('**/api/context?**', (r) => r.fulfill({ json: contextAt(context, r.request().url()) }));
 	await page.route('**/api/terrain?**', (r) => r.fulfill({ json: { terrain } }));
 }
 
 // Plan view is centered on the origin; site meters to page pixels at the current zoom
-async function clickSite(page: Page, x: number, y: number, viewHeight: number) {
+async function clickSite(page: Page, x: number, y: number, viewHeight: number, boardHalf = 150) {
 	const box = (await page.locator('.canvas-area canvas').boundingBox())!;
-	// A wide canvas shows no more than the 300 m board across, so the view may be shorter
-	const scale = box.height / Math.min(viewHeight, (300 * box.height) / box.width);
+	// A wide canvas shows no more than the board across, so the view may be shorter
+	const scale = box.height / Math.min(viewHeight, (2 * boardHalf * box.height) / box.width);
 	await page.mouse.click(box.x + box.width / 2 + x * scale, box.y + box.height / 2 + y * scale);
 }
 
@@ -156,26 +171,70 @@ test('where there is no parcel data, trace the lot', async ({ page }) => {
 	await expect(page.getByRole('button', { name: 'Data credits' })).toHaveCount(0);
 });
 
+test('a property past the board with no parcel data: widen the board, then trace it', async ({ page }) => {
+	// The church stands 190 m west of where the address lands, off the default board (west: the drawer covers the east)
+	const farChurch = { id: 'far', polygon: rect(-210, -20, 40, 50), height: 12, tags: { building: 'church' }, name: 'First Church' };
+	const halves: (string | null)[] = [];
+	await page.route('**/api/geocode/suggest?**', (r) => r.fulfill({ json: [PLACE] }));
+	await page.route('**/api/terrain?**', (r) => r.fulfill({ json: { terrain: null } }));
+	await page.route('**/api/context?**', (r) => {
+		const half = new URL(r.request().url()).searchParams.get('half');
+		halves.push(half);
+		const buildings = half ? [...CONTEXT.buildings, farChurch] : CONTEXT.buildings;
+		return r.fulfill({ json: contextAt({ ...CONTEXT, buildings, parcels: [], sources: ['overture'] }, r.request().url()) });
+	});
+	await page.goto('/modeler');
+	await page.getByLabel('Find an address').fill('100 Main');
+	await page.getByRole('option', { name: PLACE.label }).click();
+	await expect(page.getByText('No parcel data here. Click to trace your lot.')).toBeVisible();
+
+	// One step up, and the whole board shows
+	await page.getByRole('button', { name: 'Widen the board' }).click();
+	await expect.poll(() => halves).toEqual([null, '250']);
+	await expect(page.getByText('Widening the board…')).toHaveCount(0);
+	await page.waitForTimeout(300);
+	await page.screenshot({ path: 'tests/screenshots/widen-board.png' });
+
+	// Still tracing: the lot now reaches the far church
+	for (const [x, y] of [[-220, -30], [20, -30], [20, 40], [-220, 40], [-220, -30]] as Pt[]) await clickSite(page, x, y, 1e9, 250);
+	// The neighbor's house is on the lot too. The lot is well off the address, so the board moves to
+	// its middle and reloads there, no smaller than it was
+	await expect(page.getByText('Add the 4 buildings on this parcel to Existing conditions?')).toBeVisible();
+	await expect(page.getByText('Grace Church, Parish hall and 1 more')).toBeVisible();
+	expect(halves).toEqual([null, '250', '250']);
+	await page.getByRole('button', { name: 'Add buildings' }).click();
+	await page.waitForTimeout(300);
+	await page.screenshot({ path: 'tests/screenshots/centered-board.png' });
+	await expect(page.locator('.struct-item')).toHaveCount(4);
+	await expect(page.getByRole('button', { name: 'Center the board on the parcel' })).toHaveCount(0); // already is
+
+	// The address panel can still go to the largest board, and no further
+	await page.getByLabel('Address').getByRole('button', { name: 'Widen the board' }).click();
+	await expect.poll(() => halves).toEqual([null, '250', '250', '400']);
+	await expect(page.getByLabel('Address').getByText('Widening the board…')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Widen the board' })).toHaveCount(0);
+});
+
 test('a large parcel grows the board to fit it', async ({ page }) => {
-	// A long rural lot reaching 150 m east: past the 120 m edge margin of the default board
-	const bigLot = rect(-20, -20, 170, 40);
+	// A long rural lot reaching 280 m east of the address: centered on it, it still needs a bigger board
+	const bigLot = rect(-20, -20, 300, 40);
 	const halves: (string | null)[] = [];
 	await page.route('**/api/geocode/suggest?**', (r) => r.fulfill({ json: [PLACE] }));
 	await page.route('**/api/terrain?**', (r) => r.fulfill({ json: { terrain: null } }));
 	await page.route('**/api/context?**', async (r) => {
 		halves.push(new URL(r.request().url()).searchParams.get('half'));
 		if (halves.length > 1) await new Promise((done) => setTimeout(done, 300)); // let the banner show
-		await r.fulfill({ json: { ...CONTEXT, parcels: [{ id: 'big', address: 'FARM RD', polygon: bigLot }] } });
+		await r.fulfill({ json: contextAt({ ...CONTEXT, parcels: [{ id: 'big', address: 'FARM RD', polygon: bigLot }] }, r.request().url()) });
 	});
 	await page.goto('/modeler');
 	await page.getByLabel('Find an address').fill('100 Main');
 	await page.getByRole('option', { name: PLACE.label }).click();
 	await page.getByRole('button', { name: 'Use this parcel' }).click();
 
-	await expect(page.getByText('This parcel is large. Loading more of the neighborhood…')).toBeVisible();
+	await expect(page.getByText('Loading the neighborhood around this parcel…')).toBeVisible();
 	// The long lot also takes in the house 47 m east
 	await expect(page.getByText('Add the 3 buildings on this parcel to Existing conditions?')).toBeVisible();
-	// First load at the default board; one reload sized to the parcel: 150 m + 60 m margin
+	// First load at the default board; one reload around the lot's middle, sized to it: 150 m + 60 m margin
 	expect(halves).toEqual([null, '210']);
 });
 

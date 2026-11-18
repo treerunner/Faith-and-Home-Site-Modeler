@@ -59,6 +59,13 @@ export function boardHalfFor(parcel: Pt[], current: number): number | null {
 	return Math.min(MAX_BOARD_HALF, Math.ceil(Math.max(extent + BOARD_GROW_MARGIN, inView) / 10) * 10);
 }
 
+// The next board up when the user widens it by hand (the property runs past the edge and there's
+// no parcel data to size the board from), or null at the largest
+const BOARD_STEPS = [CONTEXT_HALF_SIZE, 250, MAX_BOARD_HALF];
+export function widerBoard(current: number): number | null {
+	return BOARD_STEPS.find((h) => h > current) ?? null;
+}
+
 // ── Polygons ────────────────────────────────────────────────────────────────
 
 // Drops a repeated closing vertex (GeoJSON and OSM rings repeat the first point).
@@ -321,15 +328,15 @@ export function buildingsInParcel<B extends { polygon: Pt[] }>(buildings: B[], p
 	return buildings.filter((b) => pointInPolygon(polygonCentroid(b.polygon), parcel));
 }
 
-// A grown board's buildings: the old board's exactly as they were (the parcel's own left the
-// foam when they became chipboard, and must not come back), plus the fetched ones in the new
-// ring around it. A building belongs to the board its center is on.
-export function grownBuildings<B extends { polygon: Pt[] }>(old: B[], oldHalf: number, fetched: B[]): B[] {
-	const onOld = (b: B) => {
-		const [x, y] = polygonCentroid(b.polygon);
-		return Math.abs(x) <= oldHalf && Math.abs(y) <= oldHalf;
-	};
-	return [...old, ...fetched.filter((b) => !onOld(b))];
+// Foam that isn't standing on any of the footprints: a building that became chipboard leaves the
+// foam. Matched by where it stands, since a reloaded or shifted board's polygons differ by a hair.
+// A U or L can have its center outside itself, so a footprint whose center is the foam's counts too.
+export function foamOff<B extends { polygon: Pt[] }>(buildings: B[], footprints: Pt[][]): B[] {
+	const centers = footprints.map(polygonCentroid);
+	return buildings.filter((b) => {
+		const c = polygonCentroid(b.polygon);
+		return !footprints.some((f, i) => pointInPolygon(c, f) || Math.hypot(c[0] - centers[i][0], c[1] - centers[i][1]) < 1);
+	});
 }
 
 // Joins neighboring parcels into one outline, or null if they don't form a single piece

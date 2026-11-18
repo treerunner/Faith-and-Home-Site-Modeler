@@ -49,12 +49,20 @@
 			{:else}
 				{drawing.points.length} points. Click the first point to close.
 			{/if}
+			{#if store.boardState === 'loading'}
+				<span class="banner__detail">Widening the board…</span>
+			{:else if store.boardState === 'failed'}
+				<span class="banner__detail banner__detail--notice">Couldn't load more of the neighborhood.</span>
+			{/if}
 		</span>
+		{#if store.canWidenBoard && store.boardState !== 'loading'}
+			<button class="banner__btn" onclick={() => store.widenBoard()} title="Load more of the neighborhood, for a lot that runs past the board's edge">Widen the board</button>
+		{/if}
 		<button class="banner__btn banner__btn--quiet" onclick={cancelDrawing}>{candidates ? 'Back to parcels' : 'Skip'}</button>
 	</div>
 {:else if store.setup?.growing}
 	<div class="banner" role="status">
-		<span class="banner__text">This parcel is large. Loading more of the neighborhood…</span>
+		<span class="banner__text">Loading the neighborhood around this parcel…</span>
 	</div>
 {:else if prefill}
 	<div class="banner" role="dialog" aria-label="Add buildings">

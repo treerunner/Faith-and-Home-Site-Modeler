@@ -42,7 +42,7 @@
 		store.viewMode = 'plan';
 		tick().then(() =>
 			requestAnimationFrame(() => {
-				images = { a: capturePlanImage(a, a.annotations, viewA), b: capturePlanImage(b, b.annotations, viewB) };
+				images = { a: capturePlanImage(a, a.annotations, viewA, 4 / 3), b: capturePlanImage(b, b.annotations, viewB, 4 / 3) };
 			}),
 		);
 		return () => (store.viewMode = before);
