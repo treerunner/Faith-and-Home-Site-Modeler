@@ -62,7 +62,7 @@
 	</div>
 {:else if store.setup?.growing}
 	<div class="banner" role="status">
-		<span class="banner__text">This parcel is large. Loading more of the neighborhood…</span>
+		<span class="banner__text">Loading the neighborhood around this parcel…</span>
 	</div>
 {:else if prefill}
 	<div class="banner" role="dialog" aria-label="Add buildings">

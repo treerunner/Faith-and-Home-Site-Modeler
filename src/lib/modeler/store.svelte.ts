@@ -7,7 +7,6 @@ import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextRespo
 import {
 	boardHalfFor,
 	widerBoard,
-	grownBuildings,
 	buildingsInParcel,
 	clipToPart,
 	mergeParcels,
@@ -31,6 +30,7 @@ import {
 } from './geo';
 import { partFootprint, polygonArea, programOf, sameMix } from './metrics';
 import { clampView, contentBounds, DEFAULT_VIEW, fitView, panBy, zoomAt, type PlanView } from './view';
+import { centeredBoardHalf, recenterOffset, reloadedBuildings, shiftSite } from './recenter';
 import { DEFAULT_PLAN_NAME } from './serialize';
 import { assignPlanSlugs } from './slug';
 import { freshStructures, storedSite, syncPlan } from './existing';
@@ -1531,9 +1531,42 @@ class ModelerStore {
 		this.#pushUndo();
 		this.site.parcel = polygon;
 		this.mode = { type: 'idle' };
-		this.fitPlan();
 		const version = ++this.#parcelVersion;
-		void this.#growBoardFor(polygon, version).then(() => this.#offerPrefill(polygon, version));
+		const moved = this.#recenter();
+		this.fitPlan();
+		const load = moved ? this.#loadBoard(Math.max(centeredBoardHalf(this.site.parcel!), this.boardHalf), version, false, moved) : this.#growBoardFor(polygon, version);
+		void load.then(() => this.#offerPrefill(this.site.parcel!, version));
+	}
+
+	// Moves the origin to the parcel's center when it's well off it (an address at the street of a
+	// big campus), shifting everything so nothing moves on the ground. Returns how far, or null.
+	#recenter(): [number, number] | null {
+		const d = recenterOffset(this.site.parcel);
+		if (!d || !this.site.origin) return null;
+		this.site = shiftSite(copy(this.site), d);
+		if (this.setup) {
+			const c = this.setup.context;
+			const at = (pts: [number, number][]) => pts.map(([x, y]): [number, number] => [x - d[0], y - d[1]]);
+			this.setup = {
+				...this.setup,
+				context: { ...c, buildings: c.buildings.map((b) => ({ ...b, polygon: at(b.polygon) })), parcels: c.parcels.map((p) => ({ ...p, polygon: at(p.polygon) })) },
+			};
+		}
+		void this.loadTerrain(); // the old grid was around the old origin
+		return d;
+	}
+
+	// Sites whose parcel is well off the board's center (set before boards followed the parcel)
+	get canCenterBoard(): boolean {
+		return this.site.mode === 'address' && recenterOffset(this.site.parcel) !== null && !!this.site.origin;
+	}
+
+	centerBoard() {
+		if (!this.canCenterBoard) return;
+		this.#pushUndo();
+		const moved = this.#recenter();
+		this.fitPlan();
+		if (moved) void this.#loadBoard(Math.max(centeredBoardHalf(this.site.parcel!), this.boardHalf), this.#parcelVersion, false, moved);
 	}
 
 	// A bigger board can be loaded by hand until the largest: for a property that runs past the
@@ -1548,40 +1581,42 @@ class ModelerStore {
 	widenBoard() {
 		const parcel = this.site.parcel;
 		const half = (parcel?.length ? boardHalfFor(parcel, this.boardHalf) : null) ?? widerBoard(this.boardHalf);
-		if (half) void this.#growBoard(half, this.#parcelVersion, true);
+		if (half) void this.#loadBoard(half, this.#parcelVersion, true);
 	}
 
 	#growBoardFor(parcel: [number, number][], version: number) {
 		const half = boardHalfFor(parcel, this.boardHalf);
-		return half ? this.#growBoard(half, version, false) : Promise.resolve();
+		return half ? this.#loadBoard(half, version, false) : Promise.resolve();
 	}
 
 	// A parcel near the board's edge (a big rural lot), or tall enough that a wide screen sees past
-	// the board, gets a bigger board, as does one widened by hand: the neighborhood is reloaded once
-	// at that size. If that fails, the current board is kept.
-	async #growBoard(half: number, version: number, showBoard: boolean) {
+	// the board, gets a bigger board, as does one widened by hand; a board moved to the parcel's
+	// center (`moved`, how far) is reloaded around it at the size the parcel needs, never smaller. The neighborhood
+	// is fetched once at that size. If that fails, the current board is kept.
+	async #loadBoard(half: number, version: number, showBoard: boolean, moved: [number, number] | null = null) {
 		const origin = this.site.origin;
-		if (!origin || half <= this.boardHalf) return;
+		if (!origin || (!moved && half <= this.boardHalf)) return;
 		this.boardState = 'loading';
 		if (this.setup) this.setup = { ...this.setup, growing: true };
 		try {
 			const context = await fetchContext(origin.lat, origin.lng, half);
 			if (version !== this.#parcelVersion) return; // the parcel changed while loading
 			const fetched = context.buildings.map((b) => ({ polygon: b.polygon, height: b.height }));
+			const oldCenter: [number, number] = moved ? [-moved[0], -moved[1]] : [0, 0];
 			this.site.context = {
-				buildings: grownBuildings(this.site.context.buildings, this.boardHalf, fetched),
+				buildings: reloadedBuildings(this.site.context.buildings, this.boardHalf, oldCenter, half, fetched),
 				roads: context.roads,
 				sources: this.site.context.sources, // parcel credit stays with the original fetch
-				buildingSources: context.buildingSources,
+				buildingSources: [...new Set([...(this.site.context.buildingSources ?? []), ...context.buildingSources])].sort(),
 				halfSize: half,
 			};
-			void this.loadTerrain(); // the bigger board needs its own
+			void this.loadTerrain(); // the new board needs its own
 			if (this.setup) this.setup = { ...this.setup, context: { ...context, parcels: this.setup.context.parcels } };
 			this.boardState = 'idle';
 			if (showBoard) this.planView = fitView({ minX: -half, maxX: half, minY: -half, maxY: half }, this.#planAspect || 1, half);
 			else this.fitPlan();
 		} catch (e) {
-			console.error('could not grow the board', e);
+			console.error('could not load the board', e);
 			this.boardState = 'failed';
 			if (this.setup) this.setup = { ...this.setup, growFailed: true };
 		} finally {
