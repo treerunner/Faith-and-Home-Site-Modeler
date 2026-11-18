@@ -131,11 +131,11 @@
 			{:else if !store.site.context.terrain && !store.readOnly}
 				<button class="address__btn address__terrain" onclick={() => store.loadTerrain()}>Add terrain</button>
 			{/if}
-			<!-- A board too small for a wide screen: sites set up before boards were sized for one -->
+			<!-- More of the neighborhood: a property that runs past the board's edge, or a board too small for a wide screen (while tracing, the banner offers it) -->
 			{#if store.boardState === 'loading'}
 				<p class="address__note address__note--busy" role="status">Widening the board…</p>
-			{:else if store.boardTooSmall && !store.readOnly && store.onSite}
-				<button class="address__btn address__terrain" onclick={() => store.widenBoard()} title="Load more of the neighborhood, so the board fills a wide screen">Widen the board</button>
+			{:else if store.canWidenBoard && !store.readOnly && store.mode.type !== 'drawingParcel'}
+				<button class="address__btn address__terrain" onclick={() => store.widenBoard()} title="Load more of the neighborhood, for a property that runs past the board's edge">Widen the board</button>
 				{#if store.boardState === 'failed'}
 					<p class="address__note" role="status">Couldn't load more of the neighborhood. Try again later.</p>
 				{/if}

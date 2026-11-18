@@ -56,10 +56,10 @@ async function mockAddressApi(page: Page, context: ContextResponse, terrain: Ter
 }
 
 // Plan view is centered on the origin; site meters to page pixels at the current zoom
-async function clickSite(page: Page, x: number, y: number, viewHeight: number) {
+async function clickSite(page: Page, x: number, y: number, viewHeight: number, boardHalf = 150) {
 	const box = (await page.locator('.canvas-area canvas').boundingBox())!;
-	// A wide canvas shows no more than the 300 m board across, so the view may be shorter
-	const scale = box.height / Math.min(viewHeight, (300 * box.height) / box.width);
+	// A wide canvas shows no more than the board across, so the view may be shorter
+	const scale = box.height / Math.min(viewHeight, (2 * boardHalf * box.height) / box.width);
 	await page.mouse.click(box.x + box.width / 2 + x * scale, box.y + box.height / 2 + y * scale);
 }
 
@@ -154,6 +154,45 @@ test('where there is no parcel data, trace the lot', async ({ page }) => {
 	await page.getByRole('button', { name: 'Clear' }).click();
 	await expect(page.getByLabel('Find an address')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Data credits' })).toHaveCount(0);
+});
+
+test('a property past the board with no parcel data: widen the board, then trace it', async ({ page }) => {
+	// The church stands 190 m west of where the address lands, off the default board (west: the drawer covers the east)
+	const farChurch = { id: 'far', polygon: rect(-210, -20, 40, 50), height: 12, tags: { building: 'church' }, name: 'First Church' };
+	const halves: (string | null)[] = [];
+	await page.route('**/api/geocode/suggest?**', (r) => r.fulfill({ json: [PLACE] }));
+	await page.route('**/api/terrain?**', (r) => r.fulfill({ json: { terrain: null } }));
+	await page.route('**/api/context?**', (r) => {
+		const half = new URL(r.request().url()).searchParams.get('half');
+		halves.push(half);
+		const buildings = half ? [...CONTEXT.buildings, farChurch] : CONTEXT.buildings;
+		return r.fulfill({ json: { ...CONTEXT, buildings, parcels: [], sources: ['overture'] } });
+	});
+	await page.goto('/modeler');
+	await page.getByLabel('Find an address').fill('100 Main');
+	await page.getByRole('option', { name: PLACE.label }).click();
+	await expect(page.getByText('No parcel data here. Click to trace your lot.')).toBeVisible();
+
+	// One step up, and the whole board shows
+	await page.getByRole('button', { name: 'Widen the board' }).click();
+	await expect.poll(() => halves).toEqual([null, '250']);
+	await expect(page.getByText('Widening the board…')).toHaveCount(0);
+	await page.waitForTimeout(300);
+	await page.screenshot({ path: 'tests/screenshots/widen-board.png' });
+
+	// Still tracing: the lot now reaches the far church
+	for (const [x, y] of [[-220, -30], [20, -30], [20, 40], [-220, 40], [-220, -30]] as Pt[]) await clickSite(page, x, y, 1e9, 250);
+	// The neighbor's house is on the lot too; the closed lot then sizes the board itself
+	await expect(page.getByText('Add the 4 buildings on this parcel to Existing conditions?')).toBeVisible();
+	await expect(page.getByText('Grace Church, Parish hall and 1 more')).toBeVisible();
+
+	// The address panel can still go to the largest board, and no further
+	await page.getByRole('button', { name: 'Skip' }).click();
+	expect(halves).toEqual([null, '250', '290']);
+	await page.getByLabel('Address').getByRole('button', { name: 'Widen the board' }).click();
+	await expect.poll(() => halves).toEqual([null, '250', '290', '400']);
+	await expect(page.getByLabel('Address').getByText('Widening the board…')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Widen the board' })).toHaveCount(0);
 });
 
 test('a large parcel grows the board to fit it', async ({ page }) => {

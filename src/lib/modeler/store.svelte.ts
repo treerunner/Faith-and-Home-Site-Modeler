@@ -6,6 +6,7 @@ import { terrainModel, terrainSurface, type TerrainModel, type TerrainSurface } 
 import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
 import {
 	boardHalfFor,
+	widerBoard,
 	grownBuildings,
 	buildingsInParcel,
 	clipToPart,
@@ -1535,25 +1536,32 @@ class ModelerStore {
 		void this.#growBoardFor(polygon, version).then(() => this.#offerPrefill(polygon, version));
 	}
 
-	// Sites set up before boards were sized for wide screens may need a bigger one
-	get boardTooSmall(): boolean {
-		const parcel = this.site.parcel;
-		return this.site.mode === 'address' && !!this.site.origin && !!parcel?.length && boardHalfFor(parcel, this.boardHalf) !== null;
+	// A bigger board can be loaded by hand until the largest: for a property that runs past the
+	// edge with no parcel data to size it from, or a site set up before boards fit wide screens
+	get canWidenBoard(): boolean {
+		return this.site.mode === 'address' && !!this.site.origin && widerBoard(this.boardHalf) !== null;
 	}
 
 	boardState = $state<'idle' | 'loading' | 'failed'>('idle');
 
+	// The size the parcel needs if it needs more, else the next step up; then the whole board is shown
 	widenBoard() {
-		if (this.site.parcel?.length) void this.#growBoardFor(this.site.parcel, this.#parcelVersion);
+		const parcel = this.site.parcel;
+		const half = (parcel?.length ? boardHalfFor(parcel, this.boardHalf) : null) ?? widerBoard(this.boardHalf);
+		if (half) void this.#growBoard(half, this.#parcelVersion, true);
+	}
+
+	#growBoardFor(parcel: [number, number][], version: number) {
+		const half = boardHalfFor(parcel, this.boardHalf);
+		return half ? this.#growBoard(half, version, false) : Promise.resolve();
 	}
 
 	// A parcel near the board's edge (a big rural lot), or tall enough that a wide screen sees past
-	// the board, gets a bigger board: the neighborhood is reloaded once at a size that fits it. If
-	// that fails, the current board is kept.
-	async #growBoardFor(parcel: [number, number][], version: number) {
-		const half = boardHalfFor(parcel, this.boardHalf);
+	// the board, gets a bigger board, as does one widened by hand: the neighborhood is reloaded once
+	// at that size. If that fails, the current board is kept.
+	async #growBoard(half: number, version: number, showBoard: boolean) {
 		const origin = this.site.origin;
-		if (!half || !origin) return;
+		if (!origin || half <= this.boardHalf) return;
 		this.boardState = 'loading';
 		if (this.setup) this.setup = { ...this.setup, growing: true };
 		try {
@@ -1570,7 +1578,8 @@ class ModelerStore {
 			void this.loadTerrain(); // the bigger board needs its own
 			if (this.setup) this.setup = { ...this.setup, context: { ...context, parcels: this.setup.context.parcels } };
 			this.boardState = 'idle';
-			this.fitPlan();
+			if (showBoard) this.planView = fitView({ minX: -half, maxX: half, minY: -half, maxY: half }, this.#planAspect || 1, half);
+			else this.fitPlan();
 		} catch (e) {
 			console.error('could not grow the board', e);
 			this.boardState = 'failed';

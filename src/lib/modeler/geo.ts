@@ -59,6 +59,13 @@ export function boardHalfFor(parcel: Pt[], current: number): number | null {
 	return Math.min(MAX_BOARD_HALF, Math.ceil(Math.max(extent + BOARD_GROW_MARGIN, inView) / 10) * 10);
 }
 
+// The next board up when the user widens it by hand (the property runs past the edge and there's
+// no parcel data to size the board from), or null at the largest
+const BOARD_STEPS = [CONTEXT_HALF_SIZE, 250, MAX_BOARD_HALF];
+export function widerBoard(current: number): number | null {
+	return BOARD_STEPS.find((h) => h > current) ?? null;
+}
+
 // ── Polygons ────────────────────────────────────────────────────────────────
 
 // Drops a repeated closing vertex (GeoJSON and OSM rings repeat the first point).

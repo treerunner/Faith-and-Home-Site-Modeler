@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	boardHalfFor,
+	widerBoard,
 	grownBuildings,
 	offsetPolygon,
 	partOutline,
@@ -246,6 +247,15 @@ describe('boardHalfFor', () => {
 	it('stops at the largest board', () => {
 		expect(boardHalfFor(square(900), 150)).toBe(400);
 		expect(boardHalfFor(square(900), 400)).toBeNull();
+	});
+});
+
+describe('widerBoard', () => {
+	it('steps up to the largest board, then stops', () => {
+		expect(widerBoard(150)).toBe(250);
+		expect(widerBoard(190)).toBe(250);
+		expect(widerBoard(250)).toBe(400);
+		expect(widerBoard(400)).toBeNull();
 	});
 });
 
