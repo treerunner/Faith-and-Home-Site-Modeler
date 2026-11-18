@@ -6,6 +6,7 @@ import { terrainModel, terrainSurface, type TerrainModel, type TerrainSurface } 
 import { fetchContext, fetchTerrain, type ContextBuildingData, type ContextResponse, type Suggestion } from './address';
 import {
 	boardHalfFor,
+	foamOff,
 	widerBoard,
 	buildingsInParcel,
 	clipToPart,
@@ -1604,7 +1605,11 @@ class ModelerStore {
 			const fetched = context.buildings.map((b) => ({ polygon: b.polygon, height: b.height }));
 			const oldCenter: [number, number] = moved ? [-moved[0], -moved[1]] : [0, 0];
 			this.site.context = {
-				buildings: reloadedBuildings(this.site.context.buildings, this.boardHalf, oldCenter, half, fetched),
+				// The property's buildings are chipboard: a reload doesn't bring back their foam
+				buildings: foamOff(
+					reloadedBuildings(this.site.context.buildings, this.boardHalf, oldCenter, half, fetched),
+					this.site.existing.structures.flatMap((s) => s.parts.map(partOutline)),
+				),
 				roads: context.roads,
 				sources: this.site.context.sources, // parcel credit stays with the original fetch
 				buildingSources: [...new Set([...(this.site.context.buildingSources ?? []), ...context.buildingSources])].sort(),
@@ -1661,8 +1666,7 @@ class ModelerStore {
 				heightSource: source,
 			});
 		}
-		const added = new Set(prefill.map((b) => JSON.stringify(b.polygon)));
-		this.site.context.buildings = this.site.context.buildings.filter((b) => !added.has(JSON.stringify(b.polygon)));
+		this.site.context.buildings = foamOff(this.site.context.buildings, prefill.map((b) => b.polygon));
 		this.setup = null;
 	}
 

@@ -328,6 +328,17 @@ export function buildingsInParcel<B extends { polygon: Pt[] }>(buildings: B[], p
 	return buildings.filter((b) => pointInPolygon(polygonCentroid(b.polygon), parcel));
 }
 
+// Foam that isn't standing on any of the footprints: a building that became chipboard leaves the
+// foam. Matched by where it stands, since a reloaded or shifted board's polygons differ by a hair.
+// A U or L can have its center outside itself, so a footprint whose center is the foam's counts too.
+export function foamOff<B extends { polygon: Pt[] }>(buildings: B[], footprints: Pt[][]): B[] {
+	const centers = footprints.map(polygonCentroid);
+	return buildings.filter((b) => {
+		const c = polygonCentroid(b.polygon);
+		return !footprints.some((f, i) => pointInPolygon(c, f) || Math.hypot(c[0] - centers[i][0], c[1] - centers[i][1]) < 1);
+	});
+}
+
 // Joins neighboring parcels into one outline, or null if they don't form a single piece
 // (lots that don't touch). County parcels share edges exactly, so no tolerance is needed.
 export function mergeParcels(parcels: Pt[][]): Pt[] | null {

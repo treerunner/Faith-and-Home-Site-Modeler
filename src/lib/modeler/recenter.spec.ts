@@ -102,3 +102,20 @@ describe('setting a parcel well off the address', () => {
 		expect(store.site.parcel).toBeUndefined();
 	});
 });
+
+describe("adding the parcel's buildings after the board moved", () => {
+	beforeEach(() => store.newSite());
+
+	it('takes their foam away, though the moved foam is off by a hair', () => {
+		store.site.mode = 'address';
+		store.site.origin = { lat: 40.6448, lng: -75.3763 };
+		const church = box(-20, -15, 20, 15);
+		const moved = church.map(([x, y]): Pt => [x + 3e-9, y - 2e-9]); // shifted by arithmetic, not refetched
+		store.site.context = { buildings: [{ polygon: moved, height: 12 }, { polygon: box(60, 0, 70, 10), height: 6 }], roads: [] };
+		const fetched = { id: 'church', polygon: church, height: 12, tags: { building: 'church' }, name: 'First Church' };
+		store.setup = { context: { buildings: [fetched], roads: [], parcels: [], sources: [], buildingSources: [], parcelsFailed: false }, selected: [], prefill: [fetched] };
+		store.prefillBuildings();
+		expect(store.site.existing.structures.map((s) => s.label)).toEqual(['First Church']);
+		expect(store.site.context.buildings).toHaveLength(1); // the neighbor stays foam
+	});
+});
