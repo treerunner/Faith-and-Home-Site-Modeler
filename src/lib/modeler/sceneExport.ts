@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mainView, topBelow, type SceneView } from './scene/cameraRef';
 import type { Annotation, Plan } from './types';
+import { contentBounds } from './view';
 import { COLORS, FH } from './colors';
 
 const PAD = 8;
@@ -97,27 +98,10 @@ export function capturePlanImage(plan: Plan, notes: Annotation[] = [], view: Sce
 	const { renderer, scene, planCamera } = view;
 	if (!renderer || !planCamera || !scene) return null;
 
-	// Collect site content bounds (structures, open spaces, trees)
-	const xs: number[] = [];
-	const zs: number[] = [];
-
-	for (const s of plan.structures) {
-		for (const p of s.parts) {
-			xs.push(p.x - p.w / 2, p.x + p.w / 2);
-			zs.push(p.y - p.d / 2, p.y + p.d / 2);
-		}
-	}
-	for (const os of plan.openSpaces) {
-		for (const [ox, oz] of os.polygon) { xs.push(ox); zs.push(oz); }
-	}
-	for (const t of plan.trees) {
-		xs.push(t.x - t.radius, t.x + t.radius);
-		zs.push(t.y - t.radius, t.y + t.radius);
-	}
-	for (const a of notes) {
-		xs.push(a.x);
-		zs.push(a.y);
-	}
+	// Content bounds (structures as rotated, open spaces, trees) and the notes
+	const bounds = contentBounds(plan);
+	const xs = [...(bounds ? [bounds.minX, bounds.maxX] : []), ...notes.map((a) => a.x)];
+	const zs = [...(bounds ? [bounds.minY, bounds.maxY] : []), ...notes.map((a) => a.y)];
 
 	// Hide grid lines during capture
 	const grids = scene.children.filter((c) => c instanceof THREE.GridHelper);
