@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack, type Snippet } from 'svelte';
+	import Caret from './Caret.svelte';
 
 	// A collapsible section of a side panel. Open by default; what you collapse is remembered in
 	// this browser (a convenience, so it can't break anything if storage is unavailable).
@@ -39,7 +40,7 @@
 <div class="panel-section">
 	<h2 class="panel-section__heading">
 		<button class="panel-section__toggle" aria-expanded={!collapsed} onclick={toggle}>
-			<span class="caret" class:caret--closed={collapsed} aria-hidden="true">▾</span>
+			<Caret open={!collapsed} />
 			{title}
 		</button>
 	</h2>
@@ -69,7 +70,5 @@
 		text-align: left;
 	}
 	.panel-section__toggle:hover { opacity: 0.7; }
-	.caret { font-size: 0.7rem; transition: transform 0.1s; }
-	.caret--closed { transform: rotate(-90deg); }
 	.panel-section__body { display: flex; flex-direction: column; gap: 0.6rem; }
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { invalidateAll, goto } from '$app/navigation';
+	import Caret from './Caret.svelte';
 
 	// The account menu: sign in, or your committees, the team's admin page, and sign out
 	let user = $derived(page.data.user as { email: string; name: string; isTeam: boolean; memberships: { committeeId: string; committeeName: string; committeeSlug: string }[] } | null | undefined);
@@ -27,7 +28,7 @@
 		<div class="masthead__right">
 		<div class="account" bind:this={rootEl}>
 			{#if user}
-				<button class="account__btn" aria-haspopup="true" aria-expanded={open} onclick={() => (open = !open)}>{user.name || user.email} ▾</button>
+				<button class="account__btn" aria-haspopup="true" aria-expanded={open} onclick={() => (open = !open)}>{user.name || user.email} <Caret /></button>
 				{#if open}
 					<div class="account__menu" role="menu">
 						<a role="menuitem" href="/modeler/sites" onclick={() => (open = false)}>Sites</a>

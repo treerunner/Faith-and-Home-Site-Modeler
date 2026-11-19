@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PlanList from './PlanList.svelte';
+	import Caret from './Caret.svelte';
 	import type { Plan } from '../types';
 
 	// Compare's label on each view: A or B and the plan's name, opening the same menu as the
@@ -42,7 +43,7 @@
 	>
 		<span class="side">{side}</span>
 		<span class="name">{name}</span>
-		<span class="caret" aria-hidden="true">▾</span>
+		<Caret />
 	</button>
 	{#if open}
 		<div class="menu" role="group" aria-label="Choose plan {side}">
@@ -91,7 +92,6 @@
 		font-weight: 700;
 	}
 	.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.caret { font-size: 0.7rem; color: var(--fh-stone); }
 
 	/* As the breadcrumb's plan menu */
 	.menu {
