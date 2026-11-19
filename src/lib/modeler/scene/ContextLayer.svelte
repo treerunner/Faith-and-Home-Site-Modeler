@@ -113,6 +113,9 @@
 {/if}
 
 {#if buildingGeo}
+	<!-- Keyed: a material swapped inside one mesh can lose to the old one's cleanup, which puts back
+	     the material it found (three's default white), so the mesh is rebuilt with its material -->
+	{#key is3D}
 	<T.Mesh geometry={buildingGeo} castShadow={is3D} receiveShadow>
 		{#if is3D}
 			<!-- Emissive lift keeps foam white on top while walls still shade -->
@@ -122,6 +125,7 @@
 			<T.MeshBasicMaterial color={COLORS.context} toneMapped={false} side={THREE.DoubleSide} />
 		{/if}
 	</T.Mesh>
+	{/key}
 	{#if buildingEdges}
 		<T.LineSegments geometry={buildingEdges}>
 			<T.LineBasicMaterial color={FOAM_EDGE} />

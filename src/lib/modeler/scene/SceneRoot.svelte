@@ -288,6 +288,8 @@
 	<!-- Pedestal base -->
 	<!-- On terrain, the board sits under the lowest layer -->
 	{@const boardTop = store.ground ? store.ground.minY - 0.01 : 0}
+	<!-- Keyed, so its material is never swapped in place (see the foam in ContextLayer) -->
+	{#key isAddress}
 	<T.Mesh position={[pedestal.cx, boardTop - DEPTH / 2, pedestal.cz]} receiveShadow>
 		<T.BoxGeometry args={[pedestal.w, DEPTH, pedestal.d]} />
 		<!-- Address mode: an off-white printed board; grid mode keeps the kraft base -->
@@ -297,6 +299,7 @@
 			<T.MeshLambertMaterial color="#c8b898" oncreate={(m) => applyGrain(m, GRAIN_BOARD)} />
 		{/if}
 	</T.Mesh>
+	{/key}
 {/if}
 
 {#if store.terrain}
