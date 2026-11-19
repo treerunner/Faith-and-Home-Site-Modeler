@@ -336,7 +336,7 @@
 				id="profile-tradition"
 				class="text-input"
 				type="text"
-				placeholder="e.g. Roman Catholic, AME"
+				placeholder="e.g. Presbyterian, Lutheran"
 				value={profile.tradition ?? ''}
 				oninput={(e) => store.updateCongregationProfile({ tradition: (e.target as HTMLInputElement).value || undefined })}
 			/>
