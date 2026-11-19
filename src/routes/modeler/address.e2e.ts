@@ -397,6 +397,27 @@ async function canvasPixel(page: Page, x: number, y: number): Promise<{ r: numbe
 	return { r: png.data[at], g: png.data[at + 1], b: png.data[at + 2] };
 }
 
+test('3D: foam stays warm white after switching from plan view', async ({ page }) => {
+	await mockAddressApi(page, { ...CONTEXT, parcels: [] });
+	await page.goto('/modeler');
+	await page.getByLabel('Find an address').fill('100 Main');
+	await page.getByRole('option', { name: PLACE.label }).click();
+	await page.getByRole('button', { name: 'Skip' }).click();
+	// Plan view first: its flat foam material must not be what 3D ends up with
+	await page.getByRole('button', { name: '3D', exact: true }).click();
+	await page.waitForTimeout(1000);
+	// A material swapped inside one mesh lost to the old one's cleanup, leaving three's default
+	// white, tone-mapped to a neutral gray. Foam is linen and every light is warm: nothing neutral.
+	const buf = await page.locator('canvas').first().screenshot();
+	const png = await decodePng(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
+	let neutral = 0;
+	for (let at = 0; at < png.data.length; at += png.channels) {
+		const [r, g, b] = [png.data[at], png.data[at + 1], png.data[at + 2]];
+		if (r === g && g === b && r >= 180 && r <= 225) neutral++;
+	}
+	expect(neutral).toBeLessThan(500);
+});
+
 // A pixel at the canvas's top, behind everything else (clear of the credits button in the corner)
 const topPixel = (page: Page) => canvasPixel(page, 60, 2);
 const near = (v: number) => ({ asymmetricMatch: (n: number) => Math.abs(n - v) <= 12 });

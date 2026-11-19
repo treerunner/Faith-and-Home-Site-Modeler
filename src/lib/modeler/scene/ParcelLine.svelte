@@ -46,6 +46,8 @@
 	</T.Mesh>
 {/if}
 
+<!-- Keyed, so its material is never swapped in place (see the foam in ContextLayer) -->
+{#key dashed}
 <T.LineSegments bind:ref={lineRef} geometry={geo} renderOrder={onTop ? 10 : 0}>
 	{#if dashed}
 		<T.LineDashedMaterial {color} dashSize={1.2} gapSize={0.8} depthTest={!onTop} />
@@ -53,3 +55,4 @@
 		<T.LineBasicMaterial {color} depthTest={!onTop} />
 	{/if}
 </T.LineSegments>
+{/key}

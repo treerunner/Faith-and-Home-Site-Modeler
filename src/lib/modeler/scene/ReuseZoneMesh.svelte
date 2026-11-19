@@ -85,6 +85,8 @@
 	<T.Mesh geometry={flat} position={[0, PLAN_Y, 0]}>
 		<T.MeshBasicMaterial color={COLORS.reuse} transparent opacity={upstairs ? 0.45 : 0.85} side={THREE.DoubleSide} depthWrite={false} />
 	</T.Mesh>
+	<!-- Keyed, so its material is never swapped in place (see the foam in ContextLayer) -->
+	{#key upstairs}
 	<T.Line bind:ref={dashRef} geometry={flatEdges}>
 		{#if upstairs}
 			<T.LineDashedMaterial color={EDGE} dashSize={0.6} gapSize={0.4} />
@@ -92,4 +94,5 @@
 			<T.LineBasicMaterial color={EDGE} />
 		{/if}
 	</T.Line>
+	{/key}
 {/if}
