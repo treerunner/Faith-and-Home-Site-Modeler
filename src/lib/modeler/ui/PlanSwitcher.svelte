@@ -2,6 +2,7 @@
 	import { store } from '../store.svelte';
 	import { syncUrl } from './SiteBar.svelte';
 	import PlanList from './PlanList.svelte';
+	import Caret from './Caret.svelte';
 
 	let open = $state(false);
 	let confirmingDelete = $state(false);
@@ -104,7 +105,7 @@
 				onclick={() => (open ? close() : (open = true))}
 			>
 				<span class="plan-name">{store.plan.name || 'Untitled plan'}</span>
-				<span class="caret" aria-hidden="true">▾</span>
+				<Caret />
 			</button>
 		{/if}
 	</div>
@@ -191,7 +192,6 @@
 	}
 
 	.plan-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.caret { font-size: 0.7rem; color: var(--fh-stone); }
 
 	.plan-menu-btn:hover,
 	.plan-menu-btn[aria-expanded='true'] { background: #ece8e0; border-color: var(--color-border); }

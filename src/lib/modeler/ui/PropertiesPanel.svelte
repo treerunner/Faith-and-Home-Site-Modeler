@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import { NOTE_MAX, store, type SidebarTab } from '../store.svelte';
 	import { syncUrl } from './SiteBar.svelte';
+	import Caret from './Caret.svelte';
 	import { choicesOn } from '../existing';
 	import { restsOn, totalStories } from '../geometry';
 	import { partOutline, pointInPolygon } from '../geo';
@@ -584,7 +585,7 @@
 							aria-expanded={isOpen}
 							aria-label="{isOpen ? 'Collapse' : 'Expand'} {s.label}"
 						>
-							<span class="caret" class:caret--open={isOpen} aria-hidden="true">▶</span>
+							<Caret open={isOpen} />
 							<span class="struct-label">{s.label}</span>
 							{#if s.groupId}
 								<span class="group-badge" title="Grouped — moves with linked structures">⚭</span>
@@ -1263,16 +1264,6 @@
 
 	.struct-row:hover { background: rgba(0 0 0 / 0.05); }
 	.struct-row--active { font-weight: 600; }
-
-	.caret {
-		font-size: 0.5rem;
-		color: var(--color-text);
-		flex-shrink: 0;
-		transition: transform 0.15s ease;
-		display: inline-block;
-	}
-
-	.caret--open { transform: rotate(90deg); }
 
 	.struct-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
